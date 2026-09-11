@@ -35,26 +35,15 @@ const SeletorEstrelas: React.FC<{ valor: number; onChange: (v: number) => void; 
 );
 
 export const PortalEscolaView: React.FC = () => {
-  const { escolasPnae, entregasEscola, addEscolaPnae, pedidosProdutorPAA, confirmarEntregaEscola } = useCoop();
+  const { escolasPnae, entregasEscola, pedidosProdutorPAA, confirmarEntregaEscola } = useCoop();
   const [showComprovanteModal, setShowComprovanteModal] = useState(false);
 
-  // Acesso simplificado — somente por e-mail, sem senha.
-  const [authMode, setAuthMode] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
+  // Acesso simplificado — somente por e-mail, sem senha. O cadastro da
+  // escola é feito só pela administração (Cadastros → Escolas); este portal
+  // é exclusivamente de login/consulta.
   const [authEmail, setAuthEmail] = useState<string>('');
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [loginError, setLoginError] = useState<string | null>(null);
-
-  // Registration Form State
-  const [regForm, setRegForm] = useState({
-    nomeEscola: '',
-    diretorResponsavel: '',
-    email: '',
-    inep: '',
-    cnpj: '',
-    cidade: 'Trairi',
-    estado: 'CE',
-    alunosAtendidos: 250
-  });
 
   // Escola matching strictly the logged-in email
   const escolaAtual = escolasPnae.find(
@@ -254,40 +243,6 @@ export const PortalEscolaView: React.FC = () => {
     setIsLoggedIn(true);
   };
 
-  const handleRegister = (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoginError(null);
-
-    if (!regForm.nomeEscola.trim() || !regForm.email.trim() || !regForm.diretorResponsavel.trim()) {
-      setLoginError('Preencha os campos obrigatórios para cadastrar a escola.');
-      return;
-    }
-
-    const exists = escolasPnae.some(
-      e => e.email && e.email.toLowerCase().trim() === regForm.email.toLowerCase().trim()
-    );
-
-    if (exists) {
-      setLoginError('Já existe uma escola cadastrada com este e-mail. Faça login para acessar.');
-      return;
-    }
-
-    addEscolaPnae({
-      nomeEscola: regForm.nomeEscola,
-      diretorResponsavel: regForm.diretorResponsavel,
-      email: regForm.email,
-      inep: regForm.inep || '23009988',
-      cnpj: regForm.cnpj || '12.345.678/0001-90',
-      cidade: regForm.cidade,
-      estado: regForm.estado,
-      alunosAtendidos: Number(regForm.alunosAtendidos) || 200,
-      turnosAtendidos: 'Integral e Parcial'
-    });
-
-    setAuthEmail(regForm.email);
-    setIsLoggedIn(true);
-  };
-
   const handleLogout = () => {
     setIsLoggedIn(false);
     setAuthEmail('');
@@ -309,36 +264,8 @@ export const PortalEscolaView: React.FC = () => {
             </div>
             <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Portal da Escola (PNAE)</h1>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              {authMode === 'LOGIN'
-                ? 'Acesse com o e-mail da sua unidade escolar para conferir o recebimento de merenda e assinar termos de aceite.'
-                : 'Cadastre sua unidade escolar para receber a merenda da agricultura familiar e assinar comprovantes.'}
+              Acesse com o e-mail da sua unidade escolar para conferir o recebimento de merenda e assinar termos de aceite.
             </p>
-          </div>
-
-          {/* Tab Switcher */}
-          <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-2xl text-xs font-bold">
-            <button
-              type="button"
-              onClick={() => { setAuthMode('LOGIN'); setLoginError(null); }}
-              className={`flex-1 py-2 rounded-xl transition-all ${
-                authMode === 'LOGIN'
-                  ? 'bg-white dark:bg-slate-800 text-indigo-600 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              Entrar na Conta
-            </button>
-            <button
-              type="button"
-              onClick={() => { setAuthMode('REGISTER'); setLoginError(null); }}
-              className={`flex-1 py-2 rounded-xl transition-all ${
-                authMode === 'REGISTER'
-                  ? 'bg-white dark:bg-slate-800 text-indigo-600 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              Cadastrar Escola
-            </button>
           </div>
 
           {loginError && (
@@ -348,98 +275,34 @@ export const PortalEscolaView: React.FC = () => {
             </div>
           )}
 
-          {authMode === 'LOGIN' ? (
-            <form onSubmit={handleLogin} className="space-y-4 text-xs">
-              <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-extrabold uppercase text-[10px] tracking-wider mb-1">
-                  E-mail Institucional da Escola
-                </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-                  <input
-                    type="email"
-                    required
-                    value={authEmail}
-                    onChange={e => setAuthEmail(e.target.value)}
-                    placeholder="escola@educacao.gov.br"
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition-all active:scale-[0.99] flex items-center justify-center gap-2 text-xs cursor-pointer"
-              >
-                <ShieldCheck className="w-4 h-4" /> Entrar no Portal da Escola
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleRegister} className="space-y-3 text-xs">
-              <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-extrabold uppercase text-[10px] tracking-wider mb-1">
-                  Nome da Escola
-                </label>
+          <form onSubmit={handleLogin} className="space-y-4 text-xs">
+            <div>
+              <label className="block text-slate-700 dark:text-slate-300 font-extrabold uppercase text-[10px] tracking-wider mb-1">
+                E-mail Institucional da Escola
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                 <input
-                  type="text"
+                  type="email"
                   required
-                  value={regForm.nomeEscola}
-                  onChange={e => setRegForm({ ...regForm, nomeEscola: e.target.value })}
-                  placeholder="Ex: EMEIF Francisca das Chagas"
-                  className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                  value={authEmail}
+                  onChange={e => setAuthEmail(e.target.value)}
+                  placeholder="escola@educacao.gov.br"
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                 />
               </div>
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1.5">
+                Sua escola já deve estar cadastrada pela cooperativa (Cadastros → Escolas). Se ainda não tiver acesso, fale com a administração.
+              </p>
+            </div>
 
-              <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-extrabold uppercase text-[10px] tracking-wider mb-1">
-                  Diretor / Nutricionista Responsável
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={regForm.diretorResponsavel}
-                  onChange={e => setRegForm({ ...regForm, diretorResponsavel: e.target.value })}
-                  placeholder="Ex: Dra. Juliana Menezes (CRN 1234)"
-                  className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-slate-700 dark:text-slate-300 font-extrabold uppercase text-[10px] tracking-wider mb-1">
-                    E-mail Institucional
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={regForm.email}
-                    onChange={e => setRegForm({ ...regForm, email: e.target.value })}
-                    placeholder="escola@trairi.ce.gov.br"
-                    className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-700 dark:text-slate-300 font-extrabold uppercase text-[10px] tracking-wider mb-1">
-                    Cód. INEP ou CNPJ
-                  </label>
-                  <input
-                    type="text"
-                    value={regForm.inep}
-                    onChange={e => setRegForm({ ...regForm, inep: e.target.value })}
-                    placeholder="23001234"
-                    className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition-all active:scale-[0.99] flex items-center justify-center gap-2 text-xs mt-2 cursor-pointer"
-              >
-                <ShieldCheck className="w-4 h-4" /> Cadastrar Escola e Entrar
-              </button>
-            </form>
-          )}
+            <button
+              type="submit"
+              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition-all active:scale-[0.99] flex items-center justify-center gap-2 text-xs cursor-pointer"
+            >
+              <ShieldCheck className="w-4 h-4" /> Entrar no Portal da Escola
+            </button>
+          </form>
         </div>
       </div>
     );

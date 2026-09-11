@@ -18,28 +18,19 @@ import { ReceiptModal } from '../components/ReceiptModal';
 import { BarChart, Bar, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 export const PortalCooperadoView: React.FC = () => {
-  const { currentUser, cooperados, registrosProducao, transacoesCapital, pedidosProdutorPAA, programacoesEntrega, addCooperado } = useCoop();
+  const { currentUser, cooperados, registrosProducao, transacoesCapital, pedidosProdutorPAA, programacoesEntrega } = useCoop();
   const [selectedReceiptTxId, setSelectedReceiptTxId] = useState<string | null>(null);
   const [filtroMesPortal, setFiltroMesPortal] = useState('TODOS');
   const [filtroAnoPortal, setFiltroAnoPortal] = useState('TODOS');
   const [filtroStatusPortal, setFiltroStatusPortal] = useState('TODOS');
   const [buscaPortal, setBuscaPortal] = useState('');
 
-  // Acesso simplificado — somente por e-mail, sem senha.
-  const [authMode, setAuthMode] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
+  // Acesso simplificado — somente por e-mail, sem senha. O cadastro do
+  // cooperado é feito só pela administração (Cooperados); este portal é
+  // exclusivamente de login/consulta.
   const [authEmail, setAuthEmail] = useState<string>('');
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [loginError, setLoginError] = useState<string | null>(null);
-
-  // Registration Form State
-  const [regForm, setRegForm] = useState({
-    nome: '',
-    email: '',
-    cpf: '',
-    celular: '',
-    cidade: 'Trairi',
-    estado: 'CE'
-  });
 
   // Registered Cooperado matching strictly the logged-in email
   const cooperadoAtual = cooperados.find(
@@ -60,46 +51,10 @@ export const PortalCooperadoView: React.FC = () => {
     );
 
     if (!found) {
-      setLoginError(`Nenhum cooperado cadastrado encontrado com o e-mail "${authEmail}". Utilize a aba de Cadastro para se registrar.`);
+      setLoginError(`Nenhum cooperado cadastrado encontrado com o e-mail "${authEmail}". Peça para a cooperativa cadastrar seu e-mail em Cooperados.`);
       return;
     }
 
-    setIsLoggedIn(true);
-  };
-
-  const handleRegister = (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoginError(null);
-
-    if (!regForm.nome.trim() || !regForm.email.trim() || !regForm.cpf.trim()) {
-      setLoginError('Preencha todos os campos obrigatórios para efetuar o cadastro.');
-      return;
-    }
-
-    // Check existing
-    const exists = cooperados.some(
-      c => (c.email && c.email.toLowerCase().trim() === regForm.email.toLowerCase().trim()) ||
-           (c.cpf && c.cpf.replace(/\D/g, '') === regForm.cpf.replace(/\D/g, ''))
-    );
-
-    if (exists) {
-      setLoginError('Já existe um cooperado cadastrado com este e-mail ou CPF. Acesse a aba de login.');
-      return;
-    }
-
-    const newMatricula = `COOP-${Math.floor(1000 + Math.random() * 9000)}`;
-    addCooperado({
-      nome: regForm.nome,
-      email: regForm.email,
-      cpf: regForm.cpf,
-      celular: regForm.celular,
-      cidade: regForm.cidade,
-      estado: regForm.estado,
-      matricula: newMatricula,
-      situacao: 'ATIVO'
-    });
-
-    setAuthEmail(regForm.email);
     setIsLoggedIn(true);
   };
 
@@ -109,7 +64,7 @@ export const PortalCooperadoView: React.FC = () => {
     setLoginError(null);
   };
 
-  // IF NOT LOGGED IN: Render Portal Login or Register Card
+  // IF NOT LOGGED IN: Render Portal Login Card
   if (!isLoggedIn || !cooperadoAtual) {
     return (
       <div className="max-w-2xl mx-auto my-6 space-y-6">
@@ -120,36 +75,8 @@ export const PortalCooperadoView: React.FC = () => {
             </div>
             <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Portal do Cooperado</h1>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              {authMode === 'LOGIN'
-                ? 'Acesse com seu e-mail cadastrado para consultar seu Capital Social, Produção e Recibos.'
-                : 'Cadastre-se para criar sua conta de cooperado e acessar seus dados exclusivos.'}
+              Acesse com seu e-mail cadastrado para consultar seu Capital Social, Produção e Recibos.
             </p>
-          </div>
-
-          {/* Tab Switcher: Login vs Cadastro */}
-          <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-2xl text-xs font-bold">
-            <button
-              type="button"
-              onClick={() => { setAuthMode('LOGIN'); setLoginError(null); }}
-              className={`flex-1 py-2 rounded-xl transition-all ${
-                authMode === 'LOGIN'
-                  ? 'bg-white dark:bg-slate-800 text-emerald-600 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              Já tenho conta (Login)
-            </button>
-            <button
-              type="button"
-              onClick={() => { setAuthMode('REGISTER'); setLoginError(null); }}
-              className={`flex-1 py-2 rounded-xl transition-all ${
-                authMode === 'REGISTER'
-                  ? 'bg-white dark:bg-slate-800 text-emerald-600 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              Criar Nova Conta
-            </button>
           </div>
 
           {loginError && (
@@ -159,112 +86,34 @@ export const PortalCooperadoView: React.FC = () => {
             </div>
           )}
 
-          {authMode === 'LOGIN' ? (
-            <form onSubmit={handleLogin} className="space-y-4 text-xs">
-              <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-extrabold uppercase text-[10px] tracking-wider mb-1">
-                  E-mail do Cooperado
-                </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-                  <input
-                    type="email"
-                    required
-                    value={authEmail}
-                    onChange={e => setAuthEmail(e.target.value)}
-                    placeholder="cooperado@exemplo.com.br"
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md transition-all active:scale-[0.99] flex items-center justify-center gap-2 text-xs cursor-pointer"
-              >
-                <ShieldCheck className="w-4 h-4" /> Entrar no Portal
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleRegister} className="space-y-3 text-xs">
-              <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-extrabold uppercase text-[10px] tracking-wider mb-1">
-                  Nome Completo
-                </label>
+          <form onSubmit={handleLogin} className="space-y-4 text-xs">
+            <div>
+              <label className="block text-slate-700 dark:text-slate-300 font-extrabold uppercase text-[10px] tracking-wider mb-1">
+                E-mail do Cooperado
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                 <input
-                  type="text"
+                  type="email"
                   required
-                  value={regForm.nome}
-                  onChange={e => setRegForm({ ...regForm, nome: e.target.value })}
-                  placeholder="Ex: Maria das Dores Silva"
-                  className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500"
+                  value={authEmail}
+                  onChange={e => setAuthEmail(e.target.value)}
+                  placeholder="cooperado@exemplo.com.br"
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 />
               </div>
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1.5">
+                Seu e-mail já deve estar no seu cadastro de cooperado. Se ainda não tiver acesso, fale com a administração da cooperativa.
+              </p>
+            </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-slate-700 dark:text-slate-300 font-extrabold uppercase text-[10px] tracking-wider mb-1">
-                    E-mail
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={regForm.email}
-                    onChange={e => setRegForm({ ...regForm, email: e.target.value })}
-                    placeholder="maria@exemplo.com"
-                    className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-700 dark:text-slate-300 font-extrabold uppercase text-[10px] tracking-wider mb-1">
-                    CPF
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={regForm.cpf}
-                    onChange={e => setRegForm({ ...regForm, cpf: e.target.value })}
-                    placeholder="123.456.789-00"
-                    className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-slate-700 dark:text-slate-300 font-extrabold uppercase text-[10px] tracking-wider mb-1">
-                    Telefone / Celular
-                  </label>
-                  <input
-                    type="text"
-                    value={regForm.celular}
-                    onChange={e => setRegForm({ ...regForm, celular: e.target.value })}
-                    placeholder="(88) 99999-0000"
-                    className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-700 dark:text-slate-300 font-extrabold uppercase text-[10px] tracking-wider mb-1">
-                    Cidade / UF
-                  </label>
-                  <input
-                    type="text"
-                    value={regForm.cidade}
-                    onChange={e => setRegForm({ ...regForm, cidade: e.target.value })}
-                    placeholder="Trairi / CE"
-                    className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md transition-all active:scale-[0.99] flex items-center justify-center gap-2 text-xs mt-2 cursor-pointer"
-              >
-                <ShieldCheck className="w-4 h-4" /> Concluir Cadastro e Entrar
-              </button>
-            </form>
-          )}
+            <button
+              type="submit"
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md transition-all active:scale-[0.99] flex items-center justify-center gap-2 text-xs cursor-pointer"
+            >
+              <ShieldCheck className="w-4 h-4" /> Entrar no Portal
+            </button>
+          </form>
         </div>
       </div>
     );

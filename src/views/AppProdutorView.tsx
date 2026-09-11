@@ -14,24 +14,14 @@ import {
 } from 'lucide-react';
 
 export const AppProdutorView: React.FC = () => {
-  const { produtores, produtos, registrosProducao, addRegistroProducao, addProdutor, cooperados } = useCoop();
+  const { produtores, produtos, registrosProducao, addRegistroProducao, cooperados } = useCoop();
 
-  // Acesso simplificado — somente por e-mail, sem senha.
-  const [authMode, setAuthMode] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
+  // Acesso simplificado — somente por e-mail, sem senha. O cadastro do
+  // produtor é feito só pela administração (Cadastros → Produtores); este
+  // portal é exclusivamente de login/lançamento de produção.
   const [authEmail, setAuthEmail] = useState<string>('');
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [loginError, setLoginError] = useState<string | null>(null);
-
-  // Registration Form State
-  const [regForm, setRegForm] = useState({
-    cooperadoId: '',
-    nome: '',
-    email: '',
-    cpf: '',
-    nomePropriedade: '',
-    cafDapNum: '',
-    comunidade: ''
-  });
 
   // Quando o produtor está vinculado a um cooperado (cooperadoId), o e-mail
   // do cooperado é a fonte da verdade para login — evita exigir um e-mail
@@ -69,43 +59,10 @@ export const AppProdutorView: React.FC = () => {
     });
 
     if (!found) {
-      setLoginError(`Nenhum produtor rural encontrado com o e-mail "${authEmail}". Se você já é cooperado, use o e-mail do seu cadastro de cooperado. Caso contrário, faça o cadastro para acessar.`);
+      setLoginError(`Nenhum produtor rural encontrado com o e-mail "${authEmail}". Se você já é cooperado, use o e-mail do seu cadastro de cooperado. Caso contrário, peça para a cooperativa cadastrar seu acesso em Cadastros → Produtores.`);
       return;
     }
 
-    setIsLoggedIn(true);
-  };
-
-  const handleRegister = (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoginError(null);
-
-    if (!regForm.nome.trim() || !regForm.email.trim() || !regForm.cpf.trim()) {
-      setLoginError('Preencha os campos obrigatórios para efetuar seu cadastro.');
-      return;
-    }
-
-    const exists = produtores.some(
-      p => (p.email && p.email.toLowerCase().trim() === regForm.email.toLowerCase().trim()) ||
-           (p.cpf && p.cpf.replace(/\D/g, '') === regForm.cpf.replace(/\D/g, ''))
-    );
-
-    if (exists) {
-      setLoginError('Já existe um produtor rural cadastrado com este e-mail ou CPF. Faça login para acessar.');
-      return;
-    }
-
-    addProdutor({
-      nome: regForm.nome,
-      email: regForm.email,
-      cpf: regForm.cpf,
-      nomePropriedade: regForm.nomePropriedade || 'Propriedade Agrícola Familiar',
-      cafDapNum: regForm.cafDapNum || 'DAP-2026-TRAIRI',
-      comunidade: regForm.comunidade || 'Comunidade Rural Trairi',
-      situacao: 'ATIVO'
-    });
-
-    setAuthEmail(regForm.email);
     setIsLoggedIn(true);
   };
 
@@ -144,36 +101,8 @@ export const AppProdutorView: React.FC = () => {
             </div>
             <h1 className="text-2xl font-black text-white tracking-tight">App Mobile do Produtor</h1>
             <p className="text-xs text-slate-400">
-              {authMode === 'LOGIN'
-                ? 'Acesse com seu e-mail de agricultor para lançar colheita e gerenciar suas ofertas PAA / PNAE.'
-                : 'Cadastre-se como Produtor Rural para informar suas colheitas e ofertas agrícolas.'}
+              Acesse com seu e-mail de agricultor para lançar colheita e gerenciar suas ofertas PAA / PNAE.
             </p>
-          </div>
-
-          {/* Tab Switcher */}
-          <div className="flex bg-slate-800 p-1 rounded-2xl text-xs font-bold">
-            <button
-              type="button"
-              onClick={() => { setAuthMode('LOGIN'); setLoginError(null); }}
-              className={`flex-1 py-2 rounded-xl transition-all ${
-                authMode === 'LOGIN'
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Já tenho cadastro (Login)
-            </button>
-            <button
-              type="button"
-              onClick={() => { setAuthMode('REGISTER'); setLoginError(null); }}
-              className={`flex-1 py-2 rounded-xl transition-all ${
-                authMode === 'REGISTER'
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Criar Cadastro
-            </button>
           </div>
 
           {loginError && (
@@ -183,147 +112,34 @@ export const AppProdutorView: React.FC = () => {
             </div>
           )}
 
-          {authMode === 'LOGIN' ? (
-            <form onSubmit={handleLogin} className="space-y-4 text-xs">
-              <div>
-                <label className="block text-slate-300 font-extrabold uppercase text-[10px] tracking-wider mb-1">
-                  E-mail do Produtor Rural
-                </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                  <input
-                    type="email"
-                    required
-                    value={authEmail}
-                    onChange={e => setAuthEmail(e.target.value)}
-                    placeholder="produtor@fazenda.com"
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 text-white rounded-xl font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-md transition-all active:scale-[0.99] flex items-center justify-center gap-2 text-xs cursor-pointer"
-              >
-                <ShieldCheck className="w-4 h-4" /> Entrar no App do Produtor
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleRegister} className="space-y-3 text-xs">
-              <div className="bg-emerald-950/60 p-2.5 rounded-xl border border-emerald-800/60">
-                <label className="block text-emerald-300 font-extrabold uppercase text-[10px] tracking-wider mb-1">
-                  Vincular a Cooperado (Quadro Social)
-                </label>
-                <select
-                  value={regForm.cooperadoId}
-                  onChange={e => {
-                    const cId = e.target.value;
-                    const c = cooperados.find(coop => coop.id === cId);
-                    if (c) {
-                      setRegForm({
-                        ...regForm,
-                        cooperadoId: c.id,
-                        nome: c.nome,
-                        email: c.email || regForm.email || `cooperado${c.matricula.replace(/\D/g, '')}@trairi.coop.br`,
-                        cpf: c.cpf,
-                        nomePropriedade: `Sítio / Propriedade ${c.nome.split(' ')[0]}`,
-                        cafDapNum: (c as any).dapCaf || `CAF-${c.id.slice(-4)}-2026`,
-                        comunidade: (c as any).localidadeComunidade || c.bairro || 'Comunidade Trairi'
-                      });
-                    } else {
-                      setRegForm({ ...regForm, cooperadoId: '' });
-                    }
-                  }}
-                  className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 text-white rounded-xl focus:ring-2 focus:ring-emerald-500 font-medium"
-                >
-                  <option value="">-- Selecionar do Quadro Social de Cooperados --</option>
-                  {cooperados.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.matricula} - {c.nome} (CPF: {c.cpf})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-extrabold uppercase text-[10px] tracking-wider mb-1">
-                  Nome do Produtor / Agricultor
-                </label>
+          <form onSubmit={handleLogin} className="space-y-4 text-xs">
+            <div>
+              <label className="block text-slate-300 font-extrabold uppercase text-[10px] tracking-wider mb-1">
+                E-mail do Produtor Rural
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
                 <input
-                  type="text"
+                  type="email"
                   required
-                  value={regForm.nome}
-                  onChange={e => setRegForm({ ...regForm, nome: e.target.value })}
-                  placeholder="Ex: João Batista Ribeiro"
-                  className="w-full px-3.5 py-2 bg-slate-800 border border-slate-700 text-white rounded-xl focus:ring-2 focus:ring-emerald-500"
+                  value={authEmail}
+                  onChange={e => setAuthEmail(e.target.value)}
+                  placeholder="produtor@fazenda.com"
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 text-white rounded-xl font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 />
               </div>
+              <p className="text-[10px] text-slate-500 mt-1.5">
+                Seu produtor já deve estar cadastrado pela cooperativa (Cadastros → Produtores). Se você também é cooperado, use o e-mail do seu cadastro de cooperado.
+              </p>
+            </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-slate-300 font-extrabold uppercase text-[10px] tracking-wider mb-1">
-                    E-mail
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={regForm.email}
-                    onChange={e => setRegForm({ ...regForm, email: e.target.value })}
-                    placeholder="joao@sitio.com"
-                    className="w-full px-3.5 py-2 bg-slate-800 border border-slate-700 text-white rounded-xl focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-extrabold uppercase text-[10px] tracking-wider mb-1">
-                    CPF
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={regForm.cpf}
-                    onChange={e => setRegForm({ ...regForm, cpf: e.target.value })}
-                    placeholder="123.456.789-00"
-                    className="w-full px-3.5 py-2 bg-slate-800 border border-slate-700 text-white rounded-xl focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-slate-300 font-extrabold uppercase text-[10px] tracking-wider mb-1">
-                    Nome da Propriedade / Sítio
-                  </label>
-                  <input
-                    type="text"
-                    value={regForm.nomePropriedade}
-                    onChange={e => setRegForm({ ...regForm, nomePropriedade: e.target.value })}
-                    placeholder="Sítio Boa Esperança"
-                    className="w-full px-3.5 py-2 bg-slate-800 border border-slate-700 text-white rounded-xl focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-extrabold uppercase text-[10px] tracking-wider mb-1">
-                    DAP / CAF nº
-                  </label>
-                  <input
-                    type="text"
-                    value={regForm.cafDapNum}
-                    onChange={e => setRegForm({ ...regForm, cafDapNum: e.target.value })}
-                    placeholder="CAF-123456"
-                    className="w-full px-3.5 py-2 bg-slate-800 border border-slate-700 text-white rounded-xl focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-md transition-all active:scale-[0.99] flex items-center justify-center gap-2 text-xs mt-2 cursor-pointer"
-              >
-                <ShieldCheck className="w-4 h-4" /> Cadastrar Produtor e Entrar
-              </button>
-            </form>
-          )}
+            <button
+              type="submit"
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-md transition-all active:scale-[0.99] flex items-center justify-center gap-2 text-xs cursor-pointer"
+            >
+              <ShieldCheck className="w-4 h-4" /> Entrar no App do Produtor
+            </button>
+          </form>
         </div>
       </div>
     );

@@ -16,22 +16,15 @@ import {
 } from 'lucide-react';
 
 export const AppMotoristaView: React.FC = () => {
-  const { romaneiosMotorista, atualizarStatusRomaneio, addRomaneioMotorista, motoristas, addMotorista } = useCoop();
+  const { romaneiosMotorista, atualizarStatusRomaneio, addRomaneioMotorista, motoristas } = useCoop();
   const [showModal, setShowModal] = useState(false);
 
-  // Acesso simplificado — somente por e-mail, sem senha.
-  const [authMode, setAuthMode] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
+  // Acesso simplificado — somente por e-mail, sem senha. O cadastro do
+  // motorista é feito só pela administração (Cadastros → Motoristas); este
+  // portal é exclusivamente de login/acesso às rotas.
   const [authEmail, setAuthEmail] = useState<string>('');
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [loginError, setLoginError] = useState<string | null>(null);
-
-  // Registration Form State
-  const [regForm, setRegForm] = useState({
-    nome: '',
-    email: '',
-    veiculoPadrao: '',
-    telefone: ''
-  });
 
   // Driver matching strictly the logged-in email — motoristas agora vem do
   // Context (persistido e isolado por cooperativa), não mais de um estado
@@ -62,39 +55,10 @@ export const AppMotoristaView: React.FC = () => {
     );
 
     if (!found) {
-      setLoginError(`Nenhum motorista encontrado com o e-mail "${authEmail}". Utilize a aba "Cadastrar Motorista" para criar seu acesso.`);
+      setLoginError(`Nenhum motorista encontrado com o e-mail "${authEmail}". Peça para a cooperativa cadastrar seu acesso em Cadastros → Motoristas.`);
       return;
     }
 
-    setIsLoggedIn(true);
-  };
-
-  const handleRegister = (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoginError(null);
-
-    if (!regForm.nome.trim() || !regForm.email.trim()) {
-      setLoginError('Preencha os campos obrigatórios para efetuar seu cadastro.');
-      return;
-    }
-
-    const exists = motoristas.some(
-      m => m.email && m.email.toLowerCase().trim() === regForm.email.toLowerCase().trim()
-    );
-
-    if (exists) {
-      setLoginError('Já existe um motorista cadastrado com este e-mail. Faça login para acessar.');
-      return;
-    }
-
-    addMotorista({
-      nome: regForm.nome,
-      email: regForm.email,
-      telefone: regForm.telefone,
-      veiculoPadrao: regForm.veiculoPadrao || 'PMN-4A92 (Caminhão Baú)',
-      ativo: true
-    });
-    setAuthEmail(regForm.email);
     setIsLoggedIn(true);
   };
 
@@ -135,36 +99,8 @@ export const AppMotoristaView: React.FC = () => {
             </div>
             <h1 className="text-2xl font-black text-white tracking-tight">App do Motorista & Logística</h1>
             <p className="text-xs text-slate-400">
-              {authMode === 'LOGIN'
-                ? 'Acesse com seu e-mail de motorista para visualizar suas rotas de transporte PNAE e romaneios.'
-                : 'Cadastre-se como Motorista / Transportador para gerenciar rotas e entregas escolares.'}
+              Acesse com seu e-mail de motorista para visualizar suas rotas de transporte PNAE e romaneios.
             </p>
-          </div>
-
-          {/* Tab Switcher */}
-          <div className="flex bg-slate-800 p-1 rounded-2xl text-xs font-bold">
-            <button
-              type="button"
-              onClick={() => { setAuthMode('LOGIN'); setLoginError(null); }}
-              className={`flex-1 py-2 rounded-xl transition-all ${
-                authMode === 'LOGIN'
-                  ? 'bg-amber-600 text-white shadow-xs'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Já tenho cadastro (Login)
-            </button>
-            <button
-              type="button"
-              onClick={() => { setAuthMode('REGISTER'); setLoginError(null); }}
-              className={`flex-1 py-2 rounded-xl transition-all ${
-                authMode === 'REGISTER'
-                  ? 'bg-amber-600 text-white shadow-xs'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Cadastrar Motorista
-            </button>
           </div>
 
           {loginError && (
@@ -174,97 +110,34 @@ export const AppMotoristaView: React.FC = () => {
             </div>
           )}
 
-          {authMode === 'LOGIN' ? (
-            <form onSubmit={handleLogin} className="space-y-4 text-xs">
-              <div>
-                <label className="block text-slate-300 font-extrabold uppercase text-[10px] tracking-wider mb-1">
-                  E-mail do Motorista
-                </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                  <input
-                    type="email"
-                    required
-                    value={authEmail}
-                    onChange={e => setAuthEmail(e.target.value)}
-                    placeholder="motorista@logistica.coop.br"
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 text-white rounded-xl font-medium focus:ring-2 focus:ring-amber-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl shadow-md transition-all active:scale-[0.99] flex items-center justify-center gap-2 text-xs cursor-pointer"
-              >
-                <ShieldCheck className="w-4 h-4" /> Entrar no App do Motorista
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleRegister} className="space-y-3 text-xs">
-              <div>
-                <label className="block text-slate-300 font-extrabold uppercase text-[10px] tracking-wider mb-1">
-                  Nome Completo
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={regForm.nome}
-                  onChange={e => setRegForm({ ...regForm, nome: e.target.value })}
-                  placeholder="Ex: Reginaldo de Castro"
-                  className="w-full px-3.5 py-2 bg-slate-800 border border-slate-700 text-white rounded-xl focus:ring-2 focus:ring-amber-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-extrabold uppercase text-[10px] tracking-wider mb-1">
-                  E-mail do Motorista
-                </label>
+          <form onSubmit={handleLogin} className="space-y-4 text-xs">
+            <div>
+              <label className="block text-slate-300 font-extrabold uppercase text-[10px] tracking-wider mb-1">
+                E-mail do Motorista
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
                 <input
                   type="email"
                   required
-                  value={regForm.email}
-                  onChange={e => setRegForm({ ...regForm, email: e.target.value })}
-                  placeholder="reginaldo@logistica.coop.br"
-                  className="w-full px-3.5 py-2 bg-slate-800 border border-slate-700 text-white rounded-xl focus:ring-2 focus:ring-amber-500"
+                  value={authEmail}
+                  onChange={e => setAuthEmail(e.target.value)}
+                  placeholder="motorista@logistica.coop.br"
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 text-white rounded-xl font-medium focus:ring-2 focus:ring-amber-500 focus:outline-none"
                 />
               </div>
+              <p className="text-[10px] text-slate-500 mt-1.5">
+                Seu e-mail de motorista já deve estar cadastrado pela cooperativa (Cadastros → Motoristas). Se ainda não tiver acesso, fale com a administração.
+              </p>
+            </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-slate-300 font-extrabold uppercase text-[10px] tracking-wider mb-1">
-                    Placa / Veículo Padrão
-                  </label>
-                  <input
-                    type="text"
-                    value={regForm.veiculoPadrao}
-                    onChange={e => setRegForm({ ...regForm, veiculoPadrao: e.target.value })}
-                    placeholder="PMN-4A92 (Caminhão)"
-                    className="w-full px-3.5 py-2 bg-slate-800 border border-slate-700 text-white rounded-xl focus:ring-2 focus:ring-amber-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-extrabold uppercase text-[10px] tracking-wider mb-1">
-                    Telefone / WhatsApp
-                  </label>
-                  <input
-                    type="text"
-                    value={regForm.telefone}
-                    onChange={e => setRegForm({ ...regForm, telefone: e.target.value })}
-                    placeholder="(88) 98888-0000"
-                    className="w-full px-3.5 py-2 bg-slate-800 border border-slate-700 text-white rounded-xl focus:ring-2 focus:ring-amber-500"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl shadow-md transition-all active:scale-[0.99] flex items-center justify-center gap-2 text-xs mt-2 cursor-pointer"
-              >
-                <ShieldCheck className="w-4 h-4" /> Cadastrar Motorista e Entrar
-              </button>
-            </form>
-          )}
+            <button
+              type="submit"
+              className="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl shadow-md transition-all active:scale-[0.99] flex items-center justify-center gap-2 text-xs cursor-pointer"
+            >
+              <ShieldCheck className="w-4 h-4" /> Entrar no App do Motorista
+            </button>
+          </form>
         </div>
       </div>
     );
