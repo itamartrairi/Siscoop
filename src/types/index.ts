@@ -602,6 +602,10 @@ export interface ParadaEntregaEscola {
   observacoes?: string;
   recebidoPor?: string;
   dataHoraEntregaRealizada?: string;
+  // Comprovante de entrega capturado pelo motorista no App do Motorista:
+  // foto do momento da entrega e assinatura digital de quem recebeu.
+  fotoComprovanteUrl?: string;
+  assinaturaDataUrl?: string;
   itens?: {
     produtorId?: string;
     produtorNome: string;
