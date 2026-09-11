@@ -10,6 +10,7 @@ import {
   LogOut,
   ShieldCheck,
   AlertCircle,
+  ClipboardList,
   Image as ImageIcon
 } from 'lucide-react';
 
@@ -105,6 +106,11 @@ export const AppMotoristaView: React.FC = () => {
   const [entregaAtiva, setEntregaAtiva] = useState<{ rotaId: string; paradaIdx: number } | null>(null);
   const [comprovanteForm, setComprovanteForm] = useState({ recebidoPor: '', fotoDataUrl: '', assinaturaDataUrl: '' });
   const [comprovanteErro, setComprovanteErro] = useState<string | null>(null);
+
+  // Navegação em duas etapas: o motorista primeiro escolhe o Pedido (que pode
+  // ter várias entregas/remessas no cronograma) e só depois vê a lista de
+  // entregas daquele pedido para registrar e assinar.
+  const [pedidoSelecionadoKey, setPedidoSelecionadoKey] = useState<string | null>(null);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -255,6 +261,34 @@ export const AppMotoristaView: React.FC = () => {
       && p.status !== 'ENTREGUE' && p.status !== 'CANCELADA'
   );
 
+  // Agrupa as rotas/programações por Pedido — um mesmo pedido pode ter várias
+  // remessas/parcelas de entrega no cronograma. O motorista primeiro escolhe
+  // o Pedido e só depois vê a lista de entregas daquele pedido.
+  const chavePedido = (rota: (typeof minhasRotas)[number]) =>
+    rota.pedidoId || rota.pedidoNumero || rota.chamadaPublicaEdital || rota.id;
+
+  type PedidoAgrupado = { key: string; pedidoNumero: string; programaNome?: string; chamadaPublicaEdital?: string; rotas: typeof minhasRotas };
+
+  const gruposPorPedido = minhasRotas.reduce((acc, rota) => {
+    const key = chavePedido(rota);
+    if (!acc[key]) {
+      acc[key] = {
+        key,
+        pedidoNumero: rota.pedidoNumero || rota.chamadaPublicaEdital || 'Pedido sem número',
+        programaNome: rota.programaNome,
+        chamadaPublicaEdital: rota.chamadaPublicaEdital,
+        rotas: []
+      };
+    }
+    acc[key].rotas.push(rota);
+    return acc;
+  }, {} as Record<string, PedidoAgrupado>);
+
+  const pedidosAgrupados: PedidoAgrupado[] = Object.keys(gruposPorPedido).map(k => gruposPorPedido[k]);
+
+  const pedidoSelecionado = pedidosAgrupados.find(p => p.key === pedidoSelecionadoKey) || null;
+  const rotasDoPedidoSelecionado = pedidoSelecionado?.rotas || [];
+
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-xs">
@@ -276,14 +310,60 @@ export const AppMotoristaView: React.FC = () => {
         </button>
       </div>
 
-      {/* Rotas de Entrega Geradas pela Cooperativa (SisGepa → Programação de Entregas) */}
+      {/* ETAPA 1: Seleção do Pedido */}
+      {!pedidoSelecionado && (
+        <div className="space-y-4">
+          <h2 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+            <ClipboardList className="w-4 h-4 text-amber-600" /> Selecione o Pedido
+          </h2>
+          {pedidosAgrupados.length === 0 ? (
+            <div className="p-8 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 text-center text-slate-500 text-xs font-medium">
+              Nenhum pedido com entregas atribuídas a {motoristaAtual.nome} ({motoristaAtual.email}) no momento. As rotas são criadas pela cooperativa em SisGepa → Programação de Entregas.
+            </div>
+          ) : (
+            pedidosAgrupados.map(pg => {
+              const totalParadasPendentes = pg.rotas.reduce((sum, rota) => {
+                const paradas = rota.paradasEntrega && rota.paradasEntrega.length > 0 ? rota.paradasEntrega : [{ statusEntrega: 'PENDENTE' as const }];
+                return sum + paradas.filter(p => p.statusEntrega !== 'ENTREGUE').length;
+              }, 0);
+              return (
+                <button
+                  key={pg.key}
+                  type="button"
+                  onClick={() => setPedidoSelecionadoKey(pg.key)}
+                  className="w-full text-left p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-xs hover:border-amber-400 dark:hover:border-amber-600 transition-all flex items-center justify-between gap-3 cursor-pointer"
+                >
+                  <div>
+                    <div className="font-mono font-black text-sm text-slate-900 dark:text-white">{pg.pedidoNumero}</div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      {pg.programaNome && <span>{pg.programaNome} · </span>}
+                      {pg.rotas.length} {pg.rotas.length === 1 ? 'entrega' : 'entregas'} no cronograma
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-1 bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 rounded-full text-[10px] font-bold shrink-0">
+                    {totalParadasPendentes} pendente(s)
+                  </span>
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {/* ETAPA 2: Entregas do Pedido selecionado */}
+      {pedidoSelecionado && (
       <div className="space-y-4">
-        {minhasRotas.length === 0 ? (
-          <div className="p-8 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 text-center text-slate-500 text-xs font-medium">
-            Nenhuma rota de entrega atribuída a {motoristaAtual.nome} ({motoristaAtual.email}) no momento. As rotas são criadas pela cooperativa em SisGepa → Programação de Entregas.
-          </div>
-        ) : (
-          minhasRotas.map(rota => {
+        <button
+          type="button"
+          onClick={() => { setPedidoSelecionadoKey(null); setEntregaAtiva(null); setComprovanteErro(null); }}
+          className="text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white flex items-center gap-1 cursor-pointer"
+        >
+          ← Voltar aos pedidos
+        </button>
+        <h2 className="text-sm font-black text-slate-900 dark:text-white">
+          Entregas do Pedido <span className="font-mono">{pedidoSelecionado.pedidoNumero}</span>
+        </h2>
+        {rotasDoPedidoSelecionado.map(rota => {
             const paradas = rota.paradasEntrega && rota.paradasEntrega.length > 0
               ? rota.paradasEntrega
               : [{
@@ -436,9 +516,9 @@ export const AppMotoristaView: React.FC = () => {
                 </div>
               </div>
             );
-          })
-        )}
+          })}
       </div>
+      )}
     </div>
   );
 };
