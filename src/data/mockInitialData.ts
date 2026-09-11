@@ -719,7 +719,7 @@ export const INITIAL_CHAMADAS_PUBLICAS: ChamadaPublica[] = [
     dataAbertura: '2026-07-01',
     dataEncerramento: '2026-08-30',
     valorTotalEdital: 176000.00,
-    status: 'HOMOLOGADA',
+    status: 'EM_EXECUCAO',
     observacoes: 'Aquisição de gêneros alimentícios da Agricultura Familiar para alimentação escolar de Trairi/CE.',
     itensSolicitados: [
       { produtoId: 'pdt-01', produtoNome: 'Mandioca In Natura Organica', unidade: 'KG', quantidadeTotal: 15000, precoMaximoUnitario: 4.80, valorTotalItem: 72000.00 },
