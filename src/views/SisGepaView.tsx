@@ -279,7 +279,7 @@ export const SisGepaView: React.FC = () => {
     dataAbertura: new Date().toISOString().split('T')[0],
     dataEncerramento: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0],
     valorTotalEdital: 150000,
-    status: 'ABERTA' as 'ABERTA' | 'EM_ANALISE' | 'HOMOLOGADA' | 'ENCERRADA',
+    status: 'ABERTA' as 'ABERTA' | 'EM_EXECUCAO' | 'ENCERRADA',
     observacoes: '',
     itensSolicitados: [] as ItemChamadaPublica[]
   });
@@ -3450,8 +3450,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                         <div className="flex items-center gap-1.5">
                           <span className={`px-2 py-0.5 font-black rounded text-[10px] ${
                             cp.status === 'ABERTA' ? 'bg-emerald-100 text-emerald-800' :
-                            cp.status === 'HOMOLOGADA' ? 'bg-blue-100 text-blue-800' :
-                            cp.status === 'EM_ANALISE' ? 'bg-amber-100 text-amber-800' :
+                            cp.status === 'EM_EXECUCAO' ? 'bg-blue-100 text-blue-800' :
                             'bg-slate-100 text-slate-700'
                           }`}>
                             {cp.status}
@@ -4770,8 +4769,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                     className="w-full p-2.5 bg-white border border-slate-200 rounded-xl font-bold"
                   >
                     <option value="ABERTA">ABERTA</option>
-                    <option value="EM_ANALISE">EM ANÁLISE</option>
-                    <option value="HOMOLOGADA">HOMOLOGADA</option>
+                    <option value="EM_EXECUCAO">EM EXECUÇÃO</option>
                     <option value="ENCERRADA">ENCERRADA</option>
                   </select>
                 </div>
@@ -5339,12 +5337,16 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                       className="w-full p-2.5 bg-white border-2 border-emerald-400 rounded-xl font-black text-emerald-950 shadow-xs"
                     >
                       <option value="">Selecione a Chamada Pública / Edital...</option>
-                      {chamadasPublicas.map(cp => (
+                      {chamadasPublicas
+                        .filter(cp => cp.status !== 'ENCERRADA' || cp.id === pedidoForm.chamadaPublicaId)
+                        .map(cp => (
                         <option key={cp.id} value={cp.id}>
                           Edital {cp.numeroEdital} - {cp.orgaoComprador} ({cp.programaNome || cp.programa} | R$ {(cp.valorTotalEdital || 0).toLocaleString('pt-BR')})
+                          {cp.status === 'ENCERRADA' ? ' [ENCERRADA]' : ''}
                         </option>
                       ))}
                     </select>
+                    <p className="text-[10px] text-slate-400 mt-1">Somente chamadas públicas ainda não encerradas ficam disponíveis para novos pedidos.</p>
                   </div>
 
                   <div>
@@ -5357,33 +5359,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                       className="w-full p-2.5 bg-white border border-slate-200 rounded-xl font-bold"
                       placeholder="PED-001/2026"
                     />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-700 font-bold mb-1">Programa Governamental *</label>
-                    <select
-                      value={pedidoForm.programaId}
-                      onChange={e => {
-                        const prog = programas.find(p => p.id === e.target.value);
-                        const novasFontes = getFontesRecursosParaPrograma(prog?.tipo, prog?.nome);
-                        setPedidoForm(prev => ({
-                          ...prev,
-                          programaId: e.target.value,
-                          programaNome: prog?.nome || '',
-                          programa: prog?.tipo || 'PAA',
-                          // Se a fonte já escolhida não faz sentido para o novo
-                          // programa, limpa — evita salvar um pedido do PAA com
-                          // fonte "Pré-Escola" (categoria exclusiva do PNAE).
-                          fonteRecursos: novasFontes.includes(prev.fonteRecursos) ? prev.fonteRecursos : ''
-                        }));
-                      }}
-                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl font-bold text-emerald-800"
-                    >
-                      <option value="">Selecione o Programa...</option>
-                      {programas.map(p => (
-                        <option key={p.id} value={p.id}>{p.nome} ({p.tipo})</option>
-                      ))}
-                    </select>
                   </div>
 
                   <div>
@@ -5400,7 +5375,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                       ))}
                     </select>
                     {!pedidoForm.programaId && (
-                      <p className="text-[10px] text-slate-400 mt-1">Selecione o Programa acima para ver as fontes de recursos compatíveis.</p>
+                      <p className="text-[10px] text-slate-400 mt-1">Selecione a Chamada Pública acima para ver as fontes de recursos compatíveis.</p>
                     )}
                   </div>
 

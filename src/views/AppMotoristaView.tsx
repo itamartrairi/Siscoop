@@ -247,8 +247,12 @@ export const AppMotoristaView: React.FC = () => {
   // DATA ISOLATION FOR LOGGED-IN DRIVER — rotas geradas pela administração
   // em SisGepa → Programação de Entregas, vinculadas pelo nome do motorista
   // selecionado naquele cadastro.
+  // Rotas geradas pela cooperativa, mostrando ao motorista apenas as que
+  // ainda têm entregas pendentes de assinatura (rotas já totalmente
+  // ENTREGUES ou CANCELADAS saem da lista de ação do motorista).
   const minhasRotas = programacoesEntrega.filter(
     p => p.motoristaNome && p.motoristaNome.toLowerCase().trim() === motoristaAtual.nome.toLowerCase().trim()
+      && p.status !== 'ENTREGUE' && p.status !== 'CANCELADA'
   );
 
   return (
