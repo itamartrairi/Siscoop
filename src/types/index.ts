@@ -549,7 +549,7 @@ export interface ChamadaPublica {
   dataAbertura: string;
   dataEncerramento: string;
   valorTotalEdital: number;
-  status: 'ABERTA' | 'EM_ANALISE' | 'HOMOLOGADA' | 'ENCERRADA';
+  status: 'ABERTA' | 'EM_EXECUCAO' | 'ENCERRADA';
   observacoes?: string;
   arquivoEditalNome?: string;
   itensSolicitados: ItemChamadaPublica[];
