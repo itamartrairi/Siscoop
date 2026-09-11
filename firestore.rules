@@ -1,0 +1,141 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && (
+        request.auth.token.email_verified == true ||
+        request.auth.token.firebase.sign_in_provider == 'google.com' ||
+        request.auth.token.firebase.sign_in_provider == 'password'
+      );
+    }
+
+    function isCurrentUser(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Admin é definido exclusivamente pela existência de um documento em
+    // /admins/{uid}. Os dois e-mails que estavam embutidos aqui foram removidos:
+    // e-mail em regra é frágil (basta trocar o endereço da conta ou registrar o
+    // domínio para virar admin) e obrigava um deploy de regras a cada mudança.
+    //
+    // Para promover alguém, crie /admins/{uid} pelo console do Firebase.
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Tenant (cooperativa) do usuário autenticado, lido do documento
+    // users/{uid} — mantido sincronizado pelo app a cada login
+    // (ver src/services/firebaseDbService.ts -> saveUserTenantMappingToFirestore).
+    // Sem esse documento (ex.: usuário acabou de se cadastrar e ainda não
+    // concluiu o cadastro da cooperativa), a função falha e o acesso aos
+    // dados de outras coleções é negado por padrão (fail-closed).
+    function myTenantId() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tenantId;
+    }
+
+    function belongsToTenant(dataTenantId) {
+      return isSignedIn() && dataTenantId == myTenantId();
+    }
+
+    // Default: negado. Nada é liberado por padrão — cada coleção usada pelo
+    // app precisa de uma regra explícita abaixo.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Admins collection — cada usuário só consegue verificar o próprio status.
+    // Antes, qualquer conta autenticada podia LISTAR a coleção inteira e
+    // descobrir exatamente quais UIDs atacar.
+    // A escrita fica fora do app: promover admin é operação de console.
+    match /admins/{userId} {
+      allow read: if isCurrentUser(userId);
+      allow write: if false;
+    }
+
+    // users/{uid}: mapeamento usuário -> tenantId, usado pelas regras acima.
+    //
+    // O usuário pode criar o próprio documento uma vez (no primeiro login),
+    // mas NÃO pode trocar o tenantId depois. Como esse campo é a base de todo
+    // o isolamento entre cooperativas, permitir a edição livre significava que
+    // qualquer usuário podia reescrever o próprio tenantId e passar a ler os
+    // dados de outra cooperativa.
+    match /users/{userId} {
+      allow read: if isCurrentUser(userId) || isAdmin();
+      allow create: if isCurrentUser(userId) || isAdmin();
+      allow update: if isAdmin() ||
+        (isCurrentUser(userId) && request.resource.data.tenantId == resource.data.tenantId);
+      allow delete: if isAdmin();
+    }
+
+    // Cooperados collection — isolado por cooperativa (tenantId)
+    match /cooperados/{cooperadoId} {
+      allow read, update, delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
+      allow create: if isAdmin() || belongsToTenant(request.resource.data.tenantId);
+    }
+
+    // Transações de Capital Social
+    match /transacoesCapital/{transacaoId} {
+      allow read, update, delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
+      allow create: if isAdmin() || belongsToTenant(request.resource.data.tenantId);
+    }
+
+    // Contas Financeiras (SisFin)
+    match /contasFinanceiras/{contaId} {
+      allow read, update, delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
+      allow create: if isAdmin() || belongsToTenant(request.resource.data.tenantId);
+    }
+
+    // Assembleias
+    match /assembleias/{assembleiaId} {
+      allow read, update, delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
+      allow create: if isAdmin() || belongsToTenant(request.resource.data.tenantId);
+    }
+
+    // Histórico de Backups — apenas leitura/criação pela própria cooperativa;
+    // alterar/apagar backup é ação só de admin
+    match /backups/{backupId} {
+      allow read: if isAdmin() || belongsToTenant(resource.data.tenantId);
+      allow create: if isAdmin() || belongsToTenant(request.resource.data.tenantId);
+      allow update, delete: if isAdmin();
+    }
+
+    // Cooperativa / Tenants — o próprio registro da cooperativa só pode ser
+    // lido/editado por quem pertence a ela (ou admin)
+    match /tenants/{tenantId} {
+      allow read, update: if isAdmin() || (isSignedIn() && tenantId == myTenantId());
+      // Criação acontece no cadastro inicial, antes de o usuário ter tenantId.
+      // A condição extra impede que uma conta crie cooperativas em massa: ela
+      // só pode criar o tenant que já está registrado no próprio /users/{uid},
+      // ou um primeiro tenant se ainda não tiver nenhum vínculo.
+      allow create: if isSignedIn() && (
+        !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
+        tenantId == myTenantId()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Assinaturas e logs de webhook são gravados pelo backend com credencial de
+    // serviço (que ignora estas regras). Nenhum cliente precisa de acesso.
+    match /assinaturas/{email} {
+      allow read, write: if false;
+    }
+
+    match /webhookLogs/{logId} {
+      allow read, write: if false;
+    }
+
+    // A coleção /test era gravável por qualquer usuário autenticado — uma
+    // porta aberta para inflar a conta de escrita do projeto. O teste de
+    // conexão agora só lê um documento fixo e público de diagnóstico.
+    match /test/connection {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+  }
+}

@@ -1,0 +1,57 @@
+# ATENÇÃO — este arquivo publica apenas o front-end estático.
+#
+# O Express de server.ts (webhook da Kiwify, validação de licença, consulta de
+# assinatura) NÃO roda no Netlify. Enquanto o app estiver hospedado só aqui:
+#   - POST /api/webhooks/kiwify           → 404
+#   - POST /api/license/validate          → 404, nenhuma licença ativa
+#   - GET  /api/subscription/status       → 404
+#
+# Escolha um dos caminhos antes de ir para produção:
+#   a) hospedar o app inteiro no Cloud Run / Render / Fly, rodando `npm start`;
+#   b) manter o front aqui e apontar as chamadas /api/* para o backend com um
+#      proxy (veja o bloco [[redirects]] comentado no fim do arquivo).
+
+[build]
+  publish = "dist"
+  command = "npm run build"
+
+[build.environment]
+  NODE_VERSION = "22"
+  # O frontend precisa publicar a configuração pública do Firebase. Estes
+  # dois valores são identificadores/client keys, não credenciais de servidor.
+  # As credenciais privadas continuam sujeitas ao scanner normalmente.
+  SECRETS_SCAN_SMART_DETECTION_OMIT_VALUES = "AIzaSyCYEOixxM5X0MaRpPRgixRB-3OuQKkHRlY,255528919563-aitgm62t336jfd3abqek1sviu138et6b.apps.googleusercontent.com"
+
+# O scanner de segredos do Netlify fica LIGADO de propósito.
+# Ele estava desativado em todos os contextos, o que silenciou justamente o
+# alerta que teria apontado os dados e chaves versionados no repositório.
+# Se algum falso positivo aparecer, liste a chave específica em
+# SECRETS_SCAN_OMIT_KEYS em vez de desligar o scanner inteiro.
+
+# Cabeçalhos de segurança básicos
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "SAMEORIGIN"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "geolocation=(self), camera=(), microphone=()"
+
+# Os assets com hash no nome podem ser cacheados para sempre.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Opção (b): descomente e ajuste a URL do backend.
+# [[redirects]]
+#   from = "/api/*"
+#   to = "https://SEU-BACKEND.exemplo.com/api/:splat"
+#   status = 200
+#   force = true
+
+# Fallback de SPA — precisa vir por último.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

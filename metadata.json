@@ -1,0 +1,8 @@
+{
+  "name": "SICOOP PLATFORM - Sistema Integrado de Gestão de Cooperativas",
+  "description": "Plataforma ERP modular e integrada para gestão completa de cooperativas, SisGepa (PAA/PNAE), SisCont, SisFin, Compras, Estoque, RH, BI e Portais.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

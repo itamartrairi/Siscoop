@@ -1,0 +1,15 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# Dados exportados / planilhas de origem. Nunca versione dados de cooperados:
+# nome, CPF, RG, filiação e endereço são dados pessoais sob a LGPD.
+*.csv
+!scripts/**/*.csv
+imported_cooperados.json
+*.zip
