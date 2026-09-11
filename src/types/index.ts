@@ -555,6 +555,48 @@ export interface ChamadaPublica {
   itensSolicitados: ItemChamadaPublica[];
 }
 
+// ==========================================
+// RATEIO DE CHAMADA PÚBLICA — distribuição das quantidades de cada produto
+// solicitado no edital entre os produtores que ofertaram aquele produto, e
+// de cada produtor entre as escolas contempladas na chamada. Serve de base
+// para o registro do Pedido, que herda diretamente esses dados.
+// ==========================================
+
+export interface RateioEscolaProdutor {
+  escolaId: string;
+  escolaNome: string;
+  quantidade: number;
+}
+
+export interface RateioProdutor {
+  produtorId: string;
+  produtorNome: string;
+  quantidadeOfertada: number; // capacidade informada na proposta de oferta
+  quantidadeAlocada: number; // quanto foi de fato rateado a este produtor
+  escolas: RateioEscolaProdutor[]; // rateio da quantidade alocada entre as escolas do edital
+}
+
+export interface RateioProduto {
+  produtoId?: string;
+  produtoNome: string;
+  unidade: string;
+  quantidadeTotalChamada: number; // quantidade solicitada no edital para este produto
+  precoMaximoUnitario: number;
+  produtores: RateioProdutor[];
+}
+
+export interface RateioChamadaPublica {
+  id: string;
+  tenantId: string;
+  chamadaPublicaId: string;
+  chamadaPublicaEdital: string;
+  programaId?: string;
+  programaNome?: string;
+  itens: RateioProduto[];
+  dataAtualizacao: string;
+  observacoes?: string;
+}
+
 export interface PropostaOfertaPAA {
   id: string;
   tenantId: string;

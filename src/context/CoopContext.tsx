@@ -27,6 +27,7 @@ import {
   RegistroProducao,
   ProgramaGovernamental,
   ChamadaPublica,
+  RateioChamadaPublica,
   PropostaOfertaPAA,
   ProgramacaoEntregaPAA,
   PrestacaoContasPAA,
@@ -549,6 +550,12 @@ interface CoopContextType {
   updateChamadaPublica: (id: string, c: Partial<ChamadaPublica>) => void;
   deleteChamadaPublica: (id: string) => void;
 
+  // Rateio das quantidades de cada produto do edital entre os produtores
+  // ofertantes e as escolas contempladas — um rateio por chamada pública.
+  rateiosChamadas: RateioChamadaPublica[];
+  salvarRateioChamada: (r: Omit<RateioChamadaPublica, 'id' | 'tenantId' | 'dataAtualizacao'>) => void;
+  deleteRateioChamada: (chamadaPublicaId: string) => void;
+
   ofertasPAA: PropostaOfertaPAA[];
   addOfertaPAA: (o: Omit<PropostaOfertaPAA, 'id' | 'tenantId'>) => void;
   updateOfertaPAA: (id: string, o: Partial<PropostaOfertaPAA>) => void;
@@ -1039,6 +1046,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [registrosProducao, setRegistrosProducao] = useState<RegistroProducao[]>(() => loadPersistedList('registrosProducao', INITIAL_REGISTROS_PRODUCAO));
   const [programas, setProgramas] = useState<ProgramaGovernamental[]>(() => loadPersistedList('programas', INITIAL_PROGRAMAS));
   const [chamadasPublicas, setChamadasPublicas] = useState<ChamadaPublica[]>(() => loadPersistedList('chamadasPublicas', INITIAL_CHAMADAS_PUBLICAS));
+  const [rateiosChamadas, setRateiosChamadas] = useState<RateioChamadaPublica[]>(() => loadPersistedList('rateiosChamadas', []));
   const [ofertasPAA, setOfertasPAA] = useState<PropostaOfertaPAA[]>(() => loadPersistedList('ofertasPAA', INITIAL_OFERTAS_PAA));
   const [programacoesEntrega, setProgramacoesEntrega] = useState<ProgramacaoEntregaPAA[]>(() => loadPersistedList('programacoesEntrega', INITIAL_PROGRAMACOES_ENTREGA));
   const [prestacoesContas, setPrestacoesContas] = useState<PrestacaoContasPAA[]>(() => loadPersistedList('prestacoesContas', INITIAL_PRESTACOES_CONTAS));
@@ -1397,6 +1405,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         registrosProducao,
         programas,
         chamadasPublicas,
+        rateiosChamadas,
         ofertasPAA,
         programacoesEntrega,
         prestacoesContas,
@@ -1426,7 +1435,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [
     tenants, currentTenant, currentUser, users, rolePermissions, cooperados, transacoesCapital,
     assembleias, mandatos, auditoriaLogs, config, licenseInfo, webhooks, notasFiscais, sefazCeConfig,
-    produtores, produtos, registrosProducao, programas, chamadasPublicas, ofertasPAA,
+    produtores, produtos, registrosProducao, programas, chamadasPublicas, rateiosChamadas, ofertasPAA,
     programacoesEntrega, prestacoesContas, pedidosProdutorPAA, ordensCompra, planoContas,
     lancamentosContabeis, patrimonio, contasPagarReceber, extratoBancario, solicitacoesCompra,
     fornecedores, estoque, movimentacoesEstoque, funcionariosRH, folhaPagamento, escolasPnae,
@@ -2810,6 +2819,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const tenantRegistrosProducao = registrosProducao.filter(r => !r.tenantId || r.tenantId === activeTenantId);
   const tenantProgramas = programas.filter(p => !p.tenantId || p.tenantId === activeTenantId);
   const tenantChamadasPublicas = chamadasPublicas.filter(c => !c.tenantId || c.tenantId === activeTenantId);
+  const tenantRateiosChamadas = rateiosChamadas.filter(r => !r.tenantId || r.tenantId === activeTenantId);
   const tenantOfertasPAA = ofertasPAA.filter(o => !o.tenantId || o.tenantId === activeTenantId);
   const tenantProgramacoesEntrega = programacoesEntrega.filter(p => !p.tenantId || p.tenantId === activeTenantId);
   const tenantPrestacoesContas = prestacoesContas.filter(p => !p.tenantId || p.tenantId === activeTenantId);
@@ -3044,6 +3054,30 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setChamadasPublicas(prev => prev.filter(c => c.id !== id));
     addAuditLog('SISGEPA', 'EXCLUSAO', `Excluiu chamada pública ${alvo?.numeroEdital || id}`);
+  };
+
+  // Salva (cria ou substitui) o rateio de uma chamada pública — um único
+  // rateio ativo por chamada, identificado por chamadaPublicaId.
+  const salvarRateioChamada = (rData: Omit<RateioChamadaPublica, 'id' | 'tenantId' | 'dataAtualizacao'>) => {
+    setRateiosChamadas(prev => {
+      const existente = prev.find(r => r.chamadaPublicaId === rData.chamadaPublicaId);
+      const novoRateio: RateioChamadaPublica = {
+        ...rData,
+        id: existente?.id || `rat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        tenantId: currentTenant.id,
+        dataAtualizacao: new Date().toISOString()
+      };
+      if (existente) {
+        return prev.map(r => r.id === existente.id ? novoRateio : r);
+      }
+      return [novoRateio, ...prev];
+    });
+    addAuditLog('SISGEPA', 'ALTERACAO', `Salvou rateio da chamada pública ${rData.chamadaPublicaEdital || rData.chamadaPublicaId}`);
+  };
+
+  const deleteRateioChamada = (chamadaPublicaId: string) => {
+    setRateiosChamadas(prev => prev.filter(r => r.chamadaPublicaId !== chamadaPublicaId));
+    addAuditLog('SISGEPA', 'EXCLUSAO', `Removeu rateio da chamada pública ${chamadaPublicaId}`);
   };
 
   const addOfertaPAA = (oData: Omit<PropostaOfertaPAA, 'id' | 'tenantId'>) => {
@@ -4614,6 +4648,9 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addChamadaPublica,
         updateChamadaPublica,
         deleteChamadaPublica,
+        rateiosChamadas: tenantRateiosChamadas,
+        salvarRateioChamada,
+        deleteRateioChamada,
         ofertasPAA: tenantOfertasPAA,
         addOfertaPAA,
         updateOfertaPAA,

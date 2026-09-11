@@ -72,7 +72,10 @@ import {
   PedidoProdutorPAA,
   ItemPedidoProdutor,
   NotaFiscal,
-  SistemaTributarioNFe
+  SistemaTributarioNFe,
+  RateioChamadaPublica,
+  RateioProduto,
+  RateioProdutor
 } from '../types';
 import { ALERTA_CRONOGRAMA_TEXTO, calcularImpostosItem } from '../utils/tributacaoReforma';
 import { expandirItensHistoricoProducao } from '../utils/registroProducaoHelpers';
@@ -164,6 +167,9 @@ export const SisGepaView: React.FC = () => {
     addChamadaPublica,
     updateChamadaPublica,
     deleteChamadaPublica,
+    rateiosChamadas,
+    salvarRateioChamada,
+    deleteRateioChamada,
     ofertasPAA,
     addOfertaPAA,
     updateOfertaPAA,
@@ -202,7 +208,7 @@ export const SisGepaView: React.FC = () => {
     alert('Seu perfil de acesso tem permissão apenas de leitura neste módulo. Fale com um administrador para solicitar permissão de edição.');
   };
 
-  const [activeTab, setActiveTab] = useState<'chamadas' | 'ofertas' | 'pedidos' | 'entregas' | 'relatorios'>('chamadas');
+  const [activeTab, setActiveTab] = useState<'chamadas' | 'ofertas' | 'rateio' | 'pedidos' | 'entregas' | 'relatorios'>('chamadas');
   const [relatorioSubTab, setRelatorioSubTab] = useState<'pedidos' | 'entregas'>('pedidos');
 
   // Specific filters for Relatórios de Pedidos e Entregas
@@ -409,6 +415,14 @@ export const SisGepaView: React.FC = () => {
 
   const [selectedProdutoresIds, setSelectedProdutoresIds] = useState<string[]>([]);
   const [pedidoItens, setPedidoItens] = useState<ItemPedidoProdutor[]>([]);
+
+  // --- Rateio de Produtores (aba "Rateio de Produtores") ---
+  // Distribui a quantidade de cada produto do edital entre os produtores
+  // que o ofertaram e, dentro de cada produtor, entre as escolas
+  // contempladas na chamada pública. O resultado fica disponível para
+  // popular o Pedido diretamente (ver handleCarregarRateioNoPedido).
+  const [rateioChamadaId, setRateioChamadaId] = useState('');
+  const [rateioEmEdicao, setRateioEmEdicao] = useState<RateioChamadaPublica | null>(null);
 
   // Open Handlers
   const handleOpenChamada = (cp?: ChamadaPublica) => {
@@ -1881,6 +1895,218 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
     });
   };
 
+  // --- Helpers do Rateio de Produtores ---
+
+  // Ofertas SUBMETIDAs ou ACEITAs de um produto específico dentro de uma chamada.
+  const getOfertasParaProdutoChamada = (chamadaId: string, produtoNome: string, produtoId?: string) => {
+    return ofertasPAA.filter(o =>
+      o.chamadaPublicaId === chamadaId &&
+      o.status !== 'RECUSADA' &&
+      (
+        (produtoId && o.produtoId === produtoId) ||
+        (o.produtoNome && produtoNome && o.produtoNome.toLowerCase() === produtoNome.toLowerCase())
+      )
+    );
+  };
+
+  // Distribui `total` entre `pesos` (mesma ordem), proporcionalmente,
+  // arredondando para 2 casas e ajustando a sobra no último item para que a
+  // soma bata exatamente com `total`.
+  const distribuirProporcional = (total: number, pesos: number[]): number[] => {
+    const somaPesos = pesos.reduce((s, p) => s + p, 0);
+    if (somaPesos <= 0 || total <= 0) return pesos.map(() => 0);
+    const valores = pesos.map(p => Math.round((p / somaPesos) * total * 100) / 100);
+    const somaAtual = valores.reduce((s, v) => s + v, 0);
+    const diferenca = Math.round((total - somaAtual) * 100) / 100;
+    if (valores.length > 0) valores[valores.length - 1] = Math.round((valores[valores.length - 1] + diferenca) * 100) / 100;
+    return valores;
+  };
+
+  // Gera automaticamente um rateio sugerido para uma chamada pública: para
+  // cada produto do edital, reparte a quantidade solicitada entre os
+  // produtores que a ofertaram (proporcional à quantidade ofertada por
+  // cada um, sem nunca superar o total do edital) e, dentro de cada
+  // produtor, reparte entre as escolas contempladas (proporcional ao nº de
+  // alunos atendidos; igualmente se não houver essa informação).
+  const gerarRateioAutomatico = (chamada: ChamadaPublica): RateioChamadaPublica => {
+    const escolasEdital = chamada.escolasContempladas && chamada.escolasContempladas.length > 0
+      ? chamada.escolasContempladas
+      : [];
+
+    const itens: RateioProduto[] = (chamada.itensSolicitados || []).map(item => {
+      const ofertas = getOfertasParaProdutoChamada(chamada.id, item.produtoNome, item.produtoId);
+      const pesosProdutores = ofertas.map(o => Number(o.quantidadeOfertada) || 0);
+      const alocacoes = distribuirProporcional(item.quantidadeTotal, pesosProdutores);
+
+      const produtores: RateioProdutor[] = ofertas.map((o, idx) => {
+        const quantidadeAlocada = alocacoes[idx] || 0;
+        const pesosEscolas = escolasEdital.map(e => Number(e.alunosAtendidos) || 1);
+        const qtdsEscolas = distribuirProporcional(quantidadeAlocada, pesosEscolas.length > 0 ? pesosEscolas : [1]);
+        return {
+          produtorId: o.produtorId,
+          produtorNome: o.produtorNome,
+          quantidadeOfertada: Number(o.quantidadeOfertada) || 0,
+          quantidadeAlocada,
+          escolas: escolasEdital.length > 0
+            ? escolasEdital.map((e, eIdx) => ({
+                escolaId: e.id || e.nomeEscola,
+                escolaNome: e.nomeEscola,
+                quantidade: qtdsEscolas[eIdx] || 0
+              }))
+            : []
+        };
+      });
+
+      return {
+        produtoId: item.produtoId,
+        produtoNome: item.produtoNome,
+        unidade: item.unidade,
+        quantidadeTotalChamada: item.quantidadeTotal,
+        precoMaximoUnitario: item.precoMaximoUnitario,
+        produtores
+      };
+    });
+
+    return {
+      id: '',
+      tenantId: '',
+      chamadaPublicaId: chamada.id,
+      chamadaPublicaEdital: chamada.numeroEdital,
+      programaId: chamada.programaId,
+      programaNome: chamada.programaNome,
+      itens,
+      dataAtualizacao: ''
+    };
+  };
+
+  const handleSelecionarChamadaRateio = (chamadaId: string) => {
+    setRateioChamadaId(chamadaId);
+    if (!chamadaId) { setRateioEmEdicao(null); return; }
+    const salvo = rateiosChamadas.find(r => r.chamadaPublicaId === chamadaId);
+    const chamada = chamadasPublicas.find(c => c.id === chamadaId);
+    if (salvo) {
+      setRateioEmEdicao(salvo);
+    } else if (chamada) {
+      setRateioEmEdicao(gerarRateioAutomatico(chamada));
+    } else {
+      setRateioEmEdicao(null);
+    }
+  };
+
+  const handleRegerarRateioAutomatico = () => {
+    const chamada = chamadasPublicas.find(c => c.id === rateioChamadaId);
+    if (!chamada) return;
+    if (!confirm('Isso vai substituir os ajustes manuais feitos neste rateio pela sugestão automática. Deseja continuar?')) return;
+    setRateioEmEdicao(gerarRateioAutomatico(chamada));
+  };
+
+  const handleQuantidadeProdutorRateio = (produtoIdx: number, produtorIdx: number, novaQtd: number) => {
+    setRateioEmEdicao(prev => {
+      if (!prev) return prev;
+      const itens = prev.itens.map((item, iIdx) => {
+        if (iIdx !== produtoIdx) return item;
+        const produtores = item.produtores.map((p, pIdx) => {
+          if (pIdx !== produtorIdx) return p;
+          // Redistribui a nova quantidade entre as escolas mantendo as
+          // proporções já usadas (ou igualmente, se ainda não havia rateio).
+          const pesos = p.escolas.length > 0 ? p.escolas.map(e => e.quantidade || 1) : [1];
+          const novasQtdsEscolas = distribuirProporcional(novaQtd, pesos);
+          return {
+            ...p,
+            quantidadeAlocada: novaQtd,
+            escolas: p.escolas.map((e, eIdx) => ({ ...e, quantidade: novasQtdsEscolas[eIdx] || 0 }))
+          };
+        });
+        return { ...item, produtores };
+      });
+      return { ...prev, itens };
+    });
+  };
+
+  const handleQuantidadeEscolaRateio = (produtoIdx: number, produtorIdx: number, escolaIdx: number, novaQtd: number) => {
+    setRateioEmEdicao(prev => {
+      if (!prev) return prev;
+      const itens = prev.itens.map((item, iIdx) => {
+        if (iIdx !== produtoIdx) return item;
+        const produtores = item.produtores.map((p, pIdx) => {
+          if (pIdx !== produtorIdx) return p;
+          const escolas = p.escolas.map((e, eIdx) => eIdx === escolaIdx ? { ...e, quantidade: novaQtd } : e);
+          return { ...p, escolas };
+        });
+        return { ...item, produtores };
+      });
+      return { ...prev, itens };
+    });
+  };
+
+  const handleSalvarRateioAtual = () => {
+    if (!canWrite) { blockWriteAction(); return; }
+    if (!rateioEmEdicao) return;
+    salvarRateioChamada({
+      chamadaPublicaId: rateioEmEdicao.chamadaPublicaId,
+      chamadaPublicaEdital: rateioEmEdicao.chamadaPublicaEdital,
+      programaId: rateioEmEdicao.programaId,
+      programaNome: rateioEmEdicao.programaNome,
+      itens: rateioEmEdicao.itens,
+      observacoes: rateioEmEdicao.observacoes
+    });
+    alert('Rateio salvo com sucesso! Ele já pode ser carregado ao registrar o Pedido desta chamada pública.');
+  };
+
+  // Converte o rateio salvo de uma chamada em itens de pedido — um item por
+  // combinação (produtor, escola), já com a quantidade definida no rateio.
+  // É isso que faz o Pedido "nascer" com os dados do rateio.
+  const handleCarregarRateioNoPedido = () => {
+    const rateio = rateiosChamadas.find(r => r.chamadaPublicaId === pedidoForm.chamadaPublicaId);
+    if (!rateio) {
+      alert('Esta chamada pública ainda não tem um rateio salvo. Acesse a aba "Rateio de Produtores" para criá-lo.');
+      return;
+    }
+    const itensFiltrados = pedidoForm.produtoId || pedidoForm.produtoNome
+      ? rateio.itens.filter(it =>
+          (pedidoForm.produtoId && it.produtoId === pedidoForm.produtoId) ||
+          (pedidoForm.produtoNome && it.produtoNome.toLowerCase() === pedidoForm.produtoNome.toLowerCase())
+        )
+      : rateio.itens;
+
+    if (itensFiltrados.length === 0) {
+      alert('Nenhum item do rateio corresponde ao produto selecionado.');
+      return;
+    }
+
+    const novosItens: ItemPedidoProdutor[] = [];
+    itensFiltrados.forEach(item => {
+      item.produtores.forEach(p => {
+        const prodObj = produtores.find(pr => pr.id === p.produtorId);
+        const escolasComQtd = p.escolas.filter(e => (e.quantidade || 0) > 0);
+        const linhasEscola = escolasComQtd.length > 0 ? escolasComQtd : [{ escolaId: '', escolaNome: '', quantidade: p.quantidadeAlocada }];
+        linhasEscola.forEach(e => {
+          novosItens.push({
+            produtorId: p.produtorId,
+            produtorNome: p.produtorNome,
+            produtoId: item.produtoId || '',
+            produtoNome: item.produtoNome,
+            unidadeMedida: item.unidade,
+            quantidadeOfertada: p.quantidadeOfertada,
+            quantidadePedida: e.quantidade,
+            precoUnitario: item.precoMaximoUnitario,
+            valorTotalItem: e.quantidade * item.precoMaximoUnitario,
+            polo: prodObj?.polo || 'Sede',
+            escolaId: e.escolaId,
+            escolaNome: e.escolaNome,
+            localEntrega: e.escolaNome || 'Sede',
+            escolasIds: e.escolaId ? [e.escolaId] : [],
+            escolasNomes: e.escolaNome ? [e.escolaNome] : []
+          });
+        });
+      });
+    });
+
+    setPedidoItens(novosItens);
+    sincronizarEscolasDoPedidoComItens(novosItens);
+    setSelectedProdutoresIds(Array.from(new Set(novosItens.map(it => it.produtorId))));
+  };
+
   const handleLoadOfertasToPedido = (prodId?: string) => {
     const ofertasAlvo = prodId 
       ? ofertasDoProgramaSelecionado.filter(o => o.produtorId === prodId)
@@ -3306,6 +3532,17 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
           </span>
         </button>
         <button
+          onClick={() => setActiveTab('rateio')}
+          className={`px-5 py-3 text-sm font-extrabold rounded-2xl flex items-center gap-2.5 transition-all whitespace-nowrap shadow-xs cursor-pointer ${
+            activeTab === 'rateio'
+              ? 'bg-emerald-700 text-white shadow-md ring-2 ring-emerald-600'
+              : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <Scale className={`w-4 h-4 ${activeTab === 'rateio' ? 'text-emerald-200' : 'text-emerald-700'}`} />
+          <span>Rateio de Produtores</span>
+        </button>
+        <button
           onClick={() => setActiveTab('pedidos')}
           className={`px-5 py-3 text-sm font-black rounded-2xl flex items-center gap-2.5 transition-all whitespace-nowrap shadow-xs cursor-pointer relative ${
             activeTab === 'pedidos'
@@ -3722,6 +3959,153 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* Tab Rateio de Produtores */}
+      {activeTab === 'rateio' && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-3">
+            <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+              <Scale className="w-5 h-5 text-emerald-700" />
+              Rateio das Quantidades por Produtor e Escola
+            </h3>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Escolha uma Chamada Pública para dividir a quantidade de cada produto do edital entre os produtores que a ofertaram e, dentro de cada produtor, entre as escolas contempladas. O rateio salvo aqui pode ser carregado diretamente ao registrar o Pedido daquela chamada.
+            </p>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <select
+                value={rateioChamadaId}
+                onChange={e => handleSelecionarChamadaRateio(e.target.value)}
+                className="flex-1 p-2.5 bg-white border border-slate-200 rounded-xl font-bold text-emerald-800 text-xs"
+              >
+                <option value="">Selecione a Chamada Pública / Edital...</option>
+                {chamadasPublicas.map(cp => (
+                  <option key={cp.id} value={cp.id}>
+                    Edital {cp.numeroEdital} - {cp.orgaoComprador} {cp.status === 'ENCERRADA' ? '[ENCERRADA]' : ''}
+                  </option>
+                ))}
+              </select>
+              {rateioEmEdicao && (
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleRegerarRateioAutomatico}
+                    className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer border border-slate-200"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" /> Sugerir Automaticamente
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSalvarRateioAtual}
+                    className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                  >
+                    <Save className="w-3.5 h-3.5" /> Salvar Rateio
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {!rateioEmEdicao ? (
+            <div className="p-10 bg-white rounded-2xl border border-slate-200 text-center text-slate-500 text-xs font-medium">
+              Selecione uma Chamada Pública acima para montar o rateio.
+            </div>
+          ) : rateioEmEdicao.itens.length === 0 ? (
+            <div className="p-10 bg-white rounded-2xl border border-slate-200 text-center text-slate-500 text-xs font-medium">
+              Esta chamada pública não tem produtos cadastrados no edital. Cadastre os itens solicitados na aba "Chamadas Públicas" antes de ratear.
+            </div>
+          ) : (
+            rateioEmEdicao.itens.map((item, produtoIdx) => {
+              const totalAlocado = item.produtores.reduce((s, p) => s + (p.quantidadeAlocada || 0), 0);
+              const diffTotal = Math.round((item.quantidadeTotalChamada - totalAlocado) * 100) / 100;
+              return (
+                <div key={produtoIdx} className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+                  <div className="p-4 bg-emerald-950 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <h4 className="font-black text-sm flex items-center gap-2">
+                        <Sprout className="w-4 h-4 text-emerald-300" /> {item.produtoNome}
+                      </h4>
+                      <p className="text-[11px] text-emerald-200 font-mono mt-0.5">
+                        Edital: {item.quantidadeTotalChamada} {item.unidade} a R$ {item.precoMaximoUnitario.toFixed(2)}/{item.unidade}
+                      </p>
+                    </div>
+                    <span className={`px-2.5 py-1 rounded-full text-[11px] font-black shrink-0 ${
+                      diffTotal === 0 ? 'bg-emerald-500/30 text-emerald-200 border border-emerald-400/50'
+                      : diffTotal > 0 ? 'bg-amber-500/20 text-amber-200 border border-amber-400/50'
+                      : 'bg-rose-500/20 text-rose-200 border border-rose-400/50'
+                    }`}>
+                      {diffTotal === 0 ? 'Rateio completo ✓' : diffTotal > 0 ? `Faltam ${diffTotal} ${item.unidade}` : `Excede em ${Math.abs(diffTotal)} ${item.unidade}`}
+                    </span>
+                  </div>
+
+                  {item.produtores.length === 0 ? (
+                    <div className="p-5 text-xs text-slate-500 italic">
+                      Nenhum produtor ofertou este produto para esta chamada ainda. Cadastre propostas de oferta na aba "Propostas de Oferta".
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-slate-100">
+                      {item.produtores.map((p, produtorIdx) => {
+                        const somaEscolas = p.escolas.reduce((s, e) => s + (e.quantidade || 0), 0);
+                        const diffEscolas = Math.round((p.quantidadeAlocada - somaEscolas) * 100) / 100;
+                        return (
+                          <div key={produtorIdx} className="p-4 space-y-2.5">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <Users className="w-4 h-4 text-emerald-700 shrink-0" />
+                                <span className="font-bold text-slate-900 text-xs truncate">{p.produtorNome}</span>
+                                <span className="text-[10px] text-slate-400 font-mono shrink-0">(ofertou {p.quantidadeOfertada} {item.unidade})</span>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <label className="text-[11px] font-bold text-slate-500">Quantidade alocada:</label>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step="0.01"
+                                  value={p.quantidadeAlocada}
+                                  onChange={e => handleQuantidadeProdutorRateio(produtoIdx, produtorIdx, Number(e.target.value) || 0)}
+                                  className="w-24 p-1.5 border border-slate-200 rounded-lg text-xs font-mono font-bold text-emerald-800 text-right"
+                                />
+                                <span className="text-[11px] text-slate-500">{item.unidade}</span>
+                              </div>
+                            </div>
+
+                            {p.escolas.length > 0 && (
+                              <div className="pl-6 space-y-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                    <GraduationCap className="w-3 h-3" /> Rateio entre as escolas do edital
+                                  </span>
+                                  <span className={`text-[10px] font-bold ${diffEscolas === 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                    {diffEscolas === 0 ? 'Confere com o total do produtor ✓' : `Diferença de ${diffEscolas} ${item.unidade} em relação ao alocado`}
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
+                                  {p.escolas.map((esc, escolaIdx) => (
+                                    <div key={escolaIdx} className="flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
+                                      <span className="text-[11px] text-slate-700 truncate">{esc.escolaNome}</span>
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        step="0.01"
+                                        value={esc.quantidade}
+                                        onChange={e => handleQuantidadeEscolaRateio(produtoIdx, produtorIdx, escolaIdx, Number(e.target.value) || 0)}
+                                        className="w-16 p-1 border border-slate-200 rounded text-[11px] font-mono font-bold text-emerald-800 text-right shrink-0"
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
       )}
 
@@ -5508,6 +5892,25 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                     </div>
                   );
                 })()}
+
+                {/* Carregar Rateio salvo da Chamada — preenche o pedido já com as
+                    quantidades definidas por produtor e por escola na aba "Rateio de Produtores". */}
+                {pedidoForm.chamadaPublicaId && rateiosChamadas.some(r => r.chamadaPublicaId === pedidoForm.chamadaPublicaId) && (
+                  <div className="bg-emerald-900 p-3.5 rounded-xl border border-emerald-700 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <span className="font-extrabold text-white text-xs flex items-center gap-1.5">
+                      <Scale className="w-4 h-4 text-emerald-300 shrink-0" />
+                      Esta chamada pública já tem um rateio salvo entre produtores e escolas.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleCarregarRateioNoPedido}
+                      className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-emerald-950 rounded-lg font-black text-[11px] shadow-sm transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
+                      title="Preencher os itens do pedido diretamente com os dados do rateio (produtor + escola + quantidade)"
+                    >
+                      <PackageCheck className="w-3.5 h-3.5" /> Carregar Rateio desta Chamada
+                    </button>
+                  </div>
+                )}
 
                 {/* Proposta de Oferta / Inclusão Rápida no Pedido Vinculada ao Programa e Produto */}
                 <div className="bg-emerald-50/90 p-3.5 rounded-xl border border-emerald-300 space-y-2.5 shadow-xs">
