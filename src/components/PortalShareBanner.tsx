@@ -60,7 +60,21 @@ export const PortalShareBanner: React.FC<Props> = ({
     const tenantName = currentTenant?.name || 'SICOOP Cooperativa';
     const message = `🌿 *${portalInfo.title}* - ${tenantName}\n\nOlá! Acesse o portal oficial diretamente pelo link:\n\n🔗 ${currentUrl}\n\n_${portalInfo.description}_`;
     const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+    // Cria e clica um <a real> em vez de window.open(), que costuma ser
+    // bloqueado silenciosamente em navegadores e ambientes de preview
+    // (iframes sandbox) quando chamado a partir do onClick de um botão.
+    try {
+      const a = document.createElement('a');
+      a.href = whatsappUrl;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (e) {
+      console.error('Falha ao abrir WhatsApp', e);
+      window.location.href = whatsappUrl;
+    }
   };
 
   return (

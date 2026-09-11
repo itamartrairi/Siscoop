@@ -21,6 +21,27 @@ import {
 } from 'lucide-react';
 import { useCoop } from '../context/CoopContext';
 
+// Abre uma URL em nova aba de forma robusta: cria e clica um <a real>
+// programaticamente, em vez de depender de window.open(), que muitos
+// navegadores e ambientes de preview (iframes sandbox) bloqueiam
+// silenciosamente quando chamado de dentro de um clique de botão.
+const abrirLinkExterno = (url: string) => {
+  try {
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } catch (e) {
+    console.error('Falha ao abrir link', e);
+    // Último recurso: navega na mesma aba, garantindo que o usuário
+    // consiga chegar ao portal mesmo se o navegador bloquear nova aba.
+    window.location.href = url;
+  }
+};
+
 export interface PortalShareInfo {
   id: 'portal-cooperado' | 'portal-escola' | 'app-produtor' | 'app-motorista';
   title: string;
@@ -189,12 +210,12 @@ export const SharePortalsModal: React.FC<Props> = ({ isOpen, onClose, initialPor
     const tenantName = currentTenant?.name || 'SICOOP Cooperativa';
     const message = `🌿 *${portal.title}* - ${tenantName}\n\nOlá! Acesse o portal oficial através do link abaixo:\n\n🔗 ${url}\n\n_${portal.description}_`;
     const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+    abrirLinkExterno(whatsappUrl);
   };
 
   const handleOpenNewTab = (portal: PortalShareInfo) => {
     const url = getPortalUrl(portal.paramValue);
-    window.open(url, '_blank', 'noopener,noreferrer');
+    abrirLinkExterno(url);
   };
 
   const handleDownloadQr = () => {
