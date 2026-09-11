@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useCoop } from '../context/CoopContext';
 import { ImportarCsvModal } from '../components/ImportarCsvModal';
+import { PortalShareBanner } from '../components/PortalShareBanner';
 import { sanitizeCooperado } from '../utils/cooperadoSanitizer';
 import {
   Cooperado,
@@ -344,6 +345,13 @@ export const CooperadosView: React.FC = () => {
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      <PortalShareBanner
+        portalId="portal-cooperado"
+        customTitle="Portal do Cooperado"
+        customSubtitle="Compartilhe este link com os cooperados cadastrados abaixo para que consultem extrato de capital, produção e recibos."
+        recipients={(cooperados || []).map(c => ({ id: c.id, nome: c.nome, whatsapp: c.whatsapp, celular: c.celular, telefone: c.telefone }))}
+        recipientLabel="cooperados"
+      />
       {/* View Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>

@@ -78,6 +78,7 @@ import { ALERTA_CRONOGRAMA_TEXTO, calcularImpostosItem } from '../utils/tributac
 import { expandirItensHistoricoProducao } from '../utils/registroProducaoHelpers';
 import { playActionCompleteSound } from '../utils/actionSound';
 import { poloEquivale } from '../utils/poloHelpers';
+import { abrirLinkExterno, montarLinkWhatsApp } from '../utils/whatsappHelpers';
 import {
   baixarModeloPlanilhaChamadaPublica,
   parsePlanilhaChamadaPublica,
@@ -1535,12 +1536,11 @@ ${itensText}
 Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme o cronograma. Obrigado!`;
 
     if (cleanPhone) {
-      window.open(`https://api.whatsapp.com/send?phone=55${cleanPhone}&text=${encodeURIComponent(msg)}`, '_blank');
+      abrirLinkExterno(montarLinkWhatsApp(cleanPhone, msg));
     } else {
       const manualPhone = prompt(`Informe o número de WhatsApp (com DDD) para enviar o pedido para ${prodNome}:`, '85');
       if (manualPhone) {
-        const cleanM = manualPhone.replace(/\D/g, '');
-        window.open(`https://api.whatsapp.com/send?phone=55${cleanM}&text=${encodeURIComponent(msg)}`, '_blank');
+        abrirLinkExterno(montarLinkWhatsApp(manualPhone, msg));
       }
     }
   };
