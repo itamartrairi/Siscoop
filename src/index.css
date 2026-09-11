@@ -41,3 +41,17 @@
   background: #059669;
 }
 
+
+
+/* Camada móvel compartilhada pelos quatro portais independentes. */
+@media (max-width: 640px) {
+  html, body { overflow-x: hidden; }
+  button, input, select, textarea { min-height: 44px; }
+  table { min-width: 640px; }
+  .overflow-x-auto { -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  button { transition: transform 160ms ease-out, background-color 160ms ease-out, color 160ms ease-out, box-shadow 160ms ease-out; }
+  button:active { transform: scale(.97); }
+}

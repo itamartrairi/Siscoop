@@ -38,6 +38,7 @@ const SeletorEstrelas: React.FC<{ valor: number; onChange: (v: number) => void; 
 export const PortalEscolaView: React.FC = () => {
   const { escolasPnae, entregasEscola, pedidosProdutorPAA, confirmarEntregaEscola } = useCoop();
   const [showComprovanteModal, setShowComprovanteModal] = useState(false);
+  const [abaAtiva, setAbaAtiva] = useState<'pedidos' | 'comprovante'>('pedidos');
 
   // Acesso simplificado — somente por e-mail, sem senha. O cadastro da
   // escola é feito só pela administração (Cadastros → Escolas); este portal
@@ -332,7 +333,7 @@ export const PortalEscolaView: React.FC = () => {
 
         <div className="flex items-center gap-2 shrink-0">
           <button
-            onClick={handleOpenComprovante}
+            onClick={() => { setAbaAtiva('comprovante'); handleOpenComprovante(); }}
             className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2 cursor-pointer"
             title="Comprovante com assinatura, foto e avaliação de qualidade dos produtos"
           >
@@ -347,8 +348,7 @@ export const PortalEscolaView: React.FC = () => {
         </div>
       </div>
 
-      {/* Pedidos Registrados para esta Escola */}
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-xs space-y-4">
+      {abaAtiva === 'pedidos' && <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-xs space-y-4">
         <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
           <ClipboardList className="w-4 h-4 text-indigo-600" /> Pedidos Registrados para {escolaAtual.nomeEscola}
         </h2>
@@ -423,83 +423,12 @@ export const PortalEscolaView: React.FC = () => {
             </tbody>
           </table>
         </div>
-      </div>
+      </div>}
 
-      {/* Entregas Exclusivas desta Escola */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {minhasEntregas.length === 0 ? (
-          <div className="col-span-2 p-8 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 text-center text-slate-500 text-xs font-medium">
-            Nenhuma entrega de merenda registrada até o momento para {escolaAtual.nomeEscola} ({escolaAtual.email}).
-          </div>
-        ) : (
-          minhasEntregas.map(ent => (
-            <div key={ent.id} className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-xs space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="font-extrabold text-slate-900 dark:text-white text-sm">{ent.escolaNome}</span>
-                <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                  ent.statusAprovacao === 'ENTREGUE_E_ASSINADO' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                }`}>
-                  {ent.statusAprovacao === 'ENTREGUE_E_ASSINADO' ? 'Conferido OK' : 'Pendente Aceite'}
-                </span>
-              </div>
-
-              <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-xl space-y-1 text-xs">
-                <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                  <span>Data da Entrega:</span>
-                  <span className="font-bold text-slate-900 dark:text-white">{ent.dataEntrega || ent.dataHoraEntrega}</span>
-                </div>
-                <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                  <span>Itens:</span>
-                  <span className="font-bold text-slate-900 dark:text-white">{ent.itensDescricao || 'Hortifrúti PNAE'}</span>
-                </div>
-                <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                  <span>Volume Recebido:</span>
-                  <span className="font-extrabold text-indigo-700 dark:text-indigo-400">{ent.quantidadeKg} Kg</span>
-                </div>
-              </div>
-
-              {ent.statusAprovacao !== 'ENTREGUE_E_ASSINADO' ? (
-                <button
-                  onClick={() => handleAprovar(ent)}
-                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <CheckCircle2 className="w-4 h-4" /> Assinar Digitalmente Aceite de Merenda
-                </button>
-              ) : (
-                <div className="p-2 bg-emerald-50 dark:bg-emerald-950/50 rounded-xl text-emerald-800 dark:text-emerald-300 text-xs font-bold text-center flex items-center justify-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Assinado por {ent.responsavelRecebimento || ent.assinadoPor}
-                </div>
-              )}
-
-              {/* Comprovante completo (assinatura, foto e avaliação de qualidade) */}
-              {ent.avaliacaoQualidade && (
-                <div className="p-3 bg-amber-50/70 dark:bg-slate-900/40 border border-amber-200 dark:border-slate-700 rounded-xl space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-amber-900 dark:text-amber-300 text-[11px]">Avaliação de Qualidade</span>
-                    <span className="font-black text-amber-700 dark:text-amber-400">{'★'.repeat(Math.round(ent.avaliacaoQualidade.notaMedia))}{'☆'.repeat(5 - Math.round(ent.avaliacaoQualidade.notaMedia))} ({ent.avaliacaoQualidade.notaMedia})</span>
-                  </div>
-                  {ent.avaliacaoQualidade.comentarios && (
-                    <p className="text-[11px] text-slate-600 dark:text-slate-400 italic">"{ent.avaliacaoQualidade.comentarios}"</p>
-                  )}
-                  {!ent.avaliacaoQualidade.quantidadeCorreta && (
-                    <p className="text-[11px] text-rose-600 font-bold">⚠ Quantidade divergente do esperado</p>
-                  )}
-                  <div className="flex items-center gap-3 pt-1">
-                    {ent.fotoComprovanteUrl && (
-                      <a href={ent.fotoComprovanteUrl} target="_blank" rel="noreferrer" className="block">
-                        <img src={ent.fotoComprovanteUrl} alt="Foto da entrega" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
-                      </a>
-                    )}
-                    {ent.assinaturaUrl && (
-                      <img src={ent.assinaturaUrl} alt="Assinatura" className="h-12 border border-slate-200 rounded-lg bg-white" />
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          ))
-        )}
-      </div>
+      <nav className="flex gap-2 overflow-x-auto rounded-2xl bg-slate-100 dark:bg-slate-900 p-2" aria-label="Seções do portal da escola">
+        <button type="button" onClick={() => setAbaAtiva('pedidos')} className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-black ${abaAtiva === 'pedidos' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800'}`}>Pedidos registrados</button>
+        <button type="button" onClick={() => { setAbaAtiva('comprovante'); handleOpenComprovante(); }} className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-black ${abaAtiva === 'comprovante' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800'}`}>Registrar comprovante</button>
+      </nav>
 
       {/* Modal Comprovante de Entrega — assinatura, foto e avaliação */}
       {showComprovanteModal && escolaAtual && (

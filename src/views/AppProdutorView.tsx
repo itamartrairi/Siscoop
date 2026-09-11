@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useCoop } from '../context/CoopContext';
 import {
   Smartphone,
@@ -23,6 +23,7 @@ export const AppProdutorView: React.FC = () => {
   const [filtroAnoPortal, setFiltroAnoPortal] = useState('TODOS');
   const [filtroStatusPortal, setFiltroStatusPortal] = useState('TODOS');
   const [buscaPortal, setBuscaPortal] = useState('');
+  const [abaAtiva, setAbaAtiva] = useState<'ofertar' | 'ofertas' | 'historico'>('ofertar');
 
   // Acesso simplificado — somente por e-mail, sem senha. O cadastro do
   // produtor é feito só pela administração (Cadastros → Produtores); este
@@ -103,7 +104,10 @@ export const AppProdutorView: React.FC = () => {
     }
 
     const chamada = chamadasPublicas.find(c => c.id === chamadaOfertaId);
-    if (!chamada) return;
+    if (!chamada || chamada.status !== 'ABERTA') {
+      setOfertaErro('Esta chamada pública não está aberta para novas ofertas.');
+      return;
+    }
 
     // Se este produtor já tem uma proposta enviada para esta mesma chamada
     // pública, os novos produtos entram JUNTO nela (mesma proposta), em vez
@@ -273,6 +277,28 @@ export const AppProdutorView: React.FC = () => {
          (o.produtorNome && o.produtorNome.toLowerCase() === produtorAtual.nome.toLowerCase())
   );
 
+  // O portal consulta todas as chamadas cadastradas no SisGepa. Apenas chamadas
+  // abertas aceitam novas propostas, mas as demais continuam visíveis para
+  // conferência do produtor.
+  const chamadasVisiveis = chamadasPublicas;
+
+  // O catálogo do produtor é reduzido aos itens efetivamente solicitados no
+  // edital selecionado. O vínculo aceita tanto produtoId quanto nome para
+  // manter compatibilidade com chamadas importadas do SIGEPA/SisGepa.
+  const produtosDaChamada = chamadaSelecionada
+    ? chamadaSelecionada.itensSolicitados
+        .map(item => produtos.find(p => (item.produtoId && p.id === item.produtoId) || p.nome.trim().toLowerCase() === item.produtoNome.trim().toLowerCase()))
+        .filter((produto): produto is typeof produtos[number] => Boolean(produto))
+    : [];
+
+  useEffect(() => {
+    if (!chamadaOfertaId) return;
+    const primeiroProduto = produtosDaChamada[0];
+    if (primeiroProduto && !produtosDaChamada.some(p => p.id === produtoOfertaId)) {
+      setProdutoOfertaId(primeiroProduto.id);
+    }
+  }, [chamadaOfertaId, produtosDaChamada.length]);
+
   const chamadasAbertas = chamadasPublicas.filter(c => c.status === 'ABERTA');
 
   // Extrato de Pedidos e Entregas vinculados a este produtor — movido do
@@ -309,7 +335,15 @@ export const AppProdutorView: React.FC = () => {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
-      <div className="bg-slate-900 text-white p-6 rounded-3xl shadow-xl space-y-4 border border-slate-800">
+      <nav className="sticky top-2 z-10 -mx-1 flex gap-2 overflow-x-auto rounded-2xl bg-slate-950/95 p-2 shadow-lg backdrop-blur" aria-label="Seções do portal do produtor">
+        {[['ofertar', 'Ofertar produtos'], ['ofertas', 'Minhas ofertas'], ['historico', 'Pedidos e entregas']].map(([id, label]) => (
+          <button key={id} type="button" onClick={() => setAbaAtiva(id as typeof abaAtiva)} className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-black transition-all ${abaAtiva === id ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-300 hover:bg-slate-800'}`}>
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      {abaAtiva === 'ofertar' && <div className="bg-slate-900 text-white p-6 rounded-3xl shadow-xl space-y-4 border border-slate-800">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/20 text-emerald-300 rounded-full text-xs font-bold border border-emerald-500/30">
             <Smartphone className="w-3.5 h-3.5" /> App do Produtor: {resolverEmailProdutor(produtorAtual)}
@@ -336,9 +370,9 @@ export const AppProdutorView: React.FC = () => {
           </div>
         )}
 
-        {chamadasAbertas.length === 0 ? (
+        {chamadasVisiveis.length === 0 ? (
           <div className="p-4 bg-amber-500/10 border border-amber-500/30 text-amber-200 rounded-2xl text-xs font-semibold">
-            Nenhuma chamada pública aberta no momento para enviar oferta. Fale com a cooperativa ou aguarde a próxima chamada.
+            Nenhuma chamada pública cadastrada no SisGepa no momento.
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 text-xs pt-2">
@@ -361,8 +395,8 @@ export const AppProdutorView: React.FC = () => {
                 className="w-full p-3 bg-slate-800 border border-slate-700 text-white rounded-2xl font-bold focus:ring-2 focus:ring-emerald-500"
               >
                 <option value="">-- Selecione a chamada pública --</option>
-                {chamadasAbertas.map(c => (
-                  <option key={c.id} value={c.id}>{c.numeroEdital} — {c.orgaoComprador} ({c.programa})</option>
+                {chamadasVisiveis.map(c => (
+                  <option key={c.id} value={c.id} disabled={c.status !== 'ABERTA'}>{c.numeroEdital} — {c.orgaoComprador} ({c.programaNome || c.programa}) — {c.status === 'ABERTA' ? 'Aberta' : c.status}</option>
                 ))}
               </select>
               <p className="text-[10px] text-slate-500 mt-1.5">
@@ -379,11 +413,14 @@ export const AppProdutorView: React.FC = () => {
                     onChange={e => setProdutoOfertaId(e.target.value)}
                     className="w-full p-3 bg-slate-800 border border-slate-700 text-white rounded-2xl font-bold focus:ring-2 focus:ring-emerald-500"
                   >
-                    {produtos.map(p => (
+                    {produtosDaChamada.map(p => (
                       <option key={p.id} value={p.id}>{p.nome} ({p.unidadeMedida})</option>
                     ))}
                   </select>
-                  {!itemDaChamada && (
+                  {produtosDaChamada.length === 0 && (
+                    <p className="text-[10px] text-amber-400 mt-1.5">Nenhum produto do catálogo foi vinculado aos itens deste edital.</p>
+                  )}
+                  {!itemDaChamada && produtosDaChamada.length > 0 && (
                     <p className="text-[10px] text-amber-400 mt-1.5">Este produto não está na lista de itens solicitados desta chamada.</p>
                   )}
                 </div>
@@ -463,11 +500,11 @@ export const AppProdutorView: React.FC = () => {
             </button>
           </form>
         )}
-      </div>
+      </div>}
 
       {/* Ofertas Enviadas pelo Produtor — aparecem também na Proposta de
           Oferta do SisGepa, já que usam o mesmo cadastro (ofertasPAA). */}
-      <div className="bg-slate-900 text-white p-6 rounded-3xl border border-slate-800 shadow-xl space-y-4">
+      {abaAtiva === 'ofertas' && <div className="bg-slate-900 text-white p-6 rounded-3xl border border-slate-800 shadow-xl space-y-4">
         <h2 className="text-sm font-bold text-white flex items-center gap-2">
           <Sprout className="w-4 h-4 text-emerald-400" />
           Minhas Ofertas Enviadas ({produtorAtual.nome})
@@ -500,17 +537,17 @@ export const AppProdutorView: React.FC = () => {
             ))
           )}
         </div>
-      </div>
+      </div>}
 
       {/* Extrato de Pedidos e Entregas Vinculados ao Produtor */}
-      <div className="bg-slate-900 text-white p-6 rounded-2xl border border-slate-800 shadow-xl space-y-6">
+      {abaAtiva === 'historico' && <div className="bg-slate-900 text-white p-6 rounded-2xl border border-slate-800 shadow-xl space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 p-4 rounded-2xl bg-slate-800 border border-slate-700"><div><label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Mês</label><select value={filtroMesPortal} onChange={e => setFiltroMesPortal(e.target.value)} className="w-full p-2 rounded-xl border border-slate-600 text-xs text-white bg-slate-900"><option value="TODOS">Todos</option>{Array.from({length: 12}, (_, i) => String(i + 1).padStart(2, "0")).map(m => <option key={m} value={m}>{m}</option>)}</select></div><div><label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Ano</label><select value={filtroAnoPortal} onChange={e => setFiltroAnoPortal(e.target.value)} className="w-full p-2 rounded-xl border border-slate-600 text-xs text-white bg-slate-900"><option value="TODOS">Todos</option>{anosPortal.map(ano => <option key={ano} value={ano}>{ano}</option>)}</select></div><div><label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Status</label><select value={filtroStatusPortal} onChange={e => setFiltroStatusPortal(e.target.value)} className="w-full p-2 rounded-xl border border-slate-600 text-xs text-white bg-slate-900"><option value="TODOS">Todos</option><option value="PENDENTE">Pendente</option><option value="CONFIRMADO">Confirmado</option><option value="RECEBIDO">Recebido</option><option value="AGENDADA">Agendada</option><option value="EM_TRANSITO">Em trânsito</option><option value="ENTREGUE">Entregue</option><option value="PARCIAL">Parcial</option></select></div><div><label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Pesquisar</label><input value={buscaPortal} onChange={e => setBuscaPortal(e.target.value)} placeholder="Pedido, produto ou destino" className="w-full p-2 rounded-xl border border-slate-600 text-xs text-white bg-slate-900 placeholder:text-slate-500" /></div></div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3"><div className="p-4 rounded-xl bg-emerald-950 border border-emerald-800"><span className="text-[10px] uppercase font-bold text-emerald-400">Pedidos encontrados</span><strong className="block text-2xl text-white">{pedidosFiltrados.length}</strong></div><div className="p-4 rounded-xl bg-teal-950 border border-teal-800"><span className="text-[10px] uppercase font-bold text-teal-400">Entregas encontradas</span><strong className="block text-2xl text-white">{entregasFiltradas.length}</strong></div><div className="p-4 rounded-xl bg-amber-950 border border-amber-800"><span className="text-[10px] uppercase font-bold text-amber-400">Valor dos pedidos</span><strong className="block text-xl text-white">R$ {totalPedidoFiltrado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></div></div>
         {entregasPorStatus.length > 0 && <div className="p-4 rounded-2xl border border-slate-700 bg-slate-800"><h3 className="text-xs font-black text-slate-200 mb-2">Entregas por status</h3><ResponsiveContainer width="100%" height={190}><BarChart data={entregasPorStatus}><CartesianGrid strokeDasharray="3 3" stroke="#334155" /><XAxis dataKey="status" fontSize={10} stroke="#94a3b8" /><YAxis allowDecimals={false} fontSize={10} stroke="#94a3b8" /><Tooltip /><Bar dataKey="total" name="Entregas" fill="#059669" radius={[5, 5, 0, 0]}>{entregasPorStatus.map((item, index) => <Cell key={item.status} fill={["#10b981", "#0ea5e9", "#34d399", "#fbbf24", "#f43f5e"][index % 5]} />)}</Bar></BarChart></ResponsiveContainer></div> }
         <div><h2 className="text-sm font-bold text-white flex items-center gap-2"><ClipboardList className="w-4 h-4 text-emerald-400" /> Extrato de Pedidos e Entregas de {produtorAtual.nome}</h2><p className="text-[11px] text-slate-400 mt-1">Pedidos realizados, produtos solicitados e entregas vinculadas ao seu cadastro.</p></div>
         <div><h3 className="text-xs font-black uppercase tracking-wide text-slate-400 mb-3">Pedidos</h3><div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr className="bg-emerald-950 text-emerald-300 font-bold uppercase border-b border-emerald-800"><th className="p-3">Pedido / Data</th><th className="p-3">Programa</th><th className="p-3">Produtos</th><th className="p-3">Entrega prevista</th><th className="p-3">Status</th><th className="p-3 text-right">Valor</th></tr></thead><tbody className="divide-y divide-slate-800">{pedidosFiltrados.length === 0 ? <tr><td colSpan={6} className="p-6 text-center text-slate-500">Nenhum pedido encontrado para o e-mail {resolverEmailProdutor(produtorAtual)}.</td></tr> : pedidosFiltrados.map(p => { const itens = p.itens?.filter(item => item.produtorId === produtorAtual.id || item.produtorNome.toLowerCase() === produtorAtual.nome.toLowerCase()) || []; return <tr key={p.id} className="hover:bg-slate-800/60"><td className="p-3"><div className="font-bold text-white">{p.numeroPedido}</div><div className="text-[10px] text-slate-500">{p.dataPedido}</div></td><td className="p-3 font-semibold text-emerald-400">{p.programaNome || p.programa}</td><td className="p-3 text-slate-300">{itens.map(item => <div key={item.produtoId + item.produtoNome}>{item.produtoNome} — {item.quantidadePedida} {item.unidadeMedida}</div>)}</td><td className="p-3 font-mono text-slate-300">{p.dataPrevistaEntrega}</td><td className="p-3"><span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded font-bold text-[10px]">{p.status}</span></td><td className="p-3 text-right font-mono font-bold text-white">R$ {itens.reduce((s, item) => s + (item.valorTotalItem || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td></tr>; })}</tbody></table></div></div>
         <div><h3 className="text-xs font-black uppercase tracking-wide text-slate-400 mb-3">Entregas</h3><div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr className="bg-emerald-950 text-emerald-300 font-bold uppercase border-b border-emerald-800"><th className="p-3">Pedido / Data</th><th className="p-3">Produtos</th><th className="p-3">Destino</th><th className="p-3">Quantidade</th><th className="p-3">Status</th></tr></thead><tbody className="divide-y divide-slate-800">{entregasFiltradas.length === 0 ? <tr><td colSpan={5} className="p-6 text-center text-slate-500">Nenhuma entrega encontrada para o e-mail {resolverEmailProdutor(produtorAtual)}.</td></tr> : entregasFiltradas.map(e => { const itens = e.itens?.filter(item => item.produtorId === produtorAtual.id || item.produtorNome.toLowerCase() === produtorAtual.nome.toLowerCase()) || []; return <tr key={e.id} className="hover:bg-slate-800/60"><td className="p-3"><div className="font-bold text-white">{e.pedidoNumero || 'Entrega avulsa'}</div><div className="text-[10px] text-slate-500">{e.dataPrevista}</div></td><td className="p-3 text-slate-300">{itens.map(item => <div key={item.produtoId + item.produtoNome}>{item.produtoNome}</div>)}</td><td className="p-3 text-slate-300">{e.localEntrega || e.escolaNome || e.escolaOrgaoDestino}</td><td className="p-3 font-mono text-slate-300">{itens.reduce((s, item) => s + (item.quantidadeEntregue || item.quantidadePrevista || 0), 0)} kg</td><td className="p-3"><span className="px-2 py-0.5 bg-teal-500/20 text-teal-300 rounded font-bold text-[10px]">{e.status}</span></td></tr>; })}</tbody></table></div></div>
-      </div>
+      </div>}
     </div>
   );
 };
