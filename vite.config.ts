@@ -15,6 +15,7 @@ export default defineConfig(() => {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       hmr: false,
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      allowedHosts: true,
     },
     build: {
       chunkSizeWarningLimit: 800,
