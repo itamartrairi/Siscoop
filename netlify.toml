@@ -13,7 +13,14 @@
 
 [build]
   publish = "dist"
-  command = "npm run build"
+  # Só compilamos o front-end (vite build) aqui. O empacotamento do server.ts
+  # (esbuild) foi removido do comando de build da Netlify de propósito: esse
+  # backend Express não roda neste hosting (é só front-end estático, como
+  # explicado no comentário acima) e o pacote `server/` não precisa estar no
+  # deploy da Netlify. Rodar o "npm run build" completo (com o esbuild do
+  # server.ts) continua funcionando normalmente para quem hospedar o backend
+  # em Cloud Run/Render/Fly — aqui usamos só a parte do Vite.
+  command = "npx vite build"
 
 [build.environment]
   NODE_VERSION = "22"
