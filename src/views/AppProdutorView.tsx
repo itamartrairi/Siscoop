@@ -16,7 +16,7 @@ import {
 import { BarChart, Bar, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 export const AppProdutorView: React.FC = () => {
-  const { produtores, produtos, chamadasPublicas, ofertasPAA, addOfertaPAA, cooperados, pedidosProdutorPAA, programacoesEntrega } = useCoop();
+  const { produtores, produtos, chamadasPublicas, ofertasPAA, addOfertaPAA, updateOfertaPAA, cooperados, pedidosProdutorPAA, programacoesEntrega } = useCoop();
 
   // Filtros do extrato de pedidos e entregas do produtor
   const [filtroMesPortal, setFiltroMesPortal] = useState('TODOS');
@@ -50,9 +50,20 @@ export const AppProdutorView: React.FC = () => {
 
   const [produtoOfertaId, setProdutoOfertaId] = useState(produtos[0]?.id || '');
   const [chamadaOfertaId, setChamadaOfertaId] = useState('');
-  const [qtdOfertaKg, setQtdOfertaKg] = useState(150);
-  const [precoOferta, setPrecoOferta] = useState(5.5);
+  // Campo livre — sem valor padrão, o produtor digita a quantidade que quiser.
+  const [qtdOfertaKg, setQtdOfertaKg] = useState<string>('');
+  // Itens já adicionados à proposta atual, antes de enviar (permite juntar
+  // vários produtos numa única proposta do mesmo edital).
+  const [itensOferta, setItensOferta] = useState<{
+    produtoId: string;
+    produtoNome: string;
+    unidadeMedida: string;
+    quantidadeKg: number;
+    precoUnitario: number;
+    valorTotal: number;
+  }[]>([]);
   const [sucessoMsg, setSucessoMsg] = useState(false);
+  const [ofertaErro, setOfertaErro] = useState<string | null>(null);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,33 +97,119 @@ export const AppProdutorView: React.FC = () => {
     e.preventDefault();
     if (!produtorAtual) return;
 
+    if (itensOferta.length === 0) {
+      setOfertaErro('Adicione pelo menos um produto à proposta antes de enviar.');
+      return;
+    }
+
     const chamada = chamadasPublicas.find(c => c.id === chamadaOfertaId);
     if (!chamada) return;
-    const produto = produtos.find(p => p.id === produtoOfertaId);
-    if (!produto) return;
 
-    const valorTotal = qtdOfertaKg * precoOferta;
+    // Se este produtor já tem uma proposta enviada para esta mesma chamada
+    // pública, os novos produtos entram JUNTO nela (mesma proposta), em vez
+    // de criar uma proposta separada.
+    const propostaExistente = ofertasPAA.find(
+      o => o.chamadaPublicaId === chamada.id &&
+        (o.produtorId === produtorAtual.id || o.produtorNome.toLowerCase() === produtorAtual.nome.toLowerCase())
+    );
 
-    addOfertaPAA({
-      chamadaPublicaId: chamada.id,
-      chamadaPublicaEdital: chamada.numeroEdital,
-      programaId: chamada.programaId,
-      programaNome: chamada.programaNome || chamada.programa,
-      produtorId: produtorAtual.id,
-      produtorNome: produtorAtual.nome,
-      produtoId: produto.id,
-      produtoNome: produto.nome,
-      unidadeMedida: produto.unidadeMedida || 'KG',
-      quantidadeOfertada: qtdOfertaKg,
-      quantidadeKg: qtdOfertaKg,
-      valorUnitario: precoOferta,
-      precoUnitario: precoOferta,
-      valorTotal,
-      status: 'SUBMETIDA',
-      dataEnvio: new Date().toISOString().split('T')[0]
-    });
+    if (propostaExistente) {
+      const itensAtuais = propostaExistente.itens && propostaExistente.itens.length > 0
+        ? propostaExistente.itens
+        : [{
+            produtoId: propostaExistente.produtoId,
+            produtoNome: propostaExistente.produtoNome,
+            unidadeMedida: propostaExistente.unidadeMedida || 'KG',
+            quantidadeKg: propostaExistente.quantidadeOfertada || propostaExistente.quantidadeKg || 0,
+            precoUnitario: propostaExistente.precoUnitario || propostaExistente.valorUnitario || 0,
+            valorTotal: propostaExistente.valorTotal || 0
+          }];
+      const itensCombinados = [...itensAtuais, ...itensOferta];
+      const valorTotalGeral = itensCombinados.reduce((s, i) => s + (i.valorTotal || i.quantidadeKg * i.precoUnitario), 0);
+      const qtdTotal = itensCombinados.reduce((s, i) => s + i.quantidadeKg, 0);
+
+      updateOfertaPAA(propostaExistente.id, {
+        itens: itensCombinados,
+        valorTotal: valorTotalGeral,
+        produtoNome: itensCombinados.map(i => i.produtoNome).join(', '),
+        quantidadeOfertada: qtdTotal,
+        quantidadeKg: qtdTotal
+      });
+    } else {
+      const valorTotalGeral = itensOferta.reduce((s, i) => s + i.valorTotal, 0);
+      const qtdTotal = itensOferta.reduce((s, i) => s + i.quantidadeKg, 0);
+
+      addOfertaPAA({
+        chamadaPublicaId: chamada.id,
+        chamadaPublicaEdital: chamada.numeroEdital,
+        programaId: chamada.programaId,
+        programaNome: chamada.programaNome || chamada.programa,
+        produtorId: produtorAtual.id,
+        produtorNome: produtorAtual.nome,
+        produtoId: itensOferta[0].produtoId,
+        produtoNome: itensOferta.map(i => i.produtoNome).join(', '),
+        unidadeMedida: itensOferta[0].unidadeMedida,
+        quantidadeOfertada: qtdTotal,
+        quantidadeKg: qtdTotal,
+        valorUnitario: itensOferta[0].precoUnitario,
+        precoUnitario: itensOferta[0].precoUnitario,
+        valorTotal: valorTotalGeral,
+        status: 'SUBMETIDA',
+        dataEnvio: new Date().toISOString().split('T')[0],
+        itens: itensOferta
+      });
+    }
+
+    setItensOferta([]);
+    setChamadaOfertaId('');
+    setOfertaErro(null);
     setSucessoMsg(true);
     setTimeout(() => setSucessoMsg(false), 3000);
+  };
+
+  // Preço unitário vem do próprio cadastro da chamada pública (itensSolicitados
+  // → precoMaximoUnitario) — o produtor não digita o preço, só a quantidade.
+  const chamadaSelecionada = chamadasPublicas.find(c => c.id === chamadaOfertaId);
+  const produtoOfertaObj = produtos.find(p => p.id === produtoOfertaId);
+  const itemDaChamada = chamadaSelecionada?.itensSolicitados.find(
+    i => i.produtoId === produtoOfertaId || i.produtoNome === produtoOfertaObj?.nome
+  );
+  const precoAtual = itemDaChamada?.precoMaximoUnitario || 0;
+
+  const handleAddItemOferta = () => {
+    setOfertaErro(null);
+    if (!chamadaOfertaId) {
+      setOfertaErro('Selecione a chamada pública / edital primeiro.');
+      return;
+    }
+    const qtd = Number(qtdOfertaKg);
+    if (!qtd || qtd <= 0) {
+      setOfertaErro('Informe uma quantidade válida.');
+      return;
+    }
+    if (!produtoOfertaObj) return;
+    if (!itemDaChamada) {
+      setOfertaErro('Este produto não está na lista de itens solicitados desta chamada pública.');
+      return;
+    }
+    if (itensOferta.some(i => i.produtoId === produtoOfertaObj.id)) {
+      setOfertaErro('Este produto já foi adicionado à proposta. Remova-o antes de adicionar de novo com outra quantidade.');
+      return;
+    }
+
+    setItensOferta(prev => [...prev, {
+      produtoId: produtoOfertaObj.id,
+      produtoNome: produtoOfertaObj.nome,
+      unidadeMedida: produtoOfertaObj.unidadeMedida || 'KG',
+      quantidadeKg: qtd,
+      precoUnitario: precoAtual,
+      valorTotal: qtd * precoAtual
+    }]);
+    setQtdOfertaKg('');
+  };
+
+  const handleRemoveItemOferta = (produtoId: string) => {
+    setItensOferta(prev => prev.filter(i => i.produtoId !== produtoId));
   };
 
   // IF NOT LOGGED IN: Render App Login Card
@@ -211,7 +308,7 @@ export const AppProdutorView: React.FC = () => {
   const entregasPorStatus = ['AGENDADA', 'EM_TRANSITO', 'ENTREGUE', 'PARCIAL', 'CANCELADA'].map(status => ({ status, total: entregasFiltradas.filter(e => e.status === status).length })).filter(x => x.total > 0);
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-6">
       <div className="bg-slate-900 text-white p-6 rounded-3xl shadow-xl space-y-4 border border-slate-800">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/20 text-emerald-300 rounded-full text-xs font-bold border border-emerald-500/30">
@@ -260,7 +357,7 @@ export const AppProdutorView: React.FC = () => {
               <select
                 required
                 value={chamadaOfertaId}
-                onChange={e => setChamadaOfertaId(e.target.value)}
+                onChange={e => { setChamadaOfertaId(e.target.value); setItensOferta([]); setOfertaErro(null); }}
                 className="w-full p-3 bg-slate-800 border border-slate-700 text-white rounded-2xl font-bold focus:ring-2 focus:ring-emerald-500"
               >
                 <option value="">-- Selecione a chamada pública --</option>
@@ -268,55 +365,101 @@ export const AppProdutorView: React.FC = () => {
                   <option key={c.id} value={c.id}>{c.numeroEdital} — {c.orgaoComprador} ({c.programa})</option>
                 ))}
               </select>
+              <p className="text-[10px] text-slate-500 mt-1.5">
+                Você pode incluir vários produtos nesta mesma proposta. Se você já tiver uma proposta enviada para este edital, os novos itens entram junto nela.
+              </p>
             </div>
 
-            <div>
-              <label className="block text-slate-300 font-bold mb-1">Produto da Lavoura</label>
-              <select
-                value={produtoOfertaId}
-                onChange={e => setProdutoOfertaId(e.target.value)}
-                className="w-full p-3 bg-slate-800 border border-slate-700 text-white rounded-2xl font-bold focus:ring-2 focus:ring-emerald-500"
-              >
-                {produtos.map(p => (
-                  <option key={p.id} value={p.id}>{p.nome} ({p.unidadeMedida})</option>
+            {chamadaOfertaId && (
+              <div className="p-3 bg-slate-800/60 rounded-2xl border border-slate-700 space-y-3">
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">Produto da Lavoura</label>
+                  <select
+                    value={produtoOfertaId}
+                    onChange={e => setProdutoOfertaId(e.target.value)}
+                    className="w-full p-3 bg-slate-800 border border-slate-700 text-white rounded-2xl font-bold focus:ring-2 focus:ring-emerald-500"
+                  >
+                    {produtos.map(p => (
+                      <option key={p.id} value={p.id}>{p.nome} ({p.unidadeMedida})</option>
+                    ))}
+                  </select>
+                  {!itemDaChamada && (
+                    <p className="text-[10px] text-amber-400 mt-1.5">Este produto não está na lista de itens solicitados desta chamada.</p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">Quantidade (Kg)</label>
+                    <input
+                      type="number"
+                      placeholder="Digite a quantidade"
+                      value={qtdOfertaKg}
+                      onChange={e => setQtdOfertaKg(e.target.value)}
+                      className="w-full p-3 bg-slate-800 border border-slate-700 text-white rounded-2xl text-lg font-black focus:ring-2 focus:ring-emerald-500 placeholder:text-slate-500 placeholder:text-xs placeholder:font-normal"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">Preço Unitário (edital)</label>
+                    <div className="w-full p-3 bg-slate-900 border border-slate-700 text-emerald-400 rounded-2xl text-lg font-black">
+                      R$ {precoAtual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleAddItemOferta}
+                  className="w-full py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  + Adicionar Produto à Proposta
+                </button>
+              </div>
+            )}
+
+            {ofertaErro && (
+              <div className="p-3 bg-rose-500/20 border border-rose-500/40 text-rose-200 rounded-2xl text-xs font-semibold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" /> {ofertaErro}
+              </div>
+            )}
+
+            {itensOferta.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-[10px] font-bold uppercase text-slate-400">Produtos nesta proposta</p>
+                {itensOferta.map(item => (
+                  <div key={item.produtoId} className="p-3 bg-slate-800 rounded-2xl flex items-center justify-between border border-slate-700">
+                    <div>
+                      <div className="font-bold text-white">{item.produtoNome}</div>
+                      <div className="text-[10px] text-slate-400">{item.quantidadeKg} {item.unidadeMedida} × R$ {item.precoUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono font-bold text-emerald-400">R$ {item.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveItemOferta(item.produtoId)}
+                        className="text-rose-400 hover:text-rose-300 text-[11px] font-bold cursor-pointer"
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  </div>
                 ))}
-              </select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">Quantidade Ofertada (Kg)</label>
-                <input
-                  type="number"
-                  value={qtdOfertaKg}
-                  onChange={e => setQtdOfertaKg(parseFloat(e.target.value) || 0)}
-                  className="w-full p-3 bg-slate-800 border border-slate-700 text-white rounded-2xl text-lg font-black focus:ring-2 focus:ring-emerald-500"
-                />
               </div>
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">Preço Unitário (R$)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={precoOferta}
-                  onChange={e => setPrecoOferta(parseFloat(e.target.value) || 0)}
-                  className="w-full p-3 bg-slate-800 border border-slate-700 text-white rounded-2xl text-lg font-black focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-            </div>
+            )}
 
             <div className="p-3 bg-slate-800/60 rounded-2xl text-slate-300 font-semibold flex items-center justify-between">
-              <span>Valor total da oferta</span>
+              <span>Valor total da proposta</span>
               <span className="text-emerald-400 font-mono font-black text-sm">
-                R$ {(qtdOfertaKg * precoOferta).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                R$ {itensOferta.reduce((s, i) => s + i.valorTotal, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </span>
             </div>
 
             <button
               type="submit"
-              className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-2xl text-sm transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer"
+              disabled={itensOferta.length === 0}
+              className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed text-slate-950 font-black rounded-2xl text-sm transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer"
             >
-              <Send className="w-4 h-4" /> Enviar Oferta ao SisGepa
+              <Send className="w-4 h-4" /> Enviar Proposta ao SisGepa
             </button>
           </form>
         )}

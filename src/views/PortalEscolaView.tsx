@@ -10,7 +10,8 @@ import {
   AlertCircle,
   KeyRound,
   Plus,
-  X
+  X,
+  ClipboardList
 } from 'lucide-react';
 
 // Pequeno seletor de nota por estrelas (1 a 5), usado na avaliação de
@@ -343,6 +344,84 @@ export const PortalEscolaView: React.FC = () => {
           >
             <LogOut className="w-3.5 h-3.5" /> Sair
           </button>
+        </div>
+      </div>
+
+      {/* Pedidos Registrados para esta Escola */}
+      <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-xs space-y-4">
+        <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <ClipboardList className="w-4 h-4 text-indigo-600" /> Pedidos Registrados para {escolaAtual.nomeEscola}
+        </h2>
+        <p className="text-[11px] text-slate-500 dark:text-slate-400 -mt-2">
+          Todos os pedidos do PAA/PNAE que têm esta escola como destino de entrega.
+        </p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="bg-indigo-50 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300 font-bold uppercase border-b border-indigo-200 dark:border-indigo-800">
+                <th className="p-3">Pedido / Data</th>
+                <th className="p-3">Programa / Edital</th>
+                <th className="p-3">Produtor(es)</th>
+                <th className="p-3">Produtos</th>
+                <th className="p-3">Entrega Prevista</th>
+                <th className="p-3">Status</th>
+                <th className="p-3 text-right">Valor</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+              {pedidosDaEscola.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-6 text-center text-slate-400">
+                    Nenhum pedido registrado ainda com esta escola como destino.
+                  </td>
+                </tr>
+              ) : (
+                pedidosDaEscola.map(p => {
+                  const itensDaEscola = (p.itens || []).filter(
+                    it => it.escolaId === escolaAtual.id || (!it.escolaId && (p.escolaId === escolaAtual.id || (p.escolasIds || []).includes(escolaAtual.id)))
+                  );
+                  const itensExibir = itensDaEscola.length > 0 ? itensDaEscola : (p.itens || []);
+                  const valorDaEscola = itensExibir.reduce((s, it) => s + (it.valorTotalItem || 0), 0);
+                  return (
+                    <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 align-top">
+                      <td className="p-3">
+                        <div className="font-bold text-slate-900 dark:text-white">{p.numeroPedido}</div>
+                        <div className="text-[10px] text-slate-400">{p.dataPedido}</div>
+                      </td>
+                      <td className="p-3">
+                        <div className="font-semibold text-indigo-700 dark:text-indigo-400">{p.programaNome || p.programa}</div>
+                        <div className="text-[10px] text-slate-400">{p.chamadaPublicaEdital}</div>
+                      </td>
+                      <td className="p-3 text-slate-700 dark:text-slate-300">
+                        {p.produtoresParticipantes?.join(', ') || '—'}
+                      </td>
+                      <td className="p-3 text-slate-700 dark:text-slate-300">
+                        {itensExibir.map(item => (
+                          <div key={item.produtoId + item.produtoNome}>
+                            {item.produtoNome} — {item.quantidadePedida} {item.unidadeMedida}
+                          </div>
+                        ))}
+                      </td>
+                      <td className="p-3 font-mono text-slate-700 dark:text-slate-300">{p.dataPrevistaEntrega}</td>
+                      <td className="p-3">
+                        <span className={`px-2 py-0.5 rounded font-bold text-[10px] ${
+                          p.status === 'RECEBIDO' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' :
+                          p.status === 'CANCELADO' ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300' :
+                          p.status === 'CONFIRMADO' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300' :
+                          'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                        }`}>
+                          {p.status}
+                        </span>
+                      </td>
+                      <td className="p-3 text-right font-mono font-bold text-slate-900 dark:text-white">
+                        R$ {valorDaEscola.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
