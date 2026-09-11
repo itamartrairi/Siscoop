@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useCoop } from '../context/CoopContext';
 import {
   Smartphone,
@@ -291,14 +291,6 @@ export const AppProdutorView: React.FC = () => {
         .filter((produto): produto is typeof produtos[number] => Boolean(produto))
     : [];
 
-  useEffect(() => {
-    if (!chamadaOfertaId) return;
-    const primeiroProduto = produtosDaChamada[0];
-    if (primeiroProduto && !produtosDaChamada.some(p => p.id === produtoOfertaId)) {
-      setProdutoOfertaId(primeiroProduto.id);
-    }
-  }, [chamadaOfertaId, produtosDaChamada.length]);
-
   const chamadasAbertas = chamadasPublicas.filter(c => c.status === 'ABERTA');
 
   // Extrato de Pedidos e Entregas vinculados a este produtor — movido do
@@ -391,7 +383,18 @@ export const AppProdutorView: React.FC = () => {
               <select
                 required
                 value={chamadaOfertaId}
-                onChange={e => { setChamadaOfertaId(e.target.value); setItensOferta([]); setOfertaErro(null); }}
+                onChange={e => {
+                  const id = e.target.value;
+                  const chamada = chamadasPublicas.find(c => c.id === id);
+                  const primeiroItem = chamada?.itensSolicitados?.[0];
+                  const primeiroProduto = primeiroItem
+                    ? produtos.find(p => (primeiroItem.produtoId && p.id === primeiroItem.produtoId) || p.nome.trim().toLowerCase() === primeiroItem.produtoNome.trim().toLowerCase())
+                    : undefined;
+                  setChamadaOfertaId(id);
+                  setProdutoOfertaId(primeiroProduto?.id || '');
+                  setItensOferta([]);
+                  setOfertaErro(null);
+                }}
                 className="w-full p-3 bg-slate-800 border border-slate-700 text-white rounded-2xl font-bold focus:ring-2 focus:ring-emerald-500"
               >
                 <option value="">-- Selecione a chamada pública --</option>

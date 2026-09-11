@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { useCoop } from '../context/CoopContext';
 import {
   GraduationCap,
@@ -36,7 +36,7 @@ const SeletorEstrelas: React.FC<{ valor: number; onChange: (v: number) => void; 
 );
 
 export const PortalEscolaView: React.FC = () => {
-  const { escolasPnae, entregasEscola, pedidosProdutorPAA, confirmarEntregaEscola } = useCoop();
+  const { escolasPnae, entregasEscola, pedidosProdutorPAA, programacoesEntrega, confirmarEntregaEscola } = useCoop();
   const [showComprovanteModal, setShowComprovanteModal] = useState(false);
   const [abaAtiva, setAbaAtiva] = useState<'pedidos' | 'comprovante'>('pedidos');
 
@@ -62,8 +62,30 @@ export const PortalEscolaView: React.FC = () => {
       )
     : [];
 
+  // Programações oficiais do SisGepa destinadas a esta escola. Elas são a
+  // fonte principal do comprovante: motorista, placa, data e itens previstos.
+  const programacoesDaEscola = escolaAtual
+    ? programacoesEntrega.filter(p =>
+        p.escolaId === escolaAtual.id ||
+        (p.escolasIds || []).includes(escolaAtual.id) ||
+        p.paradasEntrega?.some(parada => parada.escolaId === escolaAtual.id || parada.escolaNome.toLowerCase() === escolaAtual.nomeEscola.toLowerCase()) ||
+        (p.escolaNome || '').toLowerCase() === escolaAtual.nomeEscola.toLowerCase() ||
+        (p.escolaOrgaoDestino || '').toLowerCase() === escolaAtual.nomeEscola.toLowerCase()
+      )
+    : [];
+
+  const itensDaProgramacao = (programacao: typeof programacoesDaEscola[number]) => {
+    const parada = programacao.paradasEntrega?.find(p => p.escolaId === escolaAtual?.id || p.escolaNome.toLowerCase() === escolaAtual?.nomeEscola.toLowerCase());
+    return (parada?.itens || programacao.itens || []).map(item => ({
+      produto: item.produtoNome,
+      qtdEsperada: Number(item.quantidadePrevista) || 0,
+      qtdRecebida: Number(item.quantidadePrevista) || 0
+    }));
+  };
+
   const [comprovanteForm, setComprovanteForm] = useState({
     pedidoId: '',
+    programacaoId: '',
     motoristaNome: '',
     placaVeiculo: '',
     assinadoPor: '',
@@ -85,19 +107,34 @@ export const PortalEscolaView: React.FC = () => {
   const [assinaturaVazia, setAssinaturaVazia] = useState(true);
 
   const handleOpenComprovante = () => {
+    const programacao = programacoesDaEscola[0];
     setComprovanteForm({
-      pedidoId: '',
-      motoristaNome: '',
-      placaVeiculo: '',
+      pedidoId: programacao?.pedidoId || '',
+      programacaoId: programacao?.id || '',
+      motoristaNome: programacao?.motoristaNome || '',
+      placaVeiculo: programacao?.veiculoPlaca || '',
       assinadoPor: '',
       statusConfirmacao: 'RECEBIDO_OK',
       observacaoRestricao: '',
-      itensRecebidos: [],
+      itensRecebidos: programacao ? itensDaProgramacao(programacao) : [],
       avaliacao: { aparenciaVisual: 5, qualidadeGeral: 5, higieneEmbalagem: 5, pontualidadeEntrega: 5, quantidadeCorreta: true, comentarios: '' }
     });
     setFotoComprovanteBase64('');
     setAssinaturaVazia(true);
     setShowComprovanteModal(true);
+  };
+
+  const handleSelecionarProgramacaoComprovante = (programacaoId: string) => {
+    const programacao = programacoesDaEscola.find(p => p.id === programacaoId);
+    if (!programacao) return;
+    setComprovanteForm(prev => ({
+      ...prev,
+      programacaoId,
+      pedidoId: programacao.pedidoId || '',
+      motoristaNome: programacao.motoristaNome || '',
+      placaVeiculo: programacao.veiculoPlaca || '',
+      itensRecebidos: itensDaProgramacao(programacao)
+    }));
   };
 
   const handleSelecionarPedidoComprovante = (pedidoId: string) => {
@@ -198,13 +235,14 @@ export const PortalEscolaView: React.FC = () => {
     const notaMedia = Number(((aparenciaVisual + qualidadeGeral + higieneEmbalagem + pontualidadeEntrega) / 4).toFixed(1));
     const assinaturaUrl = canvasAssinaturaRef.current?.toDataURL('image/png') || '';
     const pedidoSelecionado = pedidosProdutorPAA.find(p => p.id === comprovanteForm.pedidoId);
+    const programacaoSelecionada = programacoesDaEscola.find(p => p.id === comprovanteForm.programacaoId);
 
     confirmarEntregaEscola({
       escolaId: escolaAtual.id,
       escolaNome: escolaAtual.nomeEscola,
       escolaEmail: escolaAtual.email,
       pedidoId: comprovanteForm.pedidoId || undefined,
-      pedidoNumero: pedidoSelecionado?.numeroPedido,
+      pedidoNumero: pedidoSelecionado?.numeroPedido || programacaoSelecionada?.pedidoNumero,
       dataHoraEntrega: new Date().toISOString(),
       motoristaNome: comprovanteForm.motoristaNome || 'Não informado',
       placaVeiculo: comprovanteForm.placaVeiculo || 'Não informado',
@@ -319,6 +357,11 @@ export const PortalEscolaView: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <nav className="flex gap-2 overflow-x-auto rounded-2xl bg-slate-100 dark:bg-slate-900 p-2" aria-label="Seções do portal da escola">
+        <button type="button" onClick={() => setAbaAtiva('pedidos')} className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-black ${abaAtiva === 'pedidos' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800'}`}>Pedidos registrados</button>
+        <button type="button" onClick={() => { setAbaAtiva('comprovante'); handleOpenComprovante(); }} className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-black ${abaAtiva === 'comprovante' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800'}`}>Registrar comprovante</button>
+      </nav>
+
       {/* Top Banner with Active Session */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-xs">
         <div>
@@ -425,11 +468,6 @@ export const PortalEscolaView: React.FC = () => {
         </div>
       </div>}
 
-      <nav className="flex gap-2 overflow-x-auto rounded-2xl bg-slate-100 dark:bg-slate-900 p-2" aria-label="Seções do portal da escola">
-        <button type="button" onClick={() => setAbaAtiva('pedidos')} className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-black ${abaAtiva === 'pedidos' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800'}`}>Pedidos registrados</button>
-        <button type="button" onClick={() => { setAbaAtiva('comprovante'); handleOpenComprovante(); }} className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-black ${abaAtiva === 'comprovante' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800'}`}>Registrar comprovante</button>
-      </nav>
-
       {/* Modal Comprovante de Entrega — assinatura, foto e avaliação */}
       {showComprovanteModal && escolaAtual && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 z-50 overflow-y-auto">
@@ -445,6 +483,17 @@ export const PortalEscolaView: React.FC = () => {
             </div>
 
             <form onSubmit={handleSalvarComprovante} className="space-y-5 text-xs">
+              {programacoesDaEscola.length > 0 && (
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">Programação de Entrega do SisGepa</label>
+                  <select value={comprovanteForm.programacaoId} onChange={e => handleSelecionarProgramacaoComprovante(e.target.value)} className="w-full p-2.5 border border-emerald-300 dark:border-emerald-700 dark:bg-slate-900 dark:text-white rounded-xl">
+                    <option value="">Selecionar programação de entrega</option>
+                    {programacoesDaEscola.map(p => <option key={p.id} value={p.id}>{p.pedidoNumero || 'Entrega'} — {p.dataPrevista} — {p.motoristaNome || 'Motorista não informado'}</option>)}
+                  </select>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Os produtos, quantidades, motorista e placa são preenchidos conforme o cronograma oficial.</p>
+                </div>
+              )}
+
               {/* Vínculo com pedido (opcional) */}
               {pedidosDaEscola.length > 0 && (
                 <div>
@@ -470,7 +519,7 @@ export const PortalEscolaView: React.FC = () => {
                     value={comprovanteForm.motoristaNome}
                     onChange={e => setComprovanteForm({ ...comprovanteForm, motoristaNome: e.target.value })}
                     className="w-full p-2.5 border border-slate-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white rounded-xl"
-                    placeholder="Nome do motorista"
+                    placeholder="Nome do motorista" readOnly={Boolean(comprovanteForm.programacaoId)}
                   />
                 </div>
                 <div>
@@ -480,7 +529,7 @@ export const PortalEscolaView: React.FC = () => {
                     value={comprovanteForm.placaVeiculo}
                     onChange={e => setComprovanteForm({ ...comprovanteForm, placaVeiculo: e.target.value })}
                     className="w-full p-2.5 border border-slate-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white rounded-xl font-mono"
-                    placeholder="ABC-1234"
+                    placeholder="ABC-1234" readOnly={Boolean(comprovanteForm.programacaoId)}
                   />
                 </div>
               </div>
