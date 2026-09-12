@@ -3064,7 +3064,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const novoRateio: RateioChamadaPublica = {
         ...rData,
         id: existente?.id || `rat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        tenantId: currentTenant.id,
+        tenantId: currentTenant?.id || activeTenantId,
         dataAtualizacao: new Date().toISOString()
       };
       if (existente) {

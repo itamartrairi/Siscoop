@@ -592,6 +592,9 @@ export interface RateioChamadaPublica {
   chamadaPublicaEdital: string;
   programaId?: string;
   programaNome?: string;
+  fonteRecursos?: string; // herdada da Chamada Pública — garante que o rateio
+                          // e o Pedido gerado a partir dele fiquem na mesma
+                          // fonte de recurso (FNDE, MDS, Tesouro Estadual...).
   itens: RateioProduto[];
   dataAtualizacao: string;
   observacoes?: string;

@@ -1897,16 +1897,52 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
 
   // --- Helpers do Rateio de Produtores ---
 
-  // Ofertas SUBMETIDAs ou ACEITAs de um produto específico dentro de uma chamada.
-  const getOfertasParaProdutoChamada = (chamadaId: string, produtoNome: string, produtoId?: string) => {
-    return ofertasPAA.filter(o =>
-      o.chamadaPublicaId === chamadaId &&
-      o.status !== 'RECUSADA' &&
-      (
-        (produtoId && o.produtoId === produtoId) ||
-        (o.produtoNome && produtoNome && o.produtoNome.toLowerCase() === produtoNome.toLowerCase())
-      )
-    );
+  // Ofertas SUBMETIDAs ou ACEITAs de um produto específico dentro de uma
+  // chamada. IMPORTANTE: uma proposta de oferta pode reunir vários produtos
+  // em `itens[]` (o cadastro só grava produtoId/produtoNome/quantidadeOfertada
+  // no nível raiz para o PRIMEIRO produto da lista — ver handleSaveOferta).
+  // Por isso é preciso procurar o produto tanto no nível raiz quanto dentro
+  // de `itens[]`; senão o rateio só enxerga o primeiro produto de cada
+  // proposta com múltiplos itens e "perde" os demais.
+  const getOfertasParaProdutoChamada = (
+    chamadaId: string,
+    produtoNome: string,
+    produtoId?: string
+  ): { produtorId: string; produtorNome: string; quantidadeOfertada: number }[] => {
+    const bate = (nome?: string, id?: string) =>
+      (!!produtoId && !!id && id === produtoId) ||
+      (!!nome && !!produtoNome && nome.trim().toLowerCase() === produtoNome.trim().toLowerCase());
+
+    const resolvidas: { produtorId: string; produtorNome: string; quantidadeOfertada: number }[] = [];
+
+    ofertasPAA.forEach(o => {
+      if (o.chamadaPublicaId !== chamadaId || o.status === 'RECUSADA') return;
+
+      if (o.itens && o.itens.length > 0) {
+        // Proposta com um ou mais produtos detalhados em itens[] — procura o
+        // item deste produto especificamente (pode não ser o primeiro).
+        const item = o.itens.find(it => bate(it.produtoNome, it.produtoId));
+        if (item) {
+          resolvidas.push({
+            produtorId: o.produtorId,
+            produtorNome: o.produtorNome,
+            quantidadeOfertada: Number(item.quantidadeOfertada ?? item.quantidadeKg) || 0
+          });
+        }
+        return;
+      }
+
+      // Proposta antiga / de produto único, sem itens[] detalhado.
+      if (bate(o.produtoNome, o.produtoId)) {
+        resolvidas.push({
+          produtorId: o.produtorId,
+          produtorNome: o.produtorNome,
+          quantidadeOfertada: Number(o.quantidadeOfertada ?? o.quantidadeKg) || 0
+        });
+      }
+    });
+
+    return resolvidas;
   };
 
   // Distribui `total` entre `pesos` (mesma ordem), proporcionalmente,
@@ -1974,6 +2010,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
       chamadaPublicaEdital: chamada.numeroEdital,
       programaId: chamada.programaId,
       programaNome: chamada.programaNome,
+      fonteRecursos: chamada.fonteRecurso || chamada.fonteRecursos,
       itens,
       dataAtualizacao: ''
     };
@@ -2047,6 +2084,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
       chamadaPublicaEdital: rateioEmEdicao.chamadaPublicaEdital,
       programaId: rateioEmEdicao.programaId,
       programaNome: rateioEmEdicao.programaNome,
+      fonteRecursos: rateioEmEdicao.fonteRecursos,
       itens: rateioEmEdicao.itens,
       observacoes: rateioEmEdicao.observacoes
     });
@@ -2062,6 +2100,18 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
       alert('Esta chamada pública ainda não tem um rateio salvo. Acesse a aba "Rateio de Produtores" para criá-lo.');
       return;
     }
+
+    // O Pedido deve ficar na MESMA fonte de recurso do rateio (herdada da
+    // Chamada Pública). Se o usuário trocou manualmente a fonte no Pedido
+    // depois de selecionar a chamada, avisa antes de prosseguir.
+    if (rateio.fonteRecursos && pedidoForm.fonteRecursos && rateio.fonteRecursos !== pedidoForm.fonteRecursos) {
+      const prosseguir = confirm(
+        `Atenção: o rateio desta chamada foi feito na fonte de recurso "${rateio.fonteRecursos}", mas o Pedido está com a fonte "${pedidoForm.fonteRecursos}". Deseja ajustar o Pedido para "${rateio.fonteRecursos}" e continuar?`
+      );
+      if (!prosseguir) return;
+      setPedidoForm(prev => ({ ...prev, fonteRecursos: rateio.fonteRecursos! }));
+    }
+
     const itensFiltrados = pedidoForm.produtoId || pedidoForm.produtoNome
       ? rateio.itens.filter(it =>
           (pedidoForm.produtoId && it.produtoId === pedidoForm.produtoId) ||
@@ -3879,8 +3929,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                   <th className="p-3">Produtor Vinc.</th>
                   <th className="p-3">Produto Vinc.</th>
                   <th className="p-3">Programa / Chamada Pública</th>
-                  <th className="p-3">Qtd. Ofertada</th>
-                  <th className="p-3">Preço Unit.</th>
                   <th className="p-3">Valor Total</th>
                   <th className="p-3">Status</th>
                   <th className="p-3 text-right">Ações</th>
@@ -3889,7 +3937,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
               <tbody className="divide-y divide-slate-100">
                 {filteredOfertas.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-slate-400">
+                    <td colSpan={6} className="p-8 text-center text-slate-400">
                       Nenhuma proposta de oferta registrada ou compatível com os filtros.
                     </td>
                   </tr>
@@ -3921,18 +3969,24 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                         <div className="font-semibold text-slate-900">{o.programaNome || 'PAA/PNAE'}</div>
                         <div className="text-[10px] text-slate-500">{o.chamadaPublicaEdital || o.chamadaPublicaId || 'Edital Geral'}</div>
                       </td>
-                      <td className="p-3 text-slate-800 font-bold">
-                        {o.itens && o.itens.length > 0
-                          ? `${o.itens.reduce((s, i) => s + (i.quantidadeKg || 0), 0)} kg (${o.itens.length} prod.)`
-                          : `${o.quantidadeKg || o.quantidadeOfertada} kg`
-                        }
-                      </td>
-                      <td className="p-3 text-slate-600 font-medium">R$ {(o.precoUnitario || o.valorUnitario || 0).toFixed(2)}</td>
                       <td className="p-3 font-extrabold text-emerald-700">R$ {(o.valorTotal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                       <td className="p-3">
-                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-md font-bold text-[10px]">
-                          {o.status}
-                        </span>
+                        <select
+                          value={o.status}
+                          onChange={e => {
+                            if (!canWrite) { blockWriteAction(); return; }
+                            updateOfertaPAA(o.id, { status: e.target.value as PropostaOfertaPAA['status'] });
+                          }}
+                          className={`px-2 py-1 rounded-md font-bold text-[10px] border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
+                            o.status === 'ACEITA' ? 'bg-emerald-100 text-emerald-800'
+                            : o.status === 'RECUSADA' ? 'bg-rose-100 text-rose-800'
+                            : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          <option value="SUBMETIDA">SUBMETIDA</option>
+                          <option value="ACEITA">ACEITA</option>
+                          <option value="RECUSADA">RECUSADA</option>
+                        </select>
                       </td>
                       <td className="p-3 text-right">
                         <div className="flex items-center justify-end gap-1">
@@ -3971,8 +4025,38 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
               Rateio das Quantidades por Produtor e Escola
             </h3>
             <p className="text-xs text-slate-500 leading-relaxed">
-              Escolha uma Chamada Pública para dividir a quantidade de cada produto do edital entre os produtores que a ofertaram e, dentro de cada produtor, entre as escolas contempladas. O rateio salvo aqui pode ser carregado diretamente ao registrar o Pedido daquela chamada.
+              Toda Chamada Pública nova precisa de um rateio antes de gerar os Pedidos: escolha o edital para dividir a quantidade de cada produto entre os produtores que o ofertaram e, dentro de cada produtor, entre as escolas contempladas. O rateio salvo aqui pode ser carregado diretamente ao registrar o Pedido daquela chamada.
             </p>
+
+            {/* Chamadas ainda sem rateio — chamada de atenção para o fluxo
+                "sempre que inserir uma chamada, é preciso ratear". */}
+            {(() => {
+              const chamadasSemRateio = chamadasPublicas.filter(cp =>
+                (cp.itensSolicitados || []).length > 0 &&
+                !rateiosChamadas.some(r => r.chamadaPublicaId === cp.id)
+              );
+              if (chamadasSemRateio.length === 0) return null;
+              return (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 space-y-2">
+                  <p className="text-[11px] font-bold text-amber-800 flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5" /> {chamadasSemRateio.length} chamada(s) pública(s) ainda sem rateio:
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {chamadasSemRateio.map(cp => (
+                      <button
+                        key={cp.id}
+                        type="button"
+                        onClick={() => handleSelecionarChamadaRateio(cp.id)}
+                        className="px-3 py-1.5 bg-white hover:bg-amber-100 border border-amber-300 text-amber-900 rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                      >
+                        <Plus className="w-3 h-3" /> Novo Rateio: Edital {cp.numeroEdital}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="flex flex-col sm:flex-row sm:items-center gap-2">
               <select
                 value={rateioChamadaId}
@@ -3980,14 +4064,25 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                 className="flex-1 p-2.5 bg-white border border-slate-200 rounded-xl font-bold text-emerald-800 text-xs"
               >
                 <option value="">Selecione a Chamada Pública / Edital...</option>
-                {chamadasPublicas.map(cp => (
-                  <option key={cp.id} value={cp.id}>
-                    Edital {cp.numeroEdital} - {cp.orgaoComprador} {cp.status === 'ENCERRADA' ? '[ENCERRADA]' : ''}
-                  </option>
-                ))}
+                {chamadasPublicas.map(cp => {
+                  const temRateio = rateiosChamadas.some(r => r.chamadaPublicaId === cp.id);
+                  return (
+                    <option key={cp.id} value={cp.id}>
+                      {temRateio ? '✓' : '○'} Edital {cp.numeroEdital} - {cp.orgaoComprador} {cp.status === 'ENCERRADA' ? '[ENCERRADA]' : ''} {!temRateio ? '(sem rateio ainda)' : ''}
+                    </option>
+                  );
+                })}
               </select>
               {rateioEmEdicao && (
                 <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleSelecionarChamadaRateio('')}
+                    className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer border border-slate-200"
+                    title="Fechar este rateio e escolher outra chamada"
+                  >
+                    <X className="w-3.5 h-3.5" /> Fechar
+                  </button>
                   <button
                     type="button"
                     onClick={handleRegerarRateioAutomatico}
@@ -4006,6 +4101,14 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
               )}
             </div>
           </div>
+
+          {rateioEmEdicao && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[11px] text-slate-500">
+              <span>Edital: <strong className="text-slate-700">{rateioEmEdicao.chamadaPublicaEdital}</strong></span>
+              {rateioEmEdicao.programaNome && <span>Programa: <strong className="text-slate-700">{rateioEmEdicao.programaNome}</strong></span>}
+              {rateioEmEdicao.fonteRecursos && <span>Fonte de Recurso: <strong className="text-emerald-700">{rateioEmEdicao.fonteRecursos}</strong></span>}
+            </div>
+          )}
 
           {!rateioEmEdicao ? (
             <div className="p-10 bg-white rounded-2xl border border-slate-200 text-center text-slate-500 text-xs font-medium">
