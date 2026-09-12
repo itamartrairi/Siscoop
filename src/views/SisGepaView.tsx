@@ -2094,22 +2094,25 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
   // Converte o rateio salvo de uma chamada em itens de pedido — um item por
   // combinação (produtor, escola), já com a quantidade definida no rateio.
   // É isso que faz o Pedido "nascer" com os dados do rateio.
-  const handleCarregarRateioNoPedido = () => {
-    const rateio = rateiosChamadas.find(r => r.chamadaPublicaId === pedidoForm.chamadaPublicaId);
+  const handleCarregarRateioNoPedido = (chamadaIdOverride?: string, opts?: { silencioso?: boolean }) => {
+    const chamadaAlvoId = chamadaIdOverride || pedidoForm.chamadaPublicaId;
+    const rateio = rateiosChamadas.find(r => r.chamadaPublicaId === chamadaAlvoId);
     if (!rateio) {
-      alert('Esta chamada pública ainda não tem um rateio salvo. Acesse a aba "Rateio de Produtores" para criá-lo.');
+      if (!opts?.silencioso) alert('Esta chamada pública ainda não tem um rateio salvo. Acesse a aba "Rateio de Produtores" para criá-lo.');
       return;
     }
 
     // O Pedido deve ficar na MESMA fonte de recurso do rateio (herdada da
     // Chamada Pública). Se o usuário trocou manualmente a fonte no Pedido
     // depois de selecionar a chamada, avisa antes de prosseguir.
-    if (rateio.fonteRecursos && pedidoForm.fonteRecursos && rateio.fonteRecursos !== pedidoForm.fonteRecursos) {
+    if (!opts?.silencioso && rateio.fonteRecursos && pedidoForm.fonteRecursos && rateio.fonteRecursos !== pedidoForm.fonteRecursos) {
       const prosseguir = confirm(
         `Atenção: o rateio desta chamada foi feito na fonte de recurso "${rateio.fonteRecursos}", mas o Pedido está com a fonte "${pedidoForm.fonteRecursos}". Deseja ajustar o Pedido para "${rateio.fonteRecursos}" e continuar?`
       );
       if (!prosseguir) return;
       setPedidoForm(prev => ({ ...prev, fonteRecursos: rateio.fonteRecursos! }));
+    } else if (rateio.fonteRecursos) {
+      setPedidoForm(prev => ({ ...prev, fonteRecursos: prev.fonteRecursos || rateio.fonteRecursos! }));
     }
 
     const itensFiltrados = pedidoForm.produtoId || pedidoForm.produtoNome
@@ -2120,13 +2123,18 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
       : rateio.itens;
 
     if (itensFiltrados.length === 0) {
-      alert('Nenhum item do rateio corresponde ao produto selecionado.');
+      if (!opts?.silencioso) {
+        alert(pedidoForm.produtoNome
+          ? `Nenhum item do rateio corresponde ao produto "${pedidoForm.produtoNome}".`
+          : 'Este rateio ainda não tem produtos com produtores rateados. Acesse a aba "Rateio de Produtores" para completá-lo.'
+        );
+      }
       return;
     }
 
     const novosItens: ItemPedidoProdutor[] = [];
     itensFiltrados.forEach(item => {
-      item.produtores.forEach(p => {
+      item.produtores.filter(p => (p.quantidadeAlocada || 0) > 0).forEach(p => {
         const prodObj = produtores.find(pr => pr.id === p.produtorId);
         const escolasComQtd = p.escolas.filter(e => (e.quantidade || 0) > 0);
         const linhasEscola = escolasComQtd.length > 0 ? escolasComQtd : [{ escolaId: '', escolaNome: '', quantidade: p.quantidadeAlocada }];
@@ -2155,6 +2163,13 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
     setPedidoItens(novosItens);
     sincronizarEscolasDoPedidoComItens(novosItens);
     setSelectedProdutoresIds(Array.from(new Set(novosItens.map(it => it.produtorId))));
+
+    const totalProdutores = new Set(novosItens.map(it => it.produtorId)).size;
+    const totalProdutos = new Set(novosItens.map(it => it.produtoId || it.produtoNome)).size;
+    const totalEscolas = new Set(novosItens.map(it => it.escolaId).filter(Boolean)).size;
+    if (!opts?.silencioso) {
+      alert(`Rateio carregado: ${novosItens.length} itens (${totalProdutos} produto(s), ${totalProdutores} produtor(es), ${totalEscolas} escola(s)).`);
+    }
   };
 
   const handleLoadOfertasToPedido = (prodId?: string) => {
@@ -2231,69 +2246,10 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
     }
   };
 
-  const handlePreencherPedidoComItensChamada = () => {
-    const chm = chamadasPublicas.find(c => c.id === pedidoForm.chamadaPublicaId);
-    if (!chm || !chm.itensSolicitados || chm.itensSolicitados.length === 0) {
-      alert('Selecione uma Chamada Pública que contenha produtos/gêneros solicitados cadastrados.');
-      return;
-    }
-
-    const novosItens: ItemPedidoProdutor[] = [];
-    const prodIdsAdicionados: string[] = [];
-
-    // Distribuir itens solicitados da Chamada Pública entre produtores cadastrados
-    chm.itensSolicitados.forEach((item, idx) => {
-      // Tenta encontrar produtor que cultiva o produto
-      const matchProds = produtores.filter(p => 
-        p.produtosCultivados?.some(cp => cp.toLowerCase().includes(item.produtoNome.toLowerCase())) ||
-        p.principaisCulturas?.toLowerCase().includes(item.produtoNome.toLowerCase())
-      );
-      const prodSelected = matchProds[0] || produtores[idx % Math.max(1, produtores.length)] || {
-        id: `prod-${idx + 1}`,
-        nome: `Produtor Familiar ${idx + 1}`,
-        polo: 'Sede'
-      };
-
-      const prodPolo = prodSelected.polo || 'Sede';
-      // Sugestão automática por polo — o usuário pode trocar livremente na
-      // coluna "Local de Entrega / Escola" da tabela de itens do pedido.
-      const escMatch = escolasPnae.find(e => poloEquivale(e.polo, prodPolo)) || escolasPnae[0];
-
-      // A quantidade inicial já respeita o saldo ainda disponível da
-      // Chamada Pública para este produto (descontando o que outros
-      // pedidos já reservaram) — nunca sugere mais do que ainda resta.
-      const saldoDisponivel = getSaldoDisponivelChamada(item.produtoId || '', item.produtoNome);
-      const qtdSugerida = saldoDisponivel !== null ? Math.max(0, Math.min(item.quantidadeTotal, saldoDisponivel)) : item.quantidadeTotal;
-
-      novosItens.push({
-        produtorId: prodSelected.id,
-        produtorNome: prodSelected.nome,
-        produtoId: item.produtoId,
-        produtoNome: item.produtoNome,
-        unidadeMedida: item.unidade,
-        quantidadeOfertada: item.quantidadeTotal,
-        quantidadePedida: qtdSugerida,
-        precoUnitario: item.precoMaximoUnitario,
-        valorTotalItem: qtdSugerida * item.precoMaximoUnitario,
-        polo: prodPolo,
-        escolaId: escMatch?.id || '',
-        escolaNome: escMatch?.nomeEscola || '',
-        localEntrega: escMatch?.localDeEntrega || escMatch?.nomeEscola || 'Sede',
-        escolasIds: escMatch ? [escMatch.id] : [],
-        escolasNomes: escMatch ? [escMatch.nomeEscola] : []
-      });
-      prodIdsAdicionados.push(prodSelected.id);
-    });
-
-    setPedidoItens(novosItens);
-    sincronizarEscolasDoPedidoComItens(novosItens);
-    setSelectedProdutoresIds(Array.from(new Set(prodIdsAdicionados)));
-  };
-
   const handleSavePedido = (e: React.FormEvent) => {
     e.preventDefault();
     if (pedidoItens.length === 0) {
-      alert('Atenção: Por favor, selecione os produtores e clique no botão "Carregar Produtos da Proposta de Oferta" para gerar os itens do pedido.');
+      alert('Atenção: Por favor, selecione a Chamada Pública e clique em "Carregar Rateio desta Chamada" para gerar os itens do pedido.');
       return;
     }
     if (!pedidoForm.escolasIds || pedidoForm.escolasIds.length === 0) {
@@ -2559,6 +2515,36 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
 
         addProgramacaoEntrega(novaEntregaPayload as any);
       });
+    }
+
+    // Encerramento automático da Chamada Pública: se, depois de salvar este
+    // pedido, todos os produtos do edital já estiverem totalmente cobertos
+    // pela soma de todos os pedidos vinculados a ela, a chamada é encerrada
+    // automaticamente e some da lista de chamadas disponíveis para novos
+    // pedidos (o seletor já filtra chamadas com status 'ENCERRADA').
+    if (pedidoForm.chamadaPublicaId) {
+      const chamadaVinculada = chamadasPublicas.find(c => c.id === pedidoForm.chamadaPublicaId);
+      if (chamadaVinculada && chamadaVinculada.status !== 'ENCERRADA' && chamadaVinculada.itensSolicitados && chamadaVinculada.itensSolicitados.length > 0) {
+        const outrosPedidosItens = pedidosProdutorPAA
+          .filter(p => p.chamadaPublicaId === chamadaVinculada.id && p.id !== targetPedidoId)
+          .flatMap(p => p.itens || []);
+        const todosItensAposEsteSalvamento = [...outrosPedidosItens, ...pedidoItens];
+
+        const totalmenteCoberto = chamadaVinculada.itensSolicitados.every(itemEdital => {
+          const totalPedido = todosItensAposEsteSalvamento
+            .filter(it =>
+              (itemEdital.produtoId && it.produtoId === itemEdital.produtoId) ||
+              (!itemEdital.produtoId && it.produtoNome?.toLowerCase() === itemEdital.produtoNome.toLowerCase())
+            )
+            .reduce((sum, it) => sum + (Number(it.quantidadePedida) || 0), 0);
+          return totalPedido >= itemEdital.quantidadeTotal - 0.01; // tolerância de arredondamento
+        });
+
+        if (totalmenteCoberto) {
+          updateChamadaPublica(chamadaVinculada.id, { status: 'ENCERRADA' });
+          alert(`Todos os produtos da Chamada Pública (Edital ${chamadaVinculada.numeroEdital}) já foram totalmente registrados em pedidos. O status dela foi alterado automaticamente para ENCERRADA e ela não aparecerá mais para novos pedidos.`);
+        }
+      }
     }
 
     setShowPedidoModal(false);
@@ -3877,6 +3863,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                           <span>Ver Detalhes</span>
                         </button>
 
+                        {cp.status !== 'ENCERRADA' && (
                         <button
                           type="button"
                           onClick={() => {
@@ -3897,10 +3884,13 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                               escolaId: escIds[0] || prev.escolaId,
                               escolaNome: escNomes.join(', ') || prev.escolaNome
                             }));
-                            // Se tiver itens, pré-popula
-                            if (cp.itensSolicitados && cp.itensSolicitados.length > 0) {
+                            // Pré-popula com o rateio já salvo desta chamada (produtor
+                            // + escola + quantidade). Sem rateio salvo, o pedido abre
+                            // vazio — o rateio precisa ser feito antes na aba "Rateio
+                            // de Produtores".
+                            if (rateiosChamadas.some(r => r.chamadaPublicaId === cp.id)) {
                               setTimeout(() => {
-                                handlePreencherPedidoComItensChamada();
+                                handleCarregarRateioNoPedido(cp.id, { silencioso: true });
                               }, 100);
                             }
                           }}
@@ -3909,6 +3899,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                           <ShoppingBag className="w-3.5 h-3.5" />
                           <span>Gerar Pedido Vinculado</span>
                         </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -4167,7 +4158,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                                   step="0.01"
                                   value={p.quantidadeAlocada}
                                   onChange={e => handleQuantidadeProdutorRateio(produtoIdx, produtorIdx, Number(e.target.value) || 0)}
-                                  className="w-24 p-1.5 border border-slate-200 rounded-lg text-xs font-mono font-bold text-emerald-800 text-right"
+                                  className="w-32 p-1.5 border border-slate-200 rounded-lg text-xs font-mono font-bold text-emerald-800 text-right"
                                 />
                                 <span className="text-[11px] text-slate-500">{item.unidade}</span>
                               </div>
@@ -4183,7 +4174,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                                     {diffEscolas === 0 ? 'Confere com o total do produtor ✓' : `Diferença de ${diffEscolas} ${item.unidade} em relação ao alocado`}
                                   </span>
                                 </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                   {p.escolas.map((esc, escolaIdx) => (
                                     <div key={escolaIdx} className="flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
                                       <span className="text-[11px] text-slate-700 truncate">{esc.escolaNome}</span>
@@ -4193,7 +4184,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                                         step="0.01"
                                         value={esc.quantidade}
                                         onChange={e => handleQuantidadeEscolaRateio(produtoIdx, produtorIdx, escolaIdx, Number(e.target.value) || 0)}
-                                        className="w-16 p-1 border border-slate-200 rounded text-[11px] font-mono font-bold text-emerald-800 text-right shrink-0"
+                                        className="w-28 p-1.5 border border-slate-200 rounded text-xs font-mono font-bold text-emerald-800 text-right shrink-0"
                                       />
                                     </div>
                                   ))}
@@ -5940,20 +5931,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                             Fonte: <strong>{chm.fonteRecurso || chm.fonteRecursos || pedidoForm.fonteRecursos}</strong> • Valor Edital: <strong>R$ {(chm.valorTotalEdital || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
                           </p>
                         </div>
-
-                        <div className="flex items-center gap-2 shrink-0">
-                          {chm.itensSolicitados && chm.itensSolicitados.length > 0 && (
-                            <button
-                              type="button"
-                              onClick={handlePreencherPedidoComItensChamada}
-                              className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-black rounded-xl text-xs transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
-                              title="Preencher os itens do pedido com todos os gêneros da Chamada Pública"
-                            >
-                              <Sparkles className="w-4 h-4 text-emerald-950" />
-                              <span>⚡ Preencher com Itens do Edital ({totalItensChm})</span>
-                            </button>
-                          )}
-                        </div>
                       </div>
 
                       {/* Resumo de Escolas e Produtos do Edital */}
@@ -6003,14 +5980,19 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                     <span className="font-extrabold text-white text-xs flex items-center gap-1.5">
                       <Scale className="w-4 h-4 text-emerald-300 shrink-0" />
                       Esta chamada pública já tem um rateio salvo entre produtores e escolas.
+                      {pedidoForm.produtoNome && (
+                        <span className="text-emerald-300 font-normal">— filtrando por "{pedidoForm.produtoNome}"</span>
+                      )}
                     </span>
                     <button
                       type="button"
-                      onClick={handleCarregarRateioNoPedido}
+                      onClick={() => handleCarregarRateioNoPedido()}
                       className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-emerald-950 rounded-lg font-black text-[11px] shadow-sm transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
-                      title="Preencher os itens do pedido diretamente com os dados do rateio (produtor + escola + quantidade)"
+                      title={pedidoForm.produtoNome
+                        ? `Preencher os itens do pedido com os dados do rateio somente para "${pedidoForm.produtoNome}" (produtor + escola + quantidade)`
+                        : 'Preencher os itens do pedido com os dados do rateio de TODOS os produtos (produtor + escola + quantidade). Selecione um produto acima para filtrar.'}
                     >
-                      <PackageCheck className="w-3.5 h-3.5" /> Carregar Rateio desta Chamada
+                      <PackageCheck className="w-3.5 h-3.5" /> Carregar Rateio {pedidoForm.produtoNome ? 'deste Produto' : 'desta Chamada'}
                     </button>
                   </div>
                 )}
@@ -6026,16 +6008,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                         <>Carregar Produtos da Proposta de Oferta do Programa ({pedidoForm.programaNome || pedidoForm.programa}):</>
                       )}
                     </span>
-                    {ofertasDoProdutoSelecionado.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => handleLoadOfertasToPedido()}
-                        className="px-3 py-1.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-lg font-extrabold text-[11px] shadow-sm transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
-                        title={pedidoForm.produtoNome ? `Carregar todas as ofertas de ${pedidoForm.produtoNome}` : "Carregar todos os produtos e produtores com oferta para este programa"}
-                      >
-                        <PackageCheck className="w-3.5 h-3.5" /> Carregar Todas as Ofertas {pedidoForm.produtoNome ? `deste Produto (${ofertasDoProdutoSelecionado.length})` : `do Programa (${ofertasDoProgramaSelecionado.length})`}
-                      </button>
-                    )}
                   </div>
                   <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-1 bg-white/70 rounded-lg border border-emerald-200">
                     {ofertasDoProdutoSelecionado.length === 0 ? (
@@ -6212,7 +6184,16 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                             const prodObj = produtores.find(p => p.id === it.produtorId);
                             const prodPolo = prodObj?.polo || it.polo || 'Sede';
                             const escolasFiltradas = escolasPnae.filter(e => !e.polo || poloEquivale(e.polo, prodPolo));
-                            const listaEscolas = escolasFiltradas.length > 0 ? escolasFiltradas : escolasPnae;
+                            // O rateio pode atribuir uma escola de outro polo a este
+                            // produtor (é uma decisão explícita do rateio, não do
+                            // cadastro do produtor) — garante que ela sempre apareça
+                            // no seletor mesmo fora do filtro por polo, senão o campo
+                            // fica "vazio" mesmo com a escola corretamente vinculada.
+                            const escolaJaAtribuida = it.escolaId ? escolasPnae.find(e => e.id === it.escolaId) : undefined;
+                            const listaEscolasBase = escolasFiltradas.length > 0 ? escolasFiltradas : escolasPnae;
+                            const listaEscolas = escolaJaAtribuida && !listaEscolasBase.some(e => e.id === escolaJaAtribuida.id)
+                              ? [escolaJaAtribuida, ...listaEscolasBase]
+                              : listaEscolasBase;
                             const listaProdutoresOpcoes = produtoresComOfertaDoProduto.length > 0 ? produtoresComOfertaDoProduto : produtores;
 
                             return (
