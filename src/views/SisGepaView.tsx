@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import jsPDF from 'jspdf';
 import * as XLSX from '@e965/xlsx';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useCoop } from '../context/CoopContext';
 import {
   Landmark,
@@ -87,6 +88,25 @@ import {
   parsePlanilhaChamadaPublica,
   ParsePlanilhaResult
 } from '../utils/chamadaPublicaExcel';
+
+type SaldoRateioRow = {
+  chave: string;
+  chamadaPublicaId: string;
+  edital: string;
+  programa: string;
+  fonteRecursos: string;
+  produtoId?: string;
+  produto: string;
+  unidade: string;
+  produtorId: string;
+  produtor: string;
+  escolaId: string;
+  escola: string;
+  rateado: number;
+  pedido: number;
+  saldo: number;
+  precoUnitario: number;
+};
 
 const FONTES_RECURSOS_OPTIONS = [
   'FNDE / PNAE Federal',
@@ -208,8 +228,13 @@ export const SisGepaView: React.FC = () => {
     alert('Seu perfil de acesso tem permissão apenas de leitura neste módulo. Fale com um administrador para solicitar permissão de edição.');
   };
 
-  const [activeTab, setActiveTab] = useState<'chamadas' | 'ofertas' | 'rateio' | 'pedidos' | 'entregas' | 'relatorios'>('chamadas');
+  const [activeTab, setActiveTab] = useState<'chamadas' | 'ofertas' | 'rateio' | 'pedidos' | 'entregas' | 'saldos' | 'relatorios'>('chamadas');
   const [relatorioSubTab, setRelatorioSubTab] = useState<'pedidos' | 'entregas'>('pedidos');
+  const [saldoFilterProduto, setSaldoFilterProduto] = useState('TODOS');
+  const [saldoFilterProdutor, setSaldoFilterProdutor] = useState('TODOS');
+  const [saldoFilterEscola, setSaldoFilterEscola] = useState('TODOS');
+  const [saldoFilterChamada, setSaldoFilterChamada] = useState('TODOS');
+  const [saldoApenasPendentes, setSaldoApenasPendentes] = useState(false);
 
   // Specific filters for Relatórios de Pedidos e Entregas
   const [relFilterProdutor, setRelFilterProdutor] = useState('TODOS');
@@ -3416,6 +3441,189 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
     XLSX.writeFile(workbook, `SisGepa_${relatorioSubTab === 'pedidos' ? 'Pedidos' : 'Entregas'}_${Date.now()}.xlsx`);
   };
 
+  const saldoRateioRows = useMemo<SaldoRateioRow[]>(() => {
+    const rows: SaldoRateioRow[] = [];
+    const pedidosAtivos = pedidosProdutorPAA.filter(p => p.status !== 'CANCELADO');
+    const normalizar = (value?: string) => (value || '').trim().toLowerCase();
+    const corresponde = (idA: string | undefined, nomeA: string | undefined, idB: string | undefined, nomeB: string | undefined) =>
+      (!!idA && !!idB && idA === idB) || (!!nomeA && !!nomeB && normalizar(nomeA) === normalizar(nomeB));
+    rateiosChamadas.forEach(rateio => {
+      const chamada = chamadasPublicas.find(c => c.id === rateio.chamadaPublicaId);
+      rateio.itens.forEach(item => item.produtores.forEach(produtor => produtor.escolas.forEach(escola => {
+        const pedido = pedidosAtivos.reduce((total, pedidoAtual) => total + pedidoAtual.itens.reduce((subtotal, pedidoItem) => {
+          if (pedidoAtual.chamadaPublicaId !== rateio.chamadaPublicaId) return subtotal;
+          if (!corresponde(item.produtoId, item.produtoNome, pedidoItem.produtoId, pedidoItem.produtoNome)) return subtotal;
+          if (!corresponde(produtor.produtorId, produtor.produtorNome, pedidoItem.produtorId, pedidoItem.produtorNome)) return subtotal;
+          if (!corresponde(escola.escolaId, escola.escolaNome, pedidoItem.escolaId || pedidoAtual.escolaId, pedidoItem.escolaNome || pedidoAtual.escolaNome)) return subtotal;
+          return subtotal + (Number(pedidoItem.quantidadePedida) || 0);
+        }, 0), 0);
+        const rateado = Number(escola.quantidade) || 0;
+        rows.push({
+          chave: `${rateio.chamadaPublicaId}-${item.produtoId || item.produtoNome}-${produtor.produtorId}-${escola.escolaId}`,
+          chamadaPublicaId: rateio.chamadaPublicaId,
+          edital: rateio.chamadaPublicaEdital || chamada?.numeroEdital || 'Sem edital',
+          programa: rateio.programaNome || chamada?.programaNome || chamada?.programa || '—',
+          fonteRecursos: rateio.fonteRecursos || chamada?.fonteRecurso || chamada?.fonteRecursos || '—',
+          produtoId: item.produtoId,
+          produto: item.produtoNome,
+          unidade: item.unidade || 'KG',
+          produtorId: produtor.produtorId,
+          produtor: produtor.produtorNome,
+          escolaId: escola.escolaId,
+          escola: escola.escolaNome,
+          rateado,
+          pedido,
+          saldo: Math.round((rateado - pedido) * 100) / 100,
+          precoUnitario: Number(item.precoMaximoUnitario) || 0
+        });
+      })));
+    });
+    return rows;
+  }, [rateiosChamadas, chamadasPublicas, pedidosProdutorPAA]);
+
+  const filteredSaldoRows = useMemo(() => saldoRateioRows.filter(row =>
+    (saldoFilterProduto === 'TODOS' || row.produto === saldoFilterProduto) &&
+    (saldoFilterProdutor === 'TODOS' || row.produtor === saldoFilterProdutor) &&
+    (saldoFilterEscola === 'TODOS' || row.escola === saldoFilterEscola) &&
+    (saldoFilterChamada === 'TODOS' || row.chamadaPublicaId === saldoFilterChamada) &&
+    (!saldoApenasPendentes || row.saldo > 0)
+  ), [saldoRateioRows, saldoFilterProduto, saldoFilterProdutor, saldoFilterEscola, saldoFilterChamada, saldoApenasPendentes]);
+
+  const saldoGraficoData = useMemo(() => {
+    const agrupado = new Map<string, { escola: string; produto: string; saldo: number }>();
+    filteredSaldoRows.filter(row => row.saldo > 0).forEach(row => {
+      const chave = `${row.escolaId || row.escola}|${row.produtoId || row.produto}`;
+      const atual = agrupado.get(chave);
+      if (atual) atual.saldo += row.saldo;
+      else agrupado.set(chave, { escola: row.escola, produto: row.produto, saldo: row.saldo });
+    });
+    return Array.from(agrupado.values())
+      .sort((a, b) => b.saldo - a.saldo)
+      .slice(0, 12)
+      .map(item => ({
+        ...item,
+        rotulo: `${item.escola} — ${item.produto}`
+      }));
+  }, [filteredSaldoRows]);
+
+  const handleExportSaldoExcel = () => {
+    const data = filteredSaldoRows.map(row => ({
+      Edital: row.edital, Programa: row.programa, 'Fonte de recurso': row.fonteRecursos,
+      Produto: row.produto, Unidade: row.unidade, Produtor: row.produtor, Escola: row.escola,
+      'Quantidade rateada': row.rateado, 'Quantidade já pedida': row.pedido, 'Saldo a pedir': row.saldo,
+      'Preço unitário': row.precoUnitario, 'Valor do saldo': Number((row.saldo * row.precoUnitario).toFixed(2))
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Saldo_a_Pedir');
+    XLSX.writeFile(workbook, `SisGepa_Saldo_a_Pedir_${Date.now()}.xlsx`);
+  };
+
+  const handleExportSaldoPdf = () => {
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const linhasAgrupadas = filteredSaldoRows
+      .filter(row => row.saldo > 0)
+      .reduce<Map<string, { escola: string; produto: string; unidade: string; rateado: number; pedido: number; saldo: number; valor: number }>>((acc, row) => {
+        const chave = `${row.escolaId || row.escola}|${row.produtoId || row.produto}|${row.unidade}`;
+        const atual = acc.get(chave);
+        if (atual) {
+          atual.rateado += row.rateado;
+          atual.pedido += row.pedido;
+          atual.saldo += row.saldo;
+          atual.valor += row.saldo * row.precoUnitario;
+        } else {
+          acc.set(chave, { escola: row.escola, produto: row.produto, unidade: row.unidade, rateado: row.rateado, pedido: row.pedido, saldo: row.saldo, valor: row.saldo * row.precoUnitario });
+        }
+        return acc;
+      }, new Map<string, { escola: string; produto: string; unidade: string; rateado: number; pedido: number; saldo: number; valor: number }>());
+    const linhas = (Array.from(linhasAgrupadas.values()) as Array<{ escola: string; produto: string; unidade: string; rateado: number; pedido: number; saldo: number; valor: number }>)
+      .sort((a, b) => a.escola.localeCompare(b.escola) || b.saldo - a.saldo);
+
+    const dataEmissao = new Date().toLocaleString('pt-BR');
+    const margem = 14;
+    const largura = doc.internal.pageSize.getWidth();
+    const novaPagina = (alturaNecessaria = 10) => {
+      if (y + alturaNecessaria > doc.internal.pageSize.getHeight() - 14) {
+        doc.addPage();
+        y = 16;
+        return true;
+      }
+      return false;
+    };
+    let y = 16;
+    doc.setFillColor(6, 78, 59);
+    doc.rect(0, 0, largura, 28, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text('SISGEPA — RELATÓRIO DE SALDO A PEDIR', margem, 12);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Produtos com maior saldo por escola | Emitido em ${dataEmissao}`, margem, 20);
+    y = 38;
+
+    const totalSaldo = linhas.reduce((s, row) => s + row.saldo, 0);
+    const totalValor = linhas.reduce((s, row) => s + row.valor, 0);
+    doc.setTextColor(30, 41, 59);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text(`Resumo: ${linhas.length} produto(s) com saldo positivo | ${totalSaldo.toFixed(2)} unidades | Valor estimado: R$ ${totalValor.toFixed(2)}`, margem, y);
+    y += 9;
+
+    let escolaAtual = '';
+    linhas.forEach((row, index) => {
+      const altura = escolaAtual !== row.escola ? 20 : 8;
+      novaPagina(altura);
+      if (escolaAtual !== row.escola) {
+        escolaAtual = row.escola;
+        if (index > 0) y += 4;
+        doc.setFillColor(226, 232, 240);
+        doc.roundedRect(margem, y - 5, largura - (margem * 2), 9, 2, 2, 'F');
+        doc.setTextColor(15, 23, 42);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.text(`Escola: ${row.escola}`, margem + 3, y + 1);
+        y += 10;
+        doc.setFontSize(8);
+        doc.setTextColor(71, 85, 105);
+        doc.text('Produto', margem, y);
+        doc.text('Rateado', 145, y, { align: 'right' });
+        doc.text('Já pedido', 180, y, { align: 'right' });
+        doc.text('Saldo a pedir', 220, y, { align: 'right' });
+        doc.text('Valor estimado', 280, y, { align: 'right' });
+        y += 5;
+      }
+      novaPagina(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.setTextColor(30, 41, 59);
+      doc.text(`${row.produto} (${row.unidade})`, margem, y);
+      doc.text(row.rateado.toFixed(2), 145, y, { align: 'right' });
+      doc.text(row.pedido.toFixed(2), 180, y, { align: 'right' });
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(180, 83, 9);
+      doc.text(row.saldo.toFixed(2), 220, y, { align: 'right' });
+      doc.text(`R$ ${row.valor.toFixed(2)}`, 280, y, { align: 'right' });
+      y += 6;
+    });
+
+    if (linhas.length === 0) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(71, 85, 105);
+      doc.text('Não há saldo positivo para os filtros selecionados.', margem, y);
+    }
+    const totalPaginas = doc.getNumberOfPages();
+    for (let pagina = 1; pagina <= totalPaginas; pagina++) {
+      doc.setPage(pagina);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`SICOOP • SisGepa | Página ${pagina} de ${totalPaginas}`, largura - margem, doc.internal.pageSize.getHeight() - 7, { align: 'right' });
+    }
+    doc.save(`SisGepa_Relatorio_Saldo_Por_Escola_${Date.now()}.pdf`);
+  };
+
   return (
     <div className="space-y-6">
       {/* Alerta Visual (Badge) no Header para Pedidos Pendentes de Envio aos Produtores Rurais */}
@@ -3614,6 +3822,20 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
               {pendingPedidosCount}
             </span>
           )}
+        </button>
+        <button
+          onClick={() => setActiveTab('saldos')}
+          className={`px-5 py-3 text-sm font-extrabold rounded-2xl flex items-center gap-2.5 transition-all whitespace-nowrap shadow-xs cursor-pointer ${
+            activeTab === 'saldos'
+              ? 'bg-emerald-700 text-white shadow-md ring-2 ring-emerald-600'
+              : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <Calculator className={`w-4 h-4 ${activeTab === 'saldos' ? 'text-emerald-200' : 'text-emerald-700'}`} />
+          <span>Saldo a Pedir</span>
+          <span className={`px-2 py-0.5 rounded-full text-xs font-black ${activeTab === 'saldos' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'}`}>
+            {saldoRateioRows.filter(r => r.saldo > 0).length}
+          </span>
         </button>
         <button
           onClick={() => setActiveTab('entregas')}
@@ -4432,6 +4654,49 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Tab Saldo a Pedir */}
+      {activeTab === 'saldos' && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2"><Calculator className="w-5 h-5 text-emerald-700" /> Saldo de Produtos a Pedir</h3>
+                <p className="text-xs text-slate-500 mt-1">Conferência do rateio contra os pedidos já registrados, detalhada por produto, produtor e escola.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={handleExportSaldoPdf} className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center gap-1.5"><Printer className="w-4 h-4 text-emerald-400" /> Relatório PDF</button>
+                <button type="button" onClick={handleExportSaldoExcel} className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5"><FileSpreadsheet className="w-4 h-4" /> Exportar Excel</button>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 text-xs">
+              <select value={saldoFilterChamada} onChange={e => setSaldoFilterChamada(e.target.value)} className="p-2 bg-slate-50 border border-slate-200 rounded-xl font-medium"><option value="TODOS">Todos os editais</option>{rateiosChamadas.map(r => <option key={r.chamadaPublicaId} value={r.chamadaPublicaId}>{r.chamadaPublicaEdital}</option>)}</select>
+              <select value={saldoFilterProduto} onChange={e => setSaldoFilterProduto(e.target.value)} className="p-2 bg-slate-50 border border-slate-200 rounded-xl font-medium"><option value="TODOS">Todos os produtos</option>{Array.from(new Set(saldoRateioRows.map(r => r.produto))).sort().map(p => <option key={p} value={p}>{p}</option>)}</select>
+              <select value={saldoFilterProdutor} onChange={e => setSaldoFilterProdutor(e.target.value)} className="p-2 bg-slate-50 border border-slate-200 rounded-xl font-medium"><option value="TODOS">Todos os produtores</option>{Array.from(new Set(saldoRateioRows.map(r => r.produtor))).sort().map(p => <option key={p} value={p}>{p}</option>)}</select>
+              <select value={saldoFilterEscola} onChange={e => setSaldoFilterEscola(e.target.value)} className="p-2 bg-slate-50 border border-slate-200 rounded-xl font-medium"><option value="TODOS">Todas as escolas</option>{Array.from(new Set(saldoRateioRows.map(r => r.escola))).sort().map(e => <option key={e} value={e}>{e}</option>)}</select>
+              <label className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl font-bold text-amber-900"><input type="checkbox" checked={saldoApenasPendentes} onChange={e => setSaldoApenasPendentes(e.target.checked)} className="accent-emerald-700" /> Mostrar somente saldo positivo</label>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-white border border-slate-200 rounded-2xl p-4"><p className="text-[10px] uppercase font-black text-slate-500">Linhas exibidas</p><p className="text-2xl font-black text-slate-900 mt-1">{filteredSaldoRows.length}</p></div>
+            <div className="bg-white border border-emerald-200 rounded-2xl p-4"><p className="text-[10px] uppercase font-black text-emerald-700">Total rateado</p><p className="text-2xl font-black text-emerald-800 mt-1">{filteredSaldoRows.reduce((s, r) => s + r.rateado, 0).toFixed(2)} <span className="text-xs">un.</span></p></div>
+            <div className="bg-white border border-amber-200 rounded-2xl p-4"><p className="text-[10px] uppercase font-black text-amber-700">Saldo a pedir</p><p className="text-2xl font-black text-amber-800 mt-1">{filteredSaldoRows.reduce((s, r) => s + Math.max(r.saldo, 0), 0).toFixed(2)} <span className="text-xs">un.</span></p></div>
+          </div>
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div>
+                <h3 className="text-sm font-extrabold text-slate-900">Maiores saldos a pedir por escola</h3>
+                <p className="text-[11px] text-slate-500">Top 12 combinações de escola e produto, conforme os filtros selecionados.</p>
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-wide text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1">Unidades</span>
+            </div>
+            {saldoGraficoData.length === 0 ? <div className="h-24 flex items-center justify-center text-xs text-slate-500">Nenhum saldo positivo para exibir no gráfico.</div> : <ResponsiveContainer width="100%" height={Math.max(260, saldoGraficoData.length * 34)}><BarChart data={saldoGraficoData} layout="vertical" margin={{ top: 4, right: 24, left: 12, bottom: 4 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" /><XAxis type="number" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} /><YAxis type="category" dataKey="rotulo" width={230} tick={{ fontSize: 10, fill: '#334155' }} axisLine={false} tickLine={false} /><Tooltip formatter={(value: number) => [`${Number(value).toFixed(2)} un.`, 'Saldo a pedir']} contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 11 }} /><Bar dataKey="saldo" name="Saldo a pedir" fill="#d97706" radius={[0, 6, 6, 0]} barSize={18} /></BarChart></ResponsiveContainer>}
+          </div>
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-x-auto">
+            {filteredSaldoRows.length === 0 ? <div className="p-12 text-center text-slate-500 text-xs font-medium">Nenhum rateio salvo encontrado para os filtros selecionados.</div> : <table className="w-full text-left text-xs min-w-[1050px]"><thead className="bg-slate-900 text-white"><tr><th className="p-3">Edital / Programa</th><th className="p-3">Produto</th><th className="p-3">Produtor</th><th className="p-3">Escola</th><th className="p-3 text-right">Rateado</th><th className="p-3 text-right">Já pedido</th><th className="p-3 text-right">Saldo a pedir</th><th className="p-3 text-right">Valor saldo</th></tr></thead><tbody className="divide-y divide-slate-100">{filteredSaldoRows.map(row => <tr key={row.chave} className="hover:bg-slate-50"><td className="p-3"><div className="font-bold text-slate-900">{row.edital}</div><div className="text-[10px] text-slate-500">{row.programa} · {row.fonteRecursos}</div></td><td className="p-3 font-bold text-slate-800">{row.produto}<div className="text-[10px] text-slate-400">{row.unidade} · R$ {row.precoUnitario.toFixed(2)}</div></td><td className="p-3 text-slate-700">{row.produtor}</td><td className="p-3 text-slate-700">{row.escola}</td><td className="p-3 text-right font-mono">{row.rateado.toFixed(2)}</td><td className="p-3 text-right font-mono">{row.pedido.toFixed(2)}</td><td className={`p-3 text-right font-mono font-black ${row.saldo > 0 ? 'text-amber-700' : row.saldo < 0 ? 'text-rose-700' : 'text-emerald-700'}`}>{row.saldo.toFixed(2)}</td><td className="p-3 text-right font-mono font-bold">R$ {(Math.max(row.saldo, 0) * row.precoUnitario).toFixed(2)}</td></tr>)}</tbody></table>}
           </div>
         </div>
       )}
