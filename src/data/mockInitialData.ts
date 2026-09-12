@@ -1527,7 +1527,7 @@ export const INITIAL_PEDIDOS_PRODUTOR: PedidoProdutorPAA[] = [
   {
     id: 'ped-prod-01',
     tenantId: 'coop-01',
-    numeroPedido: 'PED-PAA-2026-001',
+    numeroPedido: 'PED-01/2026',
     programa: 'PNAE',
     chamadaPublicaId: 'chm-01',
     chamadaPublicaEdital: 'Chamada Pública PNAE 001/2026',

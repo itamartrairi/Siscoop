@@ -325,7 +325,7 @@ export const SisGepaView: React.FC = () => {
 
   // Form Pedido
   const [pedidoForm, setPedidoForm] = useState({
-    numeroPedido: `PED-${Date.now().toString().slice(-5)}`,
+    numeroPedido: '', // placeholder — o número real (PED-01/2026) é gerado ao abrir o formulário, em handleOpenPedido
     programaId: '',
     programaNome: '',
     programa: 'PAA' as 'PAA' | 'PNAE' | 'MERCADO_LIVRE' | string,
@@ -1559,6 +1559,24 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
     }
   };
 
+  // Gera o próximo número sequencial de pedido no formato PED-01/2026 —
+  // sigla + sequencial de 2 dígitos (ou mais, se passar de 99) + ano corrente.
+  // A numeração reinicia a cada ano civil, contando apenas os pedidos já
+  // registrados naquele ano.
+  const gerarProximoNumeroPedido = (): string => {
+    const anoAtual = new Date().getFullYear();
+    const regex = /^PED-(\d+)\/(\d{4})$/;
+    const maiorSequencialDoAno = pedidosProdutorPAA.reduce((maior, p) => {
+      const match = regex.exec(p.numeroPedido || '');
+      if (match && Number(match[2]) === anoAtual) {
+        return Math.max(maior, Number(match[1]));
+      }
+      return maior;
+    }, 0);
+    const proximoSequencial = String(maiorSequencialDoAno + 1).padStart(2, '0');
+    return `PED-${proximoSequencial}/${anoAtual}`;
+  };
+
   const handleOpenPedido = (p?: PedidoProdutorPAA) => {
     if (p) {
       setEditingPedido(p);
@@ -1614,7 +1632,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
 
       setEditingPedido(null);
       setPedidoForm({
-        numeroPedido: `PED-${Date.now().toString().slice(-5)}`,
+        numeroPedido: gerarProximoNumeroPedido(),
         programaId: defaultProg?.id || '',
         programaNome: defaultProg?.nome || 'PAA',
         programa: defaultProg?.tipo || 'PAA',
