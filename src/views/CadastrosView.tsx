@@ -1031,14 +1031,6 @@ export const CadastrosView: React.FC = () => {
 
       {/* Tab 1: Produtores Rurais */}
       {activeTab === 'produtores' && (
-        <>
-          <PortalShareBanner
-            portalId="app-produtor"
-            customTitle="App do Produtor Rural"
-            customSubtitle="Compartilhe este link com os produtores cadastrados abaixo para que lancem suas colheitas direto do celular."
-            recipients={produtores.map(p => ({ id: p.id, nome: p.nome, telefone: p.telefone }))}
-            recipientLabel="produtores"
-          />
         <div className="bg-white rounded-2xl border border-slate-200/80 p-6 space-y-4 shadow-xs">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="relative flex-1 w-full">
@@ -1220,7 +1212,6 @@ export const CadastrosView: React.FC = () => {
             </table>
           </div>
         </div>
-        </>
       )}
 
       {/* Tab 2: Produtos Agropecuários */}
@@ -1330,14 +1321,6 @@ export const CadastrosView: React.FC = () => {
 
       {/* Tab 5: Escolas PNAE */}
       {activeTab === 'escolas' && (
-        <>
-          <PortalShareBanner
-            portalId="portal-escola"
-            customTitle="Portal da Escola (PNAE)"
-            customSubtitle="Compartilhe este link com as escolas cadastradas abaixo para que atestem digitalmente o recebimento das entregas."
-            recipients={escolasPnae.map(e => ({ id: e.id, nome: e.nomeEscola, telefone: e.telefone, celular: e.celular }))}
-            recipientLabel="escolas"
-          />
         <div className="bg-white rounded-2xl border border-slate-200/80 p-6 space-y-4 shadow-xs">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
@@ -1409,7 +1392,6 @@ export const CadastrosView: React.FC = () => {
             </table>
           </div>
         </div>
-        </>
       )}
 
       {/* Tab: Motoristas */}
@@ -1419,8 +1401,6 @@ export const CadastrosView: React.FC = () => {
             portalId="app-motorista"
             customTitle="App do Motorista & Logística"
             customSubtitle="Compartilhe este link com os motoristas cadastrados abaixo para que acessem as rotas e romaneios de entrega pelo celular."
-            recipients={motoristas.map(m => ({ id: m.id, nome: m.nome, telefone: m.telefone }))}
-            recipientLabel="motoristas"
           />
 
           <div className="bg-white rounded-2xl border border-slate-200/80 p-6 space-y-4 shadow-xs">

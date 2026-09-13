@@ -3,6 +3,7 @@ import { CoopProvider, useCoop } from './context/CoopContext';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { GlobalSearchModal } from './components/GlobalSearchModal';
+import { SharePortalsModal } from './components/SharePortalsModal';
 
 // Telas de entrada: carregadas junto com o app porque são a primeira coisa que
 // um visitante não autenticado vê. Esperar um chunk aqui atrasaria o login.
@@ -59,7 +60,9 @@ const CarregandoModulo: React.FC = () => (
 );
 
 import {
+  Share2,
   Building,
+  LogIn,
   Layers,
   ShieldCheck,
   UserCircle,
@@ -81,6 +84,7 @@ const MainAppContent: React.FC = () => {
   const [activeModule, setActiveModule] = useState<string>('dashboard');
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
   const [standalonePortal, setStandalonePortal] = useState<string | null>(null);
+  const [showShareModal, setShowShareModal] = useState<boolean>(false);
   const [showAdminLogin, setShowAdminLogin] = useState<boolean>(false);
 
   const {
@@ -118,6 +122,8 @@ const MainAppContent: React.FC = () => {
   // oculto, mesmo que o navegador já tenha uma sessão administrativa ativa.
   // O motivo: o link do portal é compartilhado com cooperados, escolas,
   // produtores e motoristas — eles nunca devem ver o menu interno do ERP.
+  // Um administrador que precise voltar ao ERP completo usa o botão
+  // "Acesso ERP Administrativo" abaixo (que aciona showAdminLogin).
   if (standalonePortal && !showAdminLogin) {
     const meta = PORTAL_META[standalonePortal] || PORTAL_META['portal-cooperado'];
     const Icon = meta.icon;
@@ -146,6 +152,26 @@ const MainAppContent: React.FC = () => {
             </div>
           </div>
 
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowShareModal(true)}
+              className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer border border-slate-200"
+              title="Compartilhar Links e QR Codes de Todos os Portais"
+            >
+              <Share2 className="w-3.5 h-3.5 text-emerald-600" />
+              <span className="hidden sm:inline">Compartilhar Portais</span>
+            </button>
+
+            <button
+              onClick={() => setShowAdminLogin(true)}
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+              title="Acessar Sistema Administrativo Completo do ERP"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Acesso ERP Administrativo</span>
+              <span className="sm:hidden">ERP Login</span>
+            </button>
+          </div>
         </header>
 
         {/* Standalone Body */}
@@ -157,6 +183,12 @@ const MainAppContent: React.FC = () => {
             {standalonePortal === 'app-motorista' && <AppMotoristaView />}
           </Suspense>
         </main>
+
+        <SharePortalsModal
+          isOpen={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          initialPortalId={standalonePortal as any}
+        />
       </div>
     );
   }
