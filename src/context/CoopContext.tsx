@@ -1750,14 +1750,21 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { user: newUser, requiresCooperativeSetup: true };
       }
     } catch (err: any) {
-      console.warn('Erro ao registrar usuário no Firebase Auth:', err);
-      let userMsg = err?.message || 'Erro ao registrar no Firebase.';
-      if (err?.code === 'auth/email-already-in-use') {
-        userMsg = 'Este e-mail já está cadastrado no Firebase. Faça login com suas credenciais.';
-      } else if (err?.code === 'auth/weak-password') {
-        userMsg = 'A senha deve ter pelo menos 6 caracteres no Firebase.';
+      // O provedor Email/Senha pode estar desativado no Firebase. Nesse caso,
+      // continue pelo modo local de contingência já suportado pelo aplicativo,
+      // em vez de interromper o onboarding com auth/operation-not-allowed.
+      if (err?.code === 'auth/operation-not-allowed') {
+        console.info('Firebase Auth Email/Senha indisponível; usando cadastro local de contingência.');
+      } else {
+        console.warn('Erro ao registrar usuário no Firebase Auth:', err);
+        let userMsg = err?.message || 'Erro ao registrar no Firebase.';
+        if (err?.code === 'auth/email-already-in-use') {
+          userMsg = 'Este e-mail já está cadastrado no Firebase. Faça login com suas credenciais.';
+        } else if (err?.code === 'auth/weak-password') {
+          userMsg = 'A senha deve ter pelo menos 6 caracteres no Firebase.';
+        }
+        return { user: null, requiresCooperativeSetup: false, error: userMsg };
       }
-      return { user: null, requiresCooperativeSetup: false, error: userMsg };
     }
 
     const newUser: User = {
