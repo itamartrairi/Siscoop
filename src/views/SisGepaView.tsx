@@ -61,25 +61,6 @@ import {
   Bell,
   RefreshCw
 } from 'lucide-react';
-
-type SaldoRateioRow = {
-  chave: string;
-  chamadaPublicaId: string;
-  edital: string;
-  programa: string;
-  fonteRecursos: string;
-  produtoId?: string;
-  produto: string;
-  unidade: string;
-  produtorId?: string;
-  produtor: string;
-  escolaId?: string;
-  escola: string;
-  rateado: number;
-  pedido: number;
-  saldo: number;
-  precoUnitario: number;
-};
 import {
   ChamadaPublica,
   ItemChamadaPublica,
@@ -187,7 +168,6 @@ export const SisGepaView: React.FC = () => {
     updateOfertaPAA,
     deleteOfertaPAA,
     pedidosProdutorPAA,
-    rateiosChamadas,
     addPedidoProdutorPAA,
     updatePedidoProdutorPAA,
     deletePedidoProdutorPAA,
@@ -233,11 +213,6 @@ export const SisGepaView: React.FC = () => {
   const [relFilterPrograma, setRelFilterPrograma] = useState('TODOS');
   const [relFilterChamada, setRelFilterChamada] = useState('TODOS');
   const [relFilterPedidoNum, setRelFilterPedidoNum] = useState('TODOS');
-  const [saldoFilterProduto, setSaldoFilterProduto] = useState('TODOS');
-  const [saldoFilterProdutor, setSaldoFilterProdutor] = useState('TODOS');
-  const [saldoFilterEscola, setSaldoFilterEscola] = useState('TODOS');
-  const [saldoFilterChamada, setSaldoFilterChamada] = useState('TODOS');
-  const [saldoApenasPendentes, setSaldoApenasPendentes] = useState(true);
 
   // Unified Search and Filter State
   const [searchTerm, setSearchTerm] = useState('');
@@ -1828,34 +1803,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
     return Number((itemChamada.quantidadeTotal - jaUsado).toFixed(2));
   };
 
-  const getSaldoDisponivelRateio = (item: ItemPedidoProdutor): number => {
-    const rateio = rateiosChamadas.find(r => r.chamadaPublicaId === pedidoForm.chamadaPublicaId);
-    if (!rateio) return 0;
-    const rateioItem = rateio.itens.find(ri =>
-      (item.produtoId && ri.produtoId === item.produtoId) ||
-      (!item.produtoId && ri.produtoNome?.toLowerCase() === item.produtoNome?.toLowerCase())
-    );
-    const rateioProdutor = rateioItem?.produtores.find(rp =>
-      (item.produtorId && rp.produtorId === item.produtorId) ||
-      (!item.produtorId && rp.produtorNome?.toLowerCase() === item.produtorNome?.toLowerCase())
-    );
-    const rateioEscola = rateioProdutor?.escolas.find(re =>
-      (item.escolaId && re.escolaId === item.escolaId) ||
-      (!item.escolaId && re.escolaNome?.toLowerCase() === item.escolaNome?.toLowerCase())
-    );
-    if (!rateioEscola) return 0;
-    const jaPedido = pedidosProdutorPAA
-      .filter(p => p.chamadaPublicaId === pedidoForm.chamadaPublicaId && p.id !== editingPedido?.id && p.status !== 'CANCELADO')
-      .flatMap(p => p.itens || [])
-      .filter(it =>
-        ((item.produtoId && it.produtoId === item.produtoId) || (!item.produtoId && it.produtoNome?.toLowerCase() === item.produtoNome?.toLowerCase())) &&
-        ((item.produtorId && it.produtorId === item.produtorId) || (!item.produtorId && it.produtorNome?.toLowerCase() === item.produtorNome?.toLowerCase())) &&
-        ((item.escolaId && it.escolaId === item.escolaId) || (!item.escolaId && it.escolaNome?.toLowerCase() === item.escolaNome?.toLowerCase()))
-      )
-      .reduce((sum, it) => sum + (Number(it.quantidadePedida) || 0), 0);
-    return Math.max(0, Number((rateioEscola.quantidade - jaPedido).toFixed(2)));
-  };
-
   const handleRemovePedidoItem = (idx: number) => {
     setPedidoItens(prev => {
       const atualizado = prev.filter((_, i) => i !== idx);
@@ -2078,33 +2025,27 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
       return;
     }
 
-    // Nenhum pedido pode ser criado sem um rateio salvo para a chamada.
+    // Valida que nenhum produto do pedido ultrapasse o saldo ainda
+    // disponível na Chamada Pública vinculada (quantidade do edital menos o
+    // que já foi reservado por outros pedidos). Agrupa por produto porque o
+    // mesmo produto pode aparecer em itens de vários produtores no pedido.
     if (pedidoForm.chamadaPublicaId) {
-      const rateio = rateiosChamadas.find(r => r.chamadaPublicaId === pedidoForm.chamadaPublicaId);
-      if (!rateio) {
-        alert('Não é possível salvar este pedido: a Chamada Pública ainda não possui rateio salvo. Acesse a aba "Rateio de Produtores" e salve o rateio antes de fazer o pedido.');
-        return;
-      }
-      const itensAgrupados = new Map<string, { item: ItemPedidoProdutor; quantidade: number; indices: number[] }>();
-      pedidoItens.forEach((item, idx) => {
-        const chave = `${item.produtoId || item.produtoNome}|${item.produtorId || item.produtorNome}|${item.escolaId || item.escolaNome}`;
-        const atual = itensAgrupados.get(chave);
-        if (atual) {
-          atual.quantidade += Number(item.quantidadePedida) || 0;
-          atual.indices.push(idx + 1);
-        } else {
-          itensAgrupados.set(chave, { item, quantidade: Number(item.quantidadePedida) || 0, indices: [idx + 1] });
-        }
+      const totaisPorProduto = new Map<string, { nome: string; qtd: number; unidade: string }>();
+      pedidoItens.forEach(it => {
+        const chave = it.produtoId || it.produtoNome;
+        const atual = totaisPorProduto.get(chave) || { nome: it.produtoNome, qtd: 0, unidade: it.unidadeMedida };
+        atual.qtd += Number(it.quantidadePedida) || 0;
+        totaisPorProduto.set(chave, atual);
       });
       const excedentes: string[] = [];
-      itensAgrupados.forEach(({ item, quantidade, indices }) => {
-        const saldo = getSaldoDisponivelRateio(item);
-        if (quantidade <= 0 || quantidade > saldo) {
-          excedentes.push(`Itens ${indices.join(', ')} — ${item.produtoNome} / ${item.produtorNome} / ${item.escolaNome || 'escola não selecionada'}: pedido de ${quantidade} ${item.unidadeMedida}, saldo disponível de ${saldo} ${item.unidadeMedida}`);
+      totaisPorProduto.forEach((info, produtoId) => {
+        const saldo = getSaldoDisponivelChamada(produtoId, info.nome);
+        if (saldo !== null && info.qtd > saldo) {
+          excedentes.push(`${info.nome}: pedido tem ${info.qtd} ${info.unidade}, mas o saldo disponível na chamada é de apenas ${saldo} ${info.unidade}`);
         }
       });
       if (excedentes.length > 0) {
-        alert(`Não é possível salvar: existem itens sem saldo suficiente no rateio:\n\n${excedentes.join('\n')}\n\nAjuste produtor, escola e quantidade na tabela de itens antes de salvar.`);
+        alert(`Não é possível salvar: este pedido ultrapassa a quantidade disponível na Chamada Pública para ${excedentes.length} produto(s):\n\n${excedentes.join('\n')}\n\nAjuste as quantidades na tabela de itens antes de salvar.`);
         return;
       }
     }
@@ -3054,17 +2995,15 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
         ped.itens.forEach(it => {
           rows.push({
             id: ped.id + '-' + (it.produtoNome || ''),
-            pedidoId: ped.id,
             numeroPedido: numPed,
             programa: progName,
             chamadaPublica: chamada,
-            escola: it.escolaNome || (it.escolasNomes || []).join(', ') || escolaPed,
+            escola: escolaPed,
             produtor: it.produtorNome || 'Diversos',
             produto: it.produtoNome || '',
             quantidade: it.quantidadePedida || 0,
             unidade: it.unidade || 'kg',
             valorTotal: it.valorTotalItem || 0,
-            fonteRecursos: ped.fonteRecursos || 'Geral',
             data: dataPed,
             mes: mes || '01',
             ano: ano || '2026',
@@ -3074,7 +3013,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
       } else {
         rows.push({
           id: ped.id,
-          pedidoId: ped.id,
           numeroPedido: numPed,
           programa: progName,
           chamadaPublica: chamada,
@@ -3084,7 +3022,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
           quantidade: 0,
           unidade: 'kg',
           valorTotal: ped.valorTotalPedido || 0,
-          fonteRecursos: ped.fonteRecursos || 'Geral',
           data: dataPed,
           mes: mes || '01',
           ano: ano || '2026',
@@ -3197,331 +3134,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, relatorioSubTab === 'pedidos' ? 'Relatorio_Pedidos' : 'Relatorio_Entregas');
     XLSX.writeFile(workbook, `SisGepa_${relatorioSubTab === 'pedidos' ? 'Pedidos' : 'Entregas'}_${Date.now()}.xlsx`);
-  };
-
-  const handleExportFechamentoPedidoPdf = () => {
-    type FechamentoRow = { pedido: string; pedidoId?: string; programa: string; fonte: string; escola: string; produto: string; unidade: string; quantidade: number; valor: number };
-    const agrupado = new Map<string, FechamentoRow>();
-    filteredRelPedidos.forEach(row => {
-      const chave = `${row.pedidoId || row.numeroPedido}|${row.programa}|${row.fonteRecursos}|${row.escola}|${row.produto}|${row.unidade}`;
-      const atual = agrupado.get(chave);
-      if (atual) {
-        atual.quantidade += Number(row.quantidade) || 0;
-        atual.valor += Number(row.valorTotal) || 0;
-      } else {
-        agrupado.set(chave, {
-          pedido: row.numeroPedido || 'Geral',
-          pedidoId: row.pedidoId,
-          programa: row.programa || '—',
-          fonte: row.fonteRecursos || 'Geral',
-          escola: row.escola || 'Não informada',
-          produto: row.produto || 'Diversos',
-          unidade: row.unidade || 'kg',
-          quantidade: Number(row.quantidade) || 0,
-          valor: Number(row.valorTotal) || 0
-        });
-      }
-    });
-    const linhas = Array.from(agrupado.values()).sort((a, b) => a.pedido.localeCompare(b.pedido) || a.fonte.localeCompare(b.fonte) || a.escola.localeCompare(b.escola) || a.produto.localeCompare(b.produto));
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const margem = 14;
-    let y = 16;
-    const moeda = (value: number) => value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const novaPagina = (altura = 8) => {
-      if (y + altura > pageHeight - 14) {
-        doc.addPage();
-        y = 16;
-        return true;
-      }
-      return false;
-    };
-    const cabecalho = () => {
-      doc.setTextColor(15, 23, 42);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(13);
-      doc.text(config?.nomeCooperativa || 'COOPERATIVA AGROPECUÁRIA DO TRAIRI LTDA', pageWidth / 2, y, { align: 'center' });
-      y += 7;
-      doc.setFont('helvetica', 'bolditalic');
-      doc.setFontSize(10);
-      doc.text('1.06.1 - Relatório de Fechamento da NP/Ordem de Compra /Geral', pageWidth / 2, y, { align: 'center' });
-      y += 5;
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.text('Batimento da digitação das NPs com a ordem de compra da prefeitura', pageWidth / 2, y, { align: 'center' });
-      y += 9;
-    };
-    const desenharColunas = () => {
-      doc.setFillColor(218, 218, 218);
-      doc.rect(margem, y - 4, pageWidth - (margem * 2), 8, 'F');
-      doc.setTextColor(15, 23, 42);
-      doc.setFont('helvetica', 'bolditalic');
-      doc.setFontSize(8);
-      doc.text('Produto', margem + 2, y + 1);
-      doc.text('Escola Beneficiada', 76, y + 1);
-      doc.text('Unid', 150, y + 1);
-      doc.text('Qtde Ped', 174, y + 1, { align: 'right' });
-      doc.text('Valor Aquisição', 214, y + 1, { align: 'right' });
-      doc.text('Lucro Bruto', 240, y + 1, { align: 'right' });
-      doc.text('Total do Pedido', 269, y + 1, { align: 'right' });
-      y += 7;
-    };
-
-    cabecalho();
-    let grupoAtual = '';
-    let totalQuantidade = 0;
-    let totalValor = 0;
-    linhas.forEach(row => {
-      const grupo = `${row.pedido}|${row.programa}|${row.fonte}`;
-      if (grupo !== grupoAtual) {
-        if (grupoAtual) y += 3;
-        novaPagina(20);
-        grupoAtual = grupo;
-        doc.setFillColor(232, 232, 232);
-        doc.rect(margem, y - 4, pageWidth - (margem * 2), 7, 'F');
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8);
-        doc.setTextColor(30, 41, 59);
-        doc.text(`Nº Pedido: ${row.pedido}`, margem + 2, y + 1);
-        doc.text(`Programa: ${row.programa}`, 112, y + 1);
-        y += 7;
-        doc.setFont('helvetica', 'bolditalic');
-        doc.text(`FonteDeRec: ${row.fonte}`, margem, y + 1);
-        y += 7;
-        const entregas = programacoesEntrega
-          .filter(ent => (row.pedidoId && ent.pedidoId === row.pedidoId) || (!row.pedidoId && ent.pedidoNumero === row.pedido))
-          .filter(ent => ent.status !== 'CANCELADA')
-          .sort((a, b) => (a.numeroEntrega || 0) - (b.numeroEntrega || 0));
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(7.5);
-        const textoEntregas = entregas.length > 0
-          ? entregas.map(ent => `${ent.parcelaRotulo || `Entrega ${ent.numeroEntrega || ''}`}: ${ent.dataPrevista || 'sem data'} — ${ent.status || 'AGENDADA'} — ${(ent.escolasNomes || [ent.escolaNome || ent.escolaOrgaoDestino]).filter(Boolean).join(', ')}`).join(' | ')
-          : 'Nenhuma entrega programada';
-        const linhasEntrega = doc.splitTextToSize(`Entregas: ${textoEntregas}`, pageWidth - (margem * 2));
-        doc.text(linhasEntrega, margem, y + 1);
-        y += (linhasEntrega.length * 4) + 3;
-        desenharColunas();
-      }
-      novaPagina(8);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(30, 41, 59);
-      doc.text(row.produto.substring(0, 32), margem + 2, y);
-      doc.text(row.escola.substring(0, 29), 76, y);
-      doc.text(row.unidade, 150, y);
-      doc.text(moeda(row.quantidade), 174, y, { align: 'right' });
-      doc.text(moeda(row.valor), 214, y, { align: 'right' });
-      doc.text('0,00', 240, y, { align: 'right' });
-      doc.text(moeda(row.valor), 269, y, { align: 'right' });
-      totalQuantidade += row.quantidade;
-      totalValor += row.valor;
-      y += 6;
-    });
-    novaPagina(12);
-    doc.setFillColor(230, 230, 230);
-    doc.rect(margem, y - 5, pageWidth - (margem * 2), 9, 'F');
-    doc.setFont('helvetica', 'bolditalic');
-    doc.setFontSize(8.5);
-    doc.setTextColor(15, 23, 42);
-    doc.text('Total geral', margem + 2, y + 1);
-    doc.text(moeda(totalQuantidade), 174, y + 1, { align: 'right' });
-    doc.text(moeda(totalValor), 214, y + 1, { align: 'right' });
-    doc.text('0,00', 240, y + 1, { align: 'right' });
-    doc.text(moeda(totalValor), 269, y + 1, { align: 'right' });
-    const paginas = doc.getNumberOfPages();
-    for (let pagina = 1; pagina <= paginas; pagina++) {
-      doc.setPage(pagina);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(100, 116, 139);
-      doc.text(new Date().toLocaleString('pt-BR'), margem, pageHeight - 7);
-      doc.text(`Página ${pagina} de ${paginas}`, pageWidth - margem, pageHeight - 7, { align: 'right' });
-    }
-    doc.save(`SisGepa_Relatorio_Fechamento_${Date.now()}.pdf`);
-  };
-
-  const saldoRateioRows = useMemo<SaldoRateioRow[]>(() => {
-    const rows: SaldoRateioRow[] = [];
-    const pedidosAtivos = pedidosProdutorPAA.filter(p => p.status !== 'CANCELADO');
-    const normalizar = (value?: string) => (value || '').trim().toLowerCase();
-    const corresponde = (idA: string | undefined, nomeA: string | undefined, idB: string | undefined, nomeB: string | undefined) =>
-      (!!idA && !!idB && idA === idB) || (!!nomeA && !!nomeB && normalizar(nomeA) === normalizar(nomeB));
-    rateiosChamadas.forEach(rateio => {
-      const chamada = chamadasPublicas.find(c => c.id === rateio.chamadaPublicaId);
-      rateio.itens.forEach(item => item.produtores.forEach(produtor => produtor.escolas.forEach(escola => {
-        const pedido = pedidosAtivos.reduce((total, pedidoAtual) => total + pedidoAtual.itens.reduce((subtotal, pedidoItem) => {
-          if (pedidoAtual.chamadaPublicaId !== rateio.chamadaPublicaId) return subtotal;
-          if (!corresponde(item.produtoId, item.produtoNome, pedidoItem.produtoId, pedidoItem.produtoNome)) return subtotal;
-          if (!corresponde(produtor.produtorId, produtor.produtorNome, pedidoItem.produtorId, pedidoItem.produtorNome)) return subtotal;
-          if (!corresponde(escola.escolaId, escola.escolaNome, pedidoItem.escolaId || pedidoAtual.escolaId, pedidoItem.escolaNome || pedidoAtual.escolaNome)) return subtotal;
-          return subtotal + (Number(pedidoItem.quantidadePedida) || 0);
-        }, 0), 0);
-        const rateado = Number(escola.quantidade) || 0;
-        rows.push({
-          chave: `${rateio.chamadaPublicaId}-${item.produtoId || item.produtoNome}-${produtor.produtorId}-${escola.escolaId}`,
-          chamadaPublicaId: rateio.chamadaPublicaId,
-          edital: rateio.chamadaPublicaEdital || chamada?.numeroEdital || 'Sem edital',
-          programa: rateio.programaNome || chamada?.programaNome || chamada?.programa || '—',
-          fonteRecursos: rateio.fonteRecursos || chamada?.fonteRecurso || chamada?.fonteRecursos || '—',
-          produtoId: item.produtoId,
-          produto: item.produtoNome,
-          unidade: item.unidade || 'KG',
-          produtorId: produtor.produtorId,
-          produtor: produtor.produtorNome,
-          escolaId: escola.escolaId,
-          escola: escola.escolaNome,
-          rateado,
-          pedido,
-          saldo: Math.round((rateado - pedido) * 100) / 100,
-          precoUnitario: Number(item.precoMaximoUnitario) || 0
-        });
-      })));
-    });
-    return rows;
-  }, [rateiosChamadas, chamadasPublicas, pedidosProdutorPAA]);
-
-  const filteredSaldoRows = useMemo(() => saldoRateioRows.filter(row =>
-    (saldoFilterProduto === 'TODOS' || row.produto === saldoFilterProduto) &&
-    (saldoFilterProdutor === 'TODOS' || row.produtor === saldoFilterProdutor) &&
-    (saldoFilterEscola === 'TODOS' || row.escola === saldoFilterEscola) &&
-    (saldoFilterChamada === 'TODOS' || row.chamadaPublicaId === saldoFilterChamada) &&
-    (!saldoApenasPendentes || row.saldo > 0)
-  ), [saldoRateioRows, saldoFilterProduto, saldoFilterProdutor, saldoFilterEscola, saldoFilterChamada, saldoApenasPendentes]);
-
-  const saldoGraficoData = useMemo(() => {
-    const agrupado = new Map<string, { escola: string; produto: string; saldo: number }>();
-    filteredSaldoRows.filter(row => row.saldo > 0).forEach(row => {
-      const chave = `${row.escolaId || row.escola}|${row.produtoId || row.produto}`;
-      const atual = agrupado.get(chave);
-      if (atual) atual.saldo += row.saldo;
-      else agrupado.set(chave, { escola: row.escola, produto: row.produto, saldo: row.saldo });
-    });
-    return Array.from(agrupado.values())
-      .sort((a, b) => b.saldo - a.saldo)
-      .slice(0, 12)
-      .map(item => ({
-        ...item,
-        rotulo: `${item.escola} — ${item.produto}`
-      }));
-  }, [filteredSaldoRows]);
-
-  const handleExportSaldoExcel = () => {
-    const data = filteredSaldoRows.map(row => ({
-      Edital: row.edital, Programa: row.programa, 'Fonte de recurso': row.fonteRecursos,
-      Produto: row.produto, Unidade: row.unidade, Produtor: row.produtor, Escola: row.escola,
-      'Quantidade rateada': row.rateado, 'Quantidade já pedida': row.pedido, 'Saldo a pedir': row.saldo,
-      'Preço unitário': row.precoUnitario, 'Valor do saldo': Number((row.saldo * row.precoUnitario).toFixed(2))
-    }));
-    const worksheet = XLSX.utils.json_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Saldo_a_Pedir');
-    XLSX.writeFile(workbook, `SisGepa_Saldo_a_Pedir_${Date.now()}.xlsx`);
-  };
-
-  const handleExportSaldoPdf = () => {
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-    const linhasAgrupadas = filteredSaldoRows
-      .filter(row => row.saldo > 0)
-      .reduce<Map<string, { escola: string; produto: string; unidade: string; rateado: number; pedido: number; saldo: number; valor: number }>>((acc, row) => {
-        const chave = `${row.escolaId || row.escola}|${row.produtoId || row.produto}|${row.unidade}`;
-        const atual = acc.get(chave);
-        if (atual) {
-          atual.rateado += row.rateado;
-          atual.pedido += row.pedido;
-          atual.saldo += row.saldo;
-          atual.valor += row.saldo * row.precoUnitario;
-        } else {
-          acc.set(chave, { escola: row.escola, produto: row.produto, unidade: row.unidade, rateado: row.rateado, pedido: row.pedido, saldo: row.saldo, valor: row.saldo * row.precoUnitario });
-        }
-        return acc;
-      }, new Map<string, { escola: string; produto: string; unidade: string; rateado: number; pedido: number; saldo: number; valor: number }>());
-    const linhas = (Array.from(linhasAgrupadas.values()) as Array<{ escola: string; produto: string; unidade: string; rateado: number; pedido: number; saldo: number; valor: number }>)
-      .sort((a, b) => a.escola.localeCompare(b.escola) || b.saldo - a.saldo);
-
-    const dataEmissao = new Date().toLocaleString('pt-BR');
-    const margem = 14;
-    const largura = doc.internal.pageSize.getWidth();
-    const novaPagina = (alturaNecessaria = 10) => {
-      if (y + alturaNecessaria > doc.internal.pageSize.getHeight() - 14) {
-        doc.addPage();
-        y = 16;
-        return true;
-      }
-      return false;
-    };
-    let y = 16;
-    doc.setFillColor(6, 78, 59);
-    doc.rect(0, 0, largura, 28, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(16);
-    doc.text('SISGEPA — RELATÓRIO DE SALDO A PEDIR', margem, 12);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Produtos com maior saldo por escola | Emitido em ${dataEmissao}`, margem, 20);
-    y = 38;
-
-    const totalSaldo = linhas.reduce((s, row) => s + row.saldo, 0);
-    const totalValor = linhas.reduce((s, row) => s + row.valor, 0);
-    doc.setTextColor(30, 41, 59);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.text(`Resumo: ${linhas.length} produto(s) com saldo positivo | ${totalSaldo.toFixed(2)} unidades | Valor estimado: R$ ${totalValor.toFixed(2)}`, margem, y);
-    y += 9;
-
-    let escolaAtual = '';
-    linhas.forEach((row, index) => {
-      const altura = escolaAtual !== row.escola ? 20 : 8;
-      novaPagina(altura);
-      if (escolaAtual !== row.escola) {
-        escolaAtual = row.escola;
-        if (index > 0) y += 4;
-        doc.setFillColor(226, 232, 240);
-        doc.roundedRect(margem, y - 5, largura - (margem * 2), 9, 2, 2, 'F');
-        doc.setTextColor(15, 23, 42);
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(11);
-        doc.text(`Escola: ${row.escola}`, margem + 3, y + 1);
-        y += 10;
-        doc.setFontSize(8);
-        doc.setTextColor(71, 85, 105);
-        doc.text('Produto', margem, y);
-        doc.text('Rateado', 145, y, { align: 'right' });
-        doc.text('Já pedido', 180, y, { align: 'right' });
-        doc.text('Saldo a pedir', 220, y, { align: 'right' });
-        doc.text('Valor estimado', 280, y, { align: 'right' });
-        y += 5;
-      }
-      novaPagina(8);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8.5);
-      doc.setTextColor(30, 41, 59);
-      doc.text(`${row.produto} (${row.unidade})`, margem, y);
-      doc.text(row.rateado.toFixed(2), 145, y, { align: 'right' });
-      doc.text(row.pedido.toFixed(2), 180, y, { align: 'right' });
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(180, 83, 9);
-      doc.text(row.saldo.toFixed(2), 220, y, { align: 'right' });
-      doc.text(`R$ ${row.valor.toFixed(2)}`, 280, y, { align: 'right' });
-      y += 6;
-    });
-
-    if (linhas.length === 0) {
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
-      doc.setTextColor(71, 85, 105);
-      doc.text('Não há saldo positivo para os filtros selecionados.', margem, y);
-    }
-    const totalPaginas = doc.getNumberOfPages();
-    for (let pagina = 1; pagina <= totalPaginas; pagina++) {
-      doc.setPage(pagina);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(100, 116, 139);
-      doc.text(`SICOOP • SisGepa | Página ${pagina} de ${totalPaginas}`, largura - margem, doc.internal.pageSize.getHeight() - 7, { align: 'right' });
-    }
-    doc.save(`SisGepa_Relatorio_Saldo_Por_Escola_${Date.now()}.pdf`);
   };
 
   return (
@@ -4641,15 +4253,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                 >
                   <FileSpreadsheet className="w-4 h-4" /> Exportar Excel
                 </button>
-                {relatorioSubTab === 'pedidos' && (
-                  <button
-                    onClick={handleExportFechamentoPedidoPdf}
-                    className="px-3.5 py-2 bg-indigo-700 hover:bg-indigo-800 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer"
-                    title="Gerar relatório no modelo 1.06.1, consolidando produtos repetidos"
-                  >
-                    <FileText className="w-4 h-4" /> Fechamento NP / Ordem de Compra
-                  </button>
-                )}
                 <button
                   onClick={() => setShowPrintModal(true)}
                   className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer"
@@ -6147,10 +5750,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                                 </td>
                                 <td className="p-2 border-r border-slate-300 text-right">
                                   {(() => {
-                                    const temRateio = rateiosChamadas.some(r => r.chamadaPublicaId === pedidoForm.chamadaPublicaId);
-                                    const saldo = pedidoForm.chamadaPublicaId && temRateio
-                                      ? getSaldoDisponivelRateio(it)
-                                      : getSaldoDisponivelChamada(it.produtoId, it.produtoNome);
+                                    const saldo = getSaldoDisponivelChamada(it.produtoId, it.produtoNome);
                                     const excedeSaldo = saldo !== null && (it.quantidadePedida || 0) > saldo;
                                     return (
                                       <div>
@@ -6163,7 +5763,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                                         />
                                         {saldo !== null && (
                                           <div className={`text-[10px] font-bold mt-0.5 ${excedeSaldo ? 'text-rose-600' : 'text-slate-500'}`}>
-                                            Saldo disponível no rateio: {saldo} {it.unidadeMedida}
+                                            Saldo na chamada: {saldo} {it.unidadeMedida}
                                             {excedeSaldo && ' — EXCEDE!'}
                                           </div>
                                         )}
