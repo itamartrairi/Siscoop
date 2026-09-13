@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+@theme {
+  --color-forest-50: #f0fdf4;
+  --color-forest-100: #dcfce7;
+  --color-forest-200: #bbf7d0;
+  --color-forest-300: #86efac;
+  --color-forest-400: #34d399;
+  --color-forest-500: #10b981;
+  --color-forest-600: #059669;
+  --color-forest-700: #047857;
+  --color-forest-800: #065f46;
+  --color-forest-900: #064e3b;
+  --color-forest-950: #022c22;
+}
+
+@layer base {
+  html, body {
+    background-color: #ffffff;
+    color: #0f172a;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    min-height: 100%;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Custom executive scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f8fafc;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #059669;
+}
+
+
+
+/* Camada móvel compartilhada pelos quatro portais independentes. */
+@media (max-width: 640px) {
+  html, body { overflow-x: hidden; }
+  button, input, select, textarea { min-height: 44px; }
+  table { min-width: 640px; }
+  .overflow-x-auto { -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  button { transition: transform 160ms ease-out, background-color 160ms ease-out, color 160ms ease-out, box-shadow 160ms ease-out; }
+  button:active { transform: scale(.97); }
+}
