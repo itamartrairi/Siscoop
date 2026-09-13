@@ -5,27 +5,49 @@ import {
   Check,
   MessageCircle,
   QrCode,
-  ExternalLink,
-  ShieldCheck,
-  Sparkles
+  Users,
+  ChevronDown,
+  ChevronUp,
+  Send,
+  AlertTriangle
 } from 'lucide-react';
 import { useCoop } from '../context/CoopContext';
 import { SharePortalsModal, PORTALS_LIST, PortalShareInfo } from './SharePortalsModal';
+import { abrirLinkExterno, getTelefoneContato, montarLinkWhatsApp, montarLinkWhatsAppGenerico } from '../utils/whatsappHelpers';
+
+export interface DestinatarioPortal {
+  id: string;
+  nome: string;
+  whatsapp?: string;
+  celular?: string;
+  telefone?: string;
+}
 
 interface Props {
   portalId: 'portal-cooperado' | 'portal-escola' | 'app-produtor' | 'app-motorista';
   customTitle?: string;
   customSubtitle?: string;
+  // Lista de pessoas (produtores, cooperados, escolas, motoristas) que podem
+  // receber o link do portal diretamente no WhatsApp cadastrado de cada um.
+  // Quando informada, o banner mostra um seletor para escolher um ou vários
+  // destinatários e disparar o envio individualmente para cada número.
+  recipients?: DestinatarioPortal[];
+  recipientLabel?: string; // ex.: "motoristas", "produtores", "escolas", "cooperados"
 }
 
 export const PortalShareBanner: React.FC<Props> = ({
   portalId,
   customTitle,
-  customSubtitle
+  customSubtitle,
+  recipients = [],
+  recipientLabel = 'destinatários'
 }) => {
   const { currentTenant } = useCoop();
   const [isCopied, setIsCopied] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [sentFeedback, setSentFeedback] = useState<string | null>(null);
 
   const portalInfo: PortalShareInfo = PORTALS_LIST.find(p => p.id === portalId) || PORTALS_LIST[0];
 
@@ -36,6 +58,20 @@ export const PortalShareBanner: React.FC<Props> = ({
   };
 
   const currentUrl = getPortalUrl();
+
+  // Cada destinatário com o telefone já resolvido (whatsapp > celular > telefone).
+  const destinatariosComTelefone = recipients.map(r => ({ ...r, telefoneResolvido: getTelefoneContato(r) }));
+  const comTelefoneCount = destinatariosComTelefone.filter(r => r.telefoneResolvido).length;
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const selecionarTodosComTelefone = () => {
+    setSelectedIds(destinatariosComTelefone.filter(r => r.telefoneResolvido).map(r => r.id));
+  };
+
+  const limparSelecao = () => setSelectedIds([]);
 
   const handleCopy = async () => {
     try {
@@ -56,11 +92,36 @@ export const PortalShareBanner: React.FC<Props> = ({
     }
   };
 
-  const handleWhatsApp = () => {
+  // Envio para os destinatários selecionados: cada um recebe a mensagem no
+  // PRÓPRIO número de WhatsApp cadastrado (não um número genérico), com
+  // abertura escalonada para não ser bloqueada pelo navegador.
+  const handleEnviarSelecionados = () => {
+    const tenantName = currentTenant?.name || 'SICOOP Cooperativa';
+    const selecionados = destinatariosComTelefone.filter(r => selectedIds.includes(r.id));
+    const comTelefone = selecionados.filter(r => r.telefoneResolvido);
+    const semTelefone = selecionados.filter(r => !r.telefoneResolvido);
+
+    comTelefone.forEach((r, idx) => {
+      const message = `🌿 *${portalInfo.title}* - ${tenantName}\n\nOlá, *${r.nome}*! Acesse o portal oficial diretamente pelo link abaixo:\n\n🔗 ${currentUrl}\n\n_${portalInfo.description}_`;
+      setTimeout(() => {
+        abrirLinkExterno(montarLinkWhatsApp(r.telefoneResolvido, message));
+      }, idx * 700);
+    });
+
+    if (semTelefone.length > 0) {
+      setSentFeedback(`Enviado para ${comTelefone.length} de ${selecionados.length}. Sem telefone cadastrado: ${semTelefone.map(r => r.nome).join(', ')}.`);
+    } else {
+      setSentFeedback(`Envio iniciado para ${comTelefone.length} ${comTelefone.length === 1 ? 'destinatário' : 'destinatários'}.`);
+    }
+    setTimeout(() => setSentFeedback(null), 6000);
+  };
+
+  // Envio genérico (sem destinatário específico) — usado quando não há
+  // lista de destinatários disponível para este portal.
+  const handleWhatsAppGenerico = () => {
     const tenantName = currentTenant?.name || 'SICOOP Cooperativa';
     const message = `🌿 *${portalInfo.title}* - ${tenantName}\n\nOlá! Acesse o portal oficial diretamente pelo link:\n\n🔗 ${currentUrl}\n\n_${portalInfo.description}_`;
-    const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+    abrirLinkExterno(montarLinkWhatsAppGenerico(message));
   };
 
   return (
@@ -122,14 +183,27 @@ export const PortalShareBanner: React.FC<Props> = ({
                 )}
               </button>
 
-              <button
-                type="button"
-                onClick={handleWhatsApp}
-                className="p-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all cursor-pointer shadow-xs"
-                title="Enviar por WhatsApp"
-              >
-                <MessageCircle className="w-4 h-4" />
-              </button>
+              {recipients.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setShowPicker(v => !v)}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                  title={`Selecionar ${recipientLabel} e enviar por WhatsApp`}
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span>Enviar WhatsApp</span>
+                  {showPicker ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleWhatsAppGenerico}
+                  className="p-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all cursor-pointer shadow-xs"
+                  title="Enviar por WhatsApp"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                </button>
+              )}
 
               <button
                 type="button"
@@ -141,6 +215,88 @@ export const PortalShareBanner: React.FC<Props> = ({
               </button>
             </div>
           </div>
+
+          {/* Seletor de destinatários — envia para o WhatsApp cadastrado de */}
+          {/* cada pessoa selecionada, individualmente, um ou vários por vez. */}
+          {recipients.length > 0 && showPicker && (
+            <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-4 space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2 text-xs font-bold text-white">
+                  <Users className="w-4 h-4 text-emerald-300" />
+                  <span>Selecione {recipientLabel} para enviar ao WhatsApp de cada um ({comTelefoneCount} com telefone cadastrado)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={selecionarTodosComTelefone}
+                    className="text-[11px] font-bold text-emerald-300 hover:text-emerald-200 underline cursor-pointer"
+                  >
+                    Selecionar todos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={limparSelecao}
+                    className="text-[11px] font-bold text-slate-300 hover:text-white underline cursor-pointer"
+                  >
+                    Limpar
+                  </button>
+                </div>
+              </div>
+
+              <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1">
+                {destinatariosComTelefone.length === 0 ? (
+                  <p className="text-xs text-slate-300">Nenhum cadastro encontrado.</p>
+                ) : (
+                  destinatariosComTelefone.map(r => {
+                    const checked = selectedIds.includes(r.id);
+                    const semTelefone = !r.telefoneResolvido;
+                    return (
+                      <label
+                        key={r.id}
+                        className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs cursor-pointer transition-all ${
+                          semTelefone
+                            ? 'bg-white/5 text-slate-400 cursor-not-allowed'
+                            : checked
+                              ? 'bg-emerald-500/20 border border-emerald-400/50 text-white'
+                              : 'bg-white/5 hover:bg-white/10 text-slate-200 border border-transparent'
+                        }`}
+                      >
+                        <span className="flex items-center gap-2 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={semTelefone}
+                            onChange={() => toggleSelected(r.id)}
+                            className="accent-emerald-500 shrink-0"
+                          />
+                          <span className="truncate font-semibold">{r.nome}</span>
+                        </span>
+                        <span className="font-mono text-[11px] shrink-0 flex items-center gap-1">
+                          {semTelefone && <AlertTriangle className="w-3 h-3 text-amber-400" />}
+                          {r.telefoneResolvido || 'Sem telefone'}
+                        </span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="flex items-center justify-between gap-2 pt-1">
+                {sentFeedback && (
+                  <span className="text-[11px] text-emerald-300 font-semibold">{sentFeedback}</span>
+                )}
+                <button
+                  type="button"
+                  onClick={handleEnviarSelecionados}
+                  disabled={selectedIds.length === 0}
+                  className="ml-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Enviar aos selecionados ({selectedIds.length})</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

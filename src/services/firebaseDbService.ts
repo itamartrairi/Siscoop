@@ -11,7 +11,7 @@ import {
   where,
   Unsubscribe
 } from 'firebase/firestore';
-import { auth, db, handleFirestoreError, OperationType } from './firebase';
+import { db, handleFirestoreError, OperationType } from './firebase';
 import { Cooperado, ContaPagarReceber, TransacaoCapital, Assembleia, Tenant } from '../types';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -85,10 +85,7 @@ export async function checkFirestoreDatabaseConnection(): Promise<FirestoreStatu
  * usuário pertence, e isolar os dados por tenant no banco não é possível.
  */
 export async function saveUserTenantMappingToFirestore(uid: string, tenantId: string, email?: string): Promise<void> {
-  // O app também possui um modo demo local. Só sincronize quando o UID
-  // pertence à sessão Firebase atual; caso contrário, as regras do Firestore
-  // rejeitam corretamente a gravação e poluem o console com um falso erro.
-  if (!uid || !tenantId || auth.currentUser?.uid !== uid) return;
+  if (!uid || !tenantId) return;
   try {
     const docRef = doc(db, 'users', uid);
     await setDoc(docRef, {
