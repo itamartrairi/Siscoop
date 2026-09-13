@@ -1,8 +1,0 @@
-{
-  "firestore": [
-    {
-      "database": "ai-studio-sicoopplatformsi-fd2e62a0-6b42-478c-a7c9-08d3051c6676",
-      "rules": "firestore.rules"
-    }
-  ]
-}
