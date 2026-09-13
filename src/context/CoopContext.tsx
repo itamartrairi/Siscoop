@@ -27,6 +27,7 @@ import {
   RegistroProducao,
   ProgramaGovernamental,
   ChamadaPublica,
+  RateioChamadaPublica,
   PropostaOfertaPAA,
   ProgramacaoEntregaPAA,
   PrestacaoContasPAA,
@@ -549,6 +550,12 @@ interface CoopContextType {
   updateChamadaPublica: (id: string, c: Partial<ChamadaPublica>) => void;
   deleteChamadaPublica: (id: string) => void;
 
+  // Rateio das quantidades de cada produto do edital entre os produtores
+  // ofertantes e as escolas contempladas — um rateio por chamada pública.
+  rateiosChamadas: RateioChamadaPublica[];
+  salvarRateioChamada: (r: Omit<RateioChamadaPublica, 'id' | 'tenantId' | 'dataAtualizacao'>) => void;
+  deleteRateioChamada: (chamadaPublicaId: string) => void;
+
   ofertasPAA: PropostaOfertaPAA[];
   addOfertaPAA: (o: Omit<PropostaOfertaPAA, 'id' | 'tenantId'>) => void;
   updateOfertaPAA: (id: string, o: Partial<PropostaOfertaPAA>) => void;
@@ -698,21 +705,53 @@ const chaveUnica = (valor: unknown): string => String(valor ?? '')
 const pertenceAoTenant = (registro: { tenantId?: string }, tenantId: string) =>
   !registro.tenantId || registro.tenantId === tenantId;
 
-const podeEditarAteDiaCinco = (registro: Record<string, any>, descricao: string): boolean => {
-  const dataOriginal = registro.data || registro.dataEmissao || registro.dataLancamento ||
-    registro.dataAquisicao || registro.dataFiliacao || registro.dataInicio ||
-    registro.dataEntrega || registro.dataHora || registro.dataVencimento;
-  if (!dataOriginal) return true;
+// Status considerados "finalizados" em qualquer módulo do sistema — um
+// registro nesse estado não pode mais ser editado nem excluído. Cobre os
+// nomes de status usados nos diferentes cadastros (chamada pública
+// ENCERRADA, pedido RECEBIDO, entrega ENTREGUE, programa/mandato/transação
+// CONCLUIDO, etc.), normalizando acentos e caixa para comparar.
+const normalizarStatus = (valor: unknown): string =>
+  String(valor ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .trim();
 
-  const dataTexto = String(dataOriginal).substring(0, 10);
-  const dataRegistro = new Date(`${dataTexto}T00:00:00`);
-  if (Number.isNaN(dataRegistro.getTime())) return true;
+const STATUS_FINALIZADOS = new Set([
+  'ENCERRADO', 'ENCERRADA',
+  'CONCLUIDO', 'CONCLUIDA',
+  'RECEBIDO' // Pedido ao Produtor totalmente recebido
+  // OBS: "ENTREGUE" não entra na lista global porque o mesmo texto de
+  // status é reutilizado em vários cadastros com sentidos diferentes (ex.:
+  // Ordem de Compra também usa "ENTREGUE", mas ali não deve travar a
+  // edição/cancelamento). Onde "ENTREGUE" realmente significa concluído
+  // (Programação de Entrega), ele é passado como status extra abaixo.
+]);
 
-  const prazo = new Date(dataRegistro.getFullYear(), dataRegistro.getMonth() + 1, 5, 23, 59, 59, 999);
-  if (new Date() <= prazo) return true;
+/**
+ * Bloqueia edição/exclusão de registros com status finalizado (encerrado,
+ * concluído, ou equivalente). Retorna true (e avisa o usuário) quando a
+ * ação deve ser impedida; retorna false quando pode prosseguir normalmente.
+ * `statusExtras` permite incluir, só para aquela chamada, outros valores de
+ * status que também devem ser tratados como finalizados nesse cadastro
+ * específico (ex.: "ENTREGUE" para Programação de Entrega).
+ */
+const bloqueadoPorStatusFinal = (
+  registro: Record<string, any> | undefined | null,
+  descricao: string,
+  acao: 'editar' | 'excluir' = 'editar',
+  statusExtras: string[] = []
+): boolean => {
+  if (!registro) return false;
+  const status = normalizarStatus(registro.status);
+  if (!status) return false;
+  const finalizados = statusExtras.length > 0
+    ? new Set([...STATUS_FINALIZADOS, ...statusExtras.map(normalizarStatus)])
+    : STATUS_FINALIZADOS;
+  if (!finalizados.has(status)) return false;
 
-  alert(`Edição bloqueada: ${descricao} só pode ser alterado até o dia 5 do mês seguinte ao registro (${prazo.toLocaleDateString('pt-BR')}).`);
-  return false;
+  alert(`Ação bloqueada: ${descricao} está com status "${registro.status}" e não pode mais ser ${acao === 'excluir' ? 'excluído(a)' : 'editado(a)'}.`);
+  return true;
 };
 
 /**
@@ -1039,6 +1078,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [registrosProducao, setRegistrosProducao] = useState<RegistroProducao[]>(() => loadPersistedList('registrosProducao', INITIAL_REGISTROS_PRODUCAO));
   const [programas, setProgramas] = useState<ProgramaGovernamental[]>(() => loadPersistedList('programas', INITIAL_PROGRAMAS));
   const [chamadasPublicas, setChamadasPublicas] = useState<ChamadaPublica[]>(() => loadPersistedList('chamadasPublicas', INITIAL_CHAMADAS_PUBLICAS));
+  const [rateiosChamadas, setRateiosChamadas] = useState<RateioChamadaPublica[]>(() => loadPersistedList('rateiosChamadas', []));
   const [ofertasPAA, setOfertasPAA] = useState<PropostaOfertaPAA[]>(() => loadPersistedList('ofertasPAA', INITIAL_OFERTAS_PAA));
   const [programacoesEntrega, setProgramacoesEntrega] = useState<ProgramacaoEntregaPAA[]>(() => loadPersistedList('programacoesEntrega', INITIAL_PROGRAMACOES_ENTREGA));
   const [prestacoesContas, setPrestacoesContas] = useState<PrestacaoContasPAA[]>(() => loadPersistedList('prestacoesContas', INITIAL_PRESTACOES_CONTAS));
@@ -1397,6 +1437,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         registrosProducao,
         programas,
         chamadasPublicas,
+        rateiosChamadas,
         ofertasPAA,
         programacoesEntrega,
         prestacoesContas,
@@ -1426,7 +1467,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [
     tenants, currentTenant, currentUser, users, rolePermissions, cooperados, transacoesCapital,
     assembleias, mandatos, auditoriaLogs, config, licenseInfo, webhooks, notasFiscais, sefazCeConfig,
-    produtores, produtos, registrosProducao, programas, chamadasPublicas, ofertasPAA,
+    produtores, produtos, registrosProducao, programas, chamadasPublicas, rateiosChamadas, ofertasPAA,
     programacoesEntrega, prestacoesContas, pedidosProdutorPAA, ordensCompra, planoContas,
     lancamentosContabeis, patrimonio, contasPagarReceber, extratoBancario, solicitacoesCompra,
     fornecedores, estoque, movimentacoesEstoque, funcionariosRH, folhaPagamento, escolasPnae,
@@ -2449,6 +2490,8 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateAssembleia = (id: string, data: Partial<Assembleia>) => {
+    const alvo = assembleias.find(a => a.id === id);
+    if (bloqueadoPorStatusFinal(alvo, 'assembleia')) return;
     setAssembleias(prev => prev.map(a => {
       if (a.id === id) {
         addAuditLog('ASSEMBLEIAS', 'ALTERACAO', `Atualizou dados da assembléia "${a.titulo}"`);
@@ -2559,6 +2602,8 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateMandato = (id: string, data: Partial<Mandato>) => {
+    const alvo = mandatos.find(m => m.id === id);
+    if (bloqueadoPorStatusFinal(alvo, 'mandato da diretoria')) return;
     setMandatos(prev => prev.map(m => m.id === id ? { ...m, ...data } : m));
     addAuditLog('DIRETORIA', 'ALTERACAO', `Atualizou dados do mandato da diretoria`);
   };
@@ -2810,6 +2855,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const tenantRegistrosProducao = registrosProducao.filter(r => !r.tenantId || r.tenantId === activeTenantId);
   const tenantProgramas = programas.filter(p => !p.tenantId || p.tenantId === activeTenantId);
   const tenantChamadasPublicas = chamadasPublicas.filter(c => !c.tenantId || c.tenantId === activeTenantId);
+  const tenantRateiosChamadas = rateiosChamadas.filter(r => !r.tenantId || r.tenantId === activeTenantId);
   const tenantOfertasPAA = ofertasPAA.filter(o => !o.tenantId || o.tenantId === activeTenantId);
   const tenantProgramacoesEntrega = programacoesEntrega.filter(p => !p.tenantId || p.tenantId === activeTenantId);
   const tenantPrestacoesContas = prestacoesContas.filter(p => !p.tenantId || p.tenantId === activeTenantId);
@@ -2874,7 +2920,6 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateProdutor = (id: string, pData: Partial<ProdutorRural>) => {
     const alvo = produtores.find(x => x.id === id);
-    if (alvo && !podeEditarAteDiaCinco(alvo, 'cooperado')) return;
     setProdutores(prev => prev.map(p => p.id === id ? { ...p, ...pData } : p));
     // Sincroniza o nome do produtor nos registros que já o referenciam
     // (proposta de oferta e itens de pedido) — sem isso, corrigir um nome
@@ -2927,7 +2972,6 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateProduto = (id: string, pData: Partial<ProdutoAgro>) => {
     const alvo = produtos.find(x => x.id === id);
-    if (alvo && !podeEditarAteDiaCinco(alvo, 'produto')) return;
     setProdutos(prev => prev.map(p => p.id === id ? { ...p, ...pData } : p));
     addAuditLog('SISGEPA', 'ALTERACAO', `Atualizou produto agropecuário ${alvo?.nome || id}`);
   };
@@ -2958,13 +3002,14 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateRegistroProducao = (id: string, rData: Partial<RegistroProducao>) => {
     const alvo = registrosProducao.find(x => x.id === id);
-    if (alvo && !podeEditarAteDiaCinco(alvo, 'registro de produção')) return;
+    if (bloqueadoPorStatusFinal(alvo, 'registro de produção')) return;
     setRegistrosProducao(prev => prev.map(r => r.id === id ? { ...r, ...rData } : r));
     addAuditLog('SISGEPA', 'ALTERACAO', `Atualizou registro de produção ${(alvo?.produtoNome || alvo?.produtorNome) || id}`);
   };
 
   const deleteRegistroProducao = (id: string) => {
     const alvo = registrosProducao.find(x => x.id === id);
+    if (bloqueadoPorStatusFinal(alvo, 'registro de produção', 'excluir')) return;
     setRegistrosProducao(prev => prev.filter(r => r.id !== id));
     addAuditLog('SISGEPA', 'EXCLUSAO', `Excluiu registro de produção ${(alvo?.produtoNome || alvo?.produtorNome) || id}`);
   };
@@ -2981,7 +3026,6 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updatePrograma = (id: string, pData: Partial<ProgramaGovernamental>) => {
     const alvo = programas.find(x => x.id === id);
-    if (alvo && !podeEditarAteDiaCinco(alvo, 'programa')) return;
     setProgramas(prev => prev.map(p => p.id === id ? { ...p, ...pData } : p));
     // Sincroniza o nome do programa em cascata nas chamadas, ofertas e
     // pedidos já vinculados a ele — evita que uma correção de nome no
@@ -2996,6 +3040,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const deletePrograma = (id: string) => {
     const alvo = programas.find(x => x.id === id);
+    if (bloqueadoPorStatusFinal(alvo, 'programa', 'excluir')) return;
     // Integridade referencial: um programa com chamadas públicas, propostas
     // de oferta ou pedidos vinculados não pode ser excluído — senão esses
     // registros ficariam com um programaId apontando para nada.
@@ -3022,7 +3067,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateChamadaPublica = (id: string, cData: Partial<ChamadaPublica>) => {
     const alvo = chamadasPublicas.find(x => x.id === id);
-    if (alvo && !podeEditarAteDiaCinco(alvo, 'chamada pública')) return;
+    if (bloqueadoPorStatusFinal(alvo, 'chamada pública')) return;
     setChamadasPublicas(prev => prev.map(c => c.id === id ? { ...c, ...cData } : c));
     // Sincroniza o número do edital nas ofertas e pedidos já vinculados.
     if (cData.numeroEdital && alvo && cData.numeroEdital !== alvo.numeroEdital) {
@@ -3034,6 +3079,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const deleteChamadaPublica = (id: string) => {
     const alvo = chamadasPublicas.find(x => x.id === id);
+    if (bloqueadoPorStatusFinal(alvo, 'chamada pública', 'excluir')) return;
     // Integridade referencial: uma chamada pública com propostas de oferta
     // ou pedidos vinculados não pode ser excluída sem antes removê-los.
     const ofertasVinculadas = ofertasPAA.filter(o => o.chamadaPublicaId === id).length;
@@ -3044,6 +3090,30 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setChamadasPublicas(prev => prev.filter(c => c.id !== id));
     addAuditLog('SISGEPA', 'EXCLUSAO', `Excluiu chamada pública ${alvo?.numeroEdital || id}`);
+  };
+
+  // Salva (cria ou substitui) o rateio de uma chamada pública — um único
+  // rateio ativo por chamada, identificado por chamadaPublicaId.
+  const salvarRateioChamada = (rData: Omit<RateioChamadaPublica, 'id' | 'tenantId' | 'dataAtualizacao'>) => {
+    setRateiosChamadas(prev => {
+      const existente = prev.find(r => r.chamadaPublicaId === rData.chamadaPublicaId);
+      const novoRateio: RateioChamadaPublica = {
+        ...rData,
+        id: existente?.id || `rat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        tenantId: currentTenant?.id || activeTenantId,
+        dataAtualizacao: new Date().toISOString()
+      };
+      if (existente) {
+        return prev.map(r => r.id === existente.id ? novoRateio : r);
+      }
+      return [novoRateio, ...prev];
+    });
+    addAuditLog('SISGEPA', 'ALTERACAO', `Salvou rateio da chamada pública ${rData.chamadaPublicaEdital || rData.chamadaPublicaId}`);
+  };
+
+  const deleteRateioChamada = (chamadaPublicaId: string) => {
+    setRateiosChamadas(prev => prev.filter(r => r.chamadaPublicaId !== chamadaPublicaId));
+    addAuditLog('SISGEPA', 'EXCLUSAO', `Removeu rateio da chamada pública ${chamadaPublicaId}`);
   };
 
   const addOfertaPAA = (oData: Omit<PropostaOfertaPAA, 'id' | 'tenantId'>) => {
@@ -3059,7 +3129,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateOfertaPAA = (id: string, oData: Partial<PropostaOfertaPAA>) => {
     const alvo = ofertasPAA.find(x => x.id === id);
-    if (alvo && !podeEditarAteDiaCinco(alvo, 'oferta PAA')) return;
+    if (bloqueadoPorStatusFinal(alvo, 'oferta PAA')) return;
     setOfertasPAA(prev => prev.map(o => o.id === id ? { ...o, ...oData } : o));
     addAuditLog('SISGEPA', 'ALTERACAO', `Atualizou proposta de oferta PAA/PNAE ${(alvo?.produtoNome || alvo?.produtorNome) || id}`);
   };
@@ -3082,13 +3152,14 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateProgramacaoEntrega = (id: string, pData: Partial<ProgramacaoEntregaPAA>) => {
     const alvo = programacoesEntrega.find(x => x.id === id);
-    if (alvo && !podeEditarAteDiaCinco(alvo, 'programação de entrega')) return;
+    if (bloqueadoPorStatusFinal(alvo, 'programação de entrega', 'editar', ['ENTREGUE'])) return;
     setProgramacoesEntrega(prev => prev.map(p => p.id === id ? { ...p, ...pData } : p));
     addAuditLog('SISGEPA', 'ALTERACAO', `Atualizou programação de entrega ${(alvo?.pedidoNumero || alvo?.escolaNome) || id}`);
   };
 
   const deleteProgramacaoEntrega = (id: string) => {
     const alvo = programacoesEntrega.find(x => x.id === id);
+    if (bloqueadoPorStatusFinal(alvo, 'programação de entrega', 'excluir', ['ENTREGUE'])) return;
     setProgramacoesEntrega(prev => prev.filter(p => p.id !== id));
     addAuditLog('SISGEPA', 'EXCLUSAO', `Excluiu programação de entrega ${(alvo?.pedidoNumero || alvo?.escolaNome) || id}`);
   };
@@ -3105,13 +3176,14 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updatePrestacaoContas = (id: string, pData: Partial<PrestacaoContasPAA>) => {
     const alvo = prestacoesContas.find(x => x.id === id);
-    if (alvo && !podeEditarAteDiaCinco(alvo, 'prestação de contas')) return;
+    if (bloqueadoPorStatusFinal(alvo, 'prestação de contas')) return;
     setPrestacoesContas(prev => prev.map(p => p.id === id ? { ...p, ...pData } : p));
     addAuditLog('SISGEPA', 'ALTERACAO', `Atualizou prestação de contas ${(alvo?.numeroTermo || alvo?.numeroLote) || id}`);
   };
 
   const deletePrestacaoContas = (id: string) => {
     const alvo = prestacoesContas.find(x => x.id === id);
+    if (bloqueadoPorStatusFinal(alvo, 'prestação de contas', 'excluir')) return;
     setPrestacoesContas(prev => prev.filter(p => p.id !== id));
     addAuditLog('SISGEPA', 'EXCLUSAO', `Excluiu prestação de contas ${(alvo?.numeroTermo || alvo?.numeroLote) || id}`);
   };
@@ -3175,6 +3247,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       contaCreditoNome: 'Fornecedores e Produtores Rurais',
       valor: newPed.valorTotalPedido,
       historico: `Pedido de Produtos ${newPed.programa} aos Produtores (${newPed.numeroPedido}) - ${newPed.fonteRecursos}`,
+      documentoRef: newPed.id,
       moduloOrigem: 'FINANCEIRO',
       usuario: currentUser.name
     };
@@ -3183,9 +3256,51 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addAuditLog('RELATORIOS', 'INCLUSAO', `Registrou Pedido de Produtos aos Produtores #${newPed.numeroPedido} (${newPed.programa}) no valor de R$ ${newPed.valorTotalPedido.toFixed(2)}`);
   };
 
+  // Desfaz os efeitos automáticos gerados ao registrar um Pedido (Financeiro,
+  // Contábil e Estoque) — usado tanto ao excluir quanto ao cancelar um
+  // pedido, para que esses módulos não fiquem com saldos "fantasmas" de um
+  // pedido que não vale mais.
+  const reverterEfeitosPedido = (pedido: PedidoProdutorPAA) => {
+    // 1) Financeiro: remove as contas de repasse aos produtores geradas por
+    // este pedido (deleteContaPagarReceber já reverte o lançamento contábil
+    // vinculado a cada uma, se existir).
+    const contasRepasse = contasPagarReceber.filter(c =>
+      c.categoria === 'REPASSE_PRODUCAO' && c.descricao.includes(pedido.numeroPedido)
+    );
+    contasRepasse.forEach(c => deleteContaPagarReceber(c.id));
+
+    // 2) Contábil: remove o lançamento principal gerado para este pedido.
+    setLancamentosContabeis(prev => prev.filter(l => l.documentoRef !== pedido.id));
+
+    // 3) Estoque: estorna as entradas de coleta de produção geradas por
+    // este pedido — usa addMovimentacaoEstoque para que a baixa contábil
+    // correspondente também seja gerada automaticamente, mesma integração
+    // já usada em qualquer saída manual de estoque.
+    const entradasDoPedido = movimentacoesEstoque.filter(m =>
+      m.tipoMovimento === 'ENTRADA' && (m.motivoHist || m.motivo || '').includes(pedido.numeroPedido)
+    );
+    entradasDoPedido.forEach(mov => {
+      addMovimentacaoEstoque({
+        itemEstoqueId: mov.itemEstoqueId,
+        itemNome: mov.itemNome,
+        tipoMovimento: 'SAIDA',
+        quantidade: mov.quantidade,
+        motivoHist: `Estorno por exclusão/cancelamento do Pedido ${pedido.numeroPedido}`,
+        usuarioResponsavel: currentUser?.name
+      } as any);
+    });
+  };
+
   const updatePedidoProdutorPAA = (id: string, pData: Partial<PedidoProdutorPAA>) => {
     const alvo = pedidosProdutorPAA.find(x => x.id === id);
-    if (alvo && !podeEditarAteDiaCinco(alvo, 'pedido do produtor')) return;
+    if (bloqueadoPorStatusFinal(alvo, 'pedido do produtor')) return;
+    // Cancelamento: reverte os efeitos automáticos (Financeiro/Contábil/
+    // Estoque) gerados quando este pedido foi registrado — só uma vez, na
+    // transição para CANCELADO (evita reverter de novo em cada edição
+    // subsequente de um pedido que já está cancelado).
+    if (pData.status === 'CANCELADO' && alvo && alvo.status !== 'CANCELADO') {
+      reverterEfeitosPedido(alvo);
+    }
     setPedidosProdutorPAA(prev => prev.map(p => p.id === id ? { ...p, ...pData } : p));
     addAuditLog('SISGEPA', 'ALTERACAO', `Atualizou pedido a produtores ${alvo?.numeroPedido || id}`);
   };
@@ -3193,6 +3308,11 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deletePedidoProdutorPAA = (id: string) => {
     const alvo = pedidosProdutorPAA.find(x => x.id === id);
     if (!alvo) return;
+    if (bloqueadoPorStatusFinal(alvo, 'pedido do produtor', 'excluir')) return;
+
+    // Reverte Financeiro, Contábil e Estoque gerados ao registrar este
+    // pedido — antes de seguir com a exclusão em cascata abaixo.
+    reverterEfeitosPedido(alvo);
 
     // Exclusão em cascata: remove tudo que foi gerado a partir deste
     // pedido, para não deixar registros órfãos soltos no sistema.
@@ -3336,17 +3456,53 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addAuditLog('CONFIGURACOES', 'INCLUSAO', `Criou Ordem de Compra #${newOc.numeroOrdem} para ${newOc.fornecedorNome} e creditou no SisEstoque`);
   };
 
+  // Desfaz os efeitos automáticos gerados ao criar uma Ordem de Compra
+  // (entrada no Estoque + conta a pagar/lançamento contábil) — usado tanto
+  // ao excluir quanto ao cancelar a ordem.
+  const reverterEfeitosOrdemCompra = (ordem: OrdemCompra) => {
+    // 1) Estoque: estorna (saída) as entradas geradas por esta ordem. Usa
+    // addMovimentacaoEstoque para que a baixa contábil correspondente
+    // também seja gerada automaticamente.
+    const entradasDaOrdem = movimentacoesEstoque.filter(m =>
+      m.tipoMovimento === 'ENTRADA' && (m.motivo || '').includes(`OC #${ordem.numeroOrdem}`)
+    );
+    entradasDaOrdem.forEach(mov => {
+      addMovimentacaoEstoque({
+        itemEstoqueId: mov.itemEstoqueId,
+        itemNome: mov.itemNome,
+        tipoMovimento: 'SAIDA',
+        quantidade: mov.quantidade,
+        motivo: `Estorno por exclusão/cancelamento da Ordem de Compra #${ordem.numeroOrdem}`,
+        usuarioResponsavel: currentUser?.name
+      } as any);
+    });
+
+    // 2) Financeiro + Contábil: remove a conta a pagar gerada para esta
+    // ordem (deleteContaPagarReceber já reverte o lançamento vinculado).
+    const contaVinculada = contasPagarReceber.find(c =>
+      c.descricao === `Ordem de Compra ${ordem.numeroOrdem} - ${ordem.fornecedorNome}`
+    );
+    if (contaVinculada) deleteContaPagarReceber(contaVinculada.id);
+  };
+
   const updateOrdemCompra = (id: string, oData: Partial<OrdemCompra>) => {
     const alvo = ordensCompra.find(x => x.id === id);
-    if (alvo && !podeEditarAteDiaCinco(alvo, 'ordem de compra')) return;
+    if (bloqueadoPorStatusFinal(alvo, 'ordem de compra')) return;
+    // Cancelamento: reverte Estoque/Financeiro/Contábil gerados na criação
+    // — só uma vez, na transição para CANCELADA.
+    if (oData.status === 'CANCELADA' && alvo && alvo.status !== 'CANCELADA') {
+      reverterEfeitosOrdemCompra(alvo);
+    }
     setOrdensCompra(prev => prev.map(o => o.id === id ? { ...o, ...oData } : o));
     addAuditLog('COMPRAS', 'ALTERACAO', `Atualizou ordem de compra ${alvo?.numeroOrdem || id}`);
   };
 
   const deleteOrdemCompra = (id: string) => {
     const alvo = ordensCompra.find(x => x.id === id);
+    if (bloqueadoPorStatusFinal(alvo, 'ordem de compra', 'excluir')) return;
+    if (alvo) reverterEfeitosOrdemCompra(alvo);
     setOrdensCompra(prev => prev.filter(o => o.id !== id));
-    addAuditLog('COMPRAS', 'EXCLUSAO', `Excluiu ordem de compra ${alvo?.numeroOrdem || id}`);
+    addAuditLog('COMPRAS', 'EXCLUSAO', `Excluiu ordem de compra ${alvo?.numeroOrdem || id} (revertendo estoque e financeiro/contábil vinculados)`);
   };
 
   const addPlanoConta = (pData: Omit<PlanoContaContabil, 'id'>) => {
@@ -3365,13 +3521,14 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updatePlanoConta = (id: string, pData: Partial<PlanoContaContabil>) => {
     const alvo = planoContas.find(x => x.id === id);
-    if (alvo && !podeEditarAteDiaCinco(alvo, 'conta contábil')) return;
+    if (bloqueadoPorStatusFinal(alvo, 'conta contábil')) return;
     setPlanoContas(prev => prev.map(p => p.id === id ? { ...p, ...pData } : p));
     addAuditLog('SISCONT', 'ALTERACAO', `Atualizou conta do plano de contas ${(alvo?.codigo + " - " + alvo?.nome) || id}`);
   };
 
   const deletePlanoConta = (id: string) => {
     const alvo = planoContas.find(x => x.id === id);
+    if (bloqueadoPorStatusFinal(alvo, 'conta contábil', 'excluir')) return;
     setPlanoContas(prev => prev.filter(p => p.id !== id));
     addAuditLog('SISCONT', 'EXCLUSAO', `Excluiu conta do plano de contas ${(alvo?.codigo + " - " + alvo?.nome) || id}`);
   };
@@ -3422,13 +3579,14 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateLancamentoContabil = (id: string, lData: Partial<LancamentoContabil>) => {
     const alvo = lancamentosContabeis.find(x => x.id === id);
-    if (alvo && !podeEditarAteDiaCinco(alvo, 'lançamento contábil')) return;
+    if (bloqueadoPorStatusFinal(alvo, 'lançamento contábil')) return;
     setLancamentosContabeis(prev => prev.map(l => l.id === id ? { ...l, ...lData } : l));
     addAuditLog('SISCONT', 'ALTERACAO', `Atualizou lançamento contábil ${alvo?.numeroLancamento || id}`);
   };
 
   const deleteLancamentoContabil = (id: string) => {
     const alvo = lancamentosContabeis.find(x => x.id === id);
+    if (bloqueadoPorStatusFinal(alvo, 'lançamento contábil', 'excluir')) return;
     setLancamentosContabeis(prev => prev.filter(l => l.id !== id));
     addAuditLog('SISCONT', 'EXCLUSAO', `Excluiu lançamento contábil ${alvo?.numeroLancamento || id}`);
   };
@@ -3476,13 +3634,14 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateItemPatrimonio = (id: string, pData: Partial<ItemPatrimonio>) => {
     const alvo = patrimonio.find(x => x.id === id);
-    if (alvo && !podeEditarAteDiaCinco(alvo, 'item patrimonial')) return;
+    if (bloqueadoPorStatusFinal(alvo, 'item patrimonial')) return;
     setPatrimonio(prev => prev.map(p => p.id === id ? { ...p, ...pData } : p));
     addAuditLog('PATRIMONIO', 'ALTERACAO', `Atualizou item de patrimônio ${alvo?.descricao || id}`);
   };
 
   const deleteItemPatrimonio = (id: string) => {
     const alvo = patrimonio.find(x => x.id === id);
+    if (bloqueadoPorStatusFinal(alvo, 'item patrimonial', 'excluir')) return;
     setPatrimonio(prev => prev.filter(p => p.id !== id));
     addAuditLog('PATRIMONIO', 'EXCLUSAO', `Excluiu item de patrimônio ${alvo?.descricao || id}`);
   };
@@ -3662,15 +3821,25 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateContaPagarReceber = (id: string, cData: Partial<ContaPagarReceber>) => {
     const alvo = contasPagarReceber.find(x => x.id === id);
-    if (alvo && !podeEditarAteDiaCinco(alvo, 'lançamento financeiro')) return;
+    if (bloqueadoPorStatusFinal(alvo, 'lançamento financeiro')) return;
+    // Cancelamento: reverte (remove) o lançamento contábil automático
+    // gerado para esta conta — o débito/crédito deixou de valer.
+    if (cData.status === 'CANCELADO' && alvo && alvo.status !== 'CANCELADO') {
+      setLancamentosContabeis(prev => prev.filter(l => l.documentoRef !== id));
+    }
     setContasPagarReceber(prev => prev.map(c => c.id === id ? { ...c, ...cData } : c));
     addAuditLog('SISFIN', 'ALTERACAO', `Atualizou conta a pagar/receber ${alvo?.descricao || id}`);
   };
 
   const deleteContaPagarReceber = (id: string) => {
     const alvo = contasPagarReceber.find(x => x.id === id);
+    if (bloqueadoPorStatusFinal(alvo, 'lançamento financeiro', 'excluir')) return;
+    // Reversão automática no Contábil: remove o lançamento contábil gerado
+    // a partir desta conta (rastreado por documentoRef), para não deixar um
+    // débito/crédito órfão referente a uma conta que não existe mais.
+    setLancamentosContabeis(prev => prev.filter(l => l.documentoRef !== id));
     setContasPagarReceber(prev => prev.filter(c => c.id !== id));
-    addAuditLog('SISFIN', 'EXCLUSAO', `Excluiu conta a pagar/receber ${alvo?.descricao || id}`);
+    addAuditLog('SISFIN', 'EXCLUSAO', `Excluiu conta a pagar/receber ${alvo?.descricao || id} (e o lançamento contábil vinculado, se existia)`);
   };
 
   const addSolicitacaoCompra = (sData: Omit<SolicitacaoCompra, 'id' | 'tenantId'>) => {
@@ -3685,13 +3854,14 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateSolicitacaoCompra = (id: string, sData: Partial<SolicitacaoCompra>) => {
     const alvo = solicitacoesCompra.find(x => x.id === id);
-    if (alvo && !podeEditarAteDiaCinco(alvo, 'solicitação de compra')) return;
+    if (bloqueadoPorStatusFinal(alvo, 'solicitação de compra')) return;
     setSolicitacoesCompra(prev => prev.map(s => s.id === id ? { ...s, ...sData } : s));
     addAuditLog('COMPRAS', 'ALTERACAO', `Atualizou solicitação de compra ${(alvo?.numeroSolicitacao || alvo?.itemDescricao) || id}`);
   };
 
   const deleteSolicitacaoCompra = (id: string) => {
     const alvo = solicitacoesCompra.find(x => x.id === id);
+    if (bloqueadoPorStatusFinal(alvo, 'solicitação de compra', 'excluir')) return;
     setSolicitacoesCompra(prev => prev.filter(s => s.id !== id));
     addAuditLog('COMPRAS', 'EXCLUSAO', `Excluiu solicitação de compra ${(alvo?.numeroSolicitacao || alvo?.itemDescricao) || id}`);
   };
@@ -3717,13 +3887,14 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateFornecedor = (id: string, fData: Partial<Fornecedor>) => {
     const alvo = fornecedores.find(x => x.id === id);
-    if (alvo && !podeEditarAteDiaCinco(alvo, 'fornecedor')) return;
+    if (bloqueadoPorStatusFinal(alvo, 'fornecedor')) return;
     setFornecedores(prev => prev.map(f => f.id === id ? { ...f, ...fData } : f));
     addAuditLog('COMPRAS', 'ALTERACAO', `Atualizou fornecedor ${alvo?.razaoSocial || id}`);
   };
 
   const deleteFornecedor = (id: string) => {
     const alvo = fornecedores.find(x => x.id === id);
+    if (bloqueadoPorStatusFinal(alvo, 'fornecedor', 'excluir')) return;
     setFornecedores(prev => prev.filter(f => f.id !== id));
     addAuditLog('COMPRAS', 'EXCLUSAO', `Excluiu fornecedor ${alvo?.razaoSocial || id}`);
   };
@@ -3749,13 +3920,14 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateItemEstoque = (id: string, iData: Partial<ItemEstoque>) => {
     const alvo = estoque.find(x => x.id === id);
-    if (alvo && !podeEditarAteDiaCinco(alvo, 'item de estoque')) return;
+    if (bloqueadoPorStatusFinal(alvo, 'item de estoque')) return;
     setEstoque(prev => prev.map(i => i.id === id ? { ...i, ...iData } : i));
     addAuditLog('ESTOQUE', 'ALTERACAO', `Atualizou item de estoque ${alvo?.nomeItem || id}`);
   };
 
   const deleteItemEstoque = (id: string) => {
     const alvo = estoque.find(x => x.id === id);
+    if (bloqueadoPorStatusFinal(alvo, 'item de estoque', 'excluir')) return;
     setEstoque(prev => prev.filter(i => i.id !== id));
     addAuditLog('ESTOQUE', 'EXCLUSAO', `Excluiu item de estoque ${alvo?.nomeItem || id}`);
   };
@@ -3768,13 +3940,14 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateFuncionarioRH = (id: string, fData: Partial<FuncionarioRH>) => {
     const alvo = funcionariosRH.find(x => x.id === id);
-    if (alvo && !podeEditarAteDiaCinco(alvo, 'funcionário')) return;
+    if (bloqueadoPorStatusFinal(alvo, 'funcionário')) return;
     setFuncionariosRH(prev => prev.map(f => f.id === id ? { ...f, ...fData } : f));
     addAuditLog('RH', 'ALTERACAO', `Atualizou funcionário ${alvo?.nome || id}`);
   };
 
   const deleteFuncionarioRH = (id: string) => {
     const alvo = funcionariosRH.find(x => x.id === id);
+    if (bloqueadoPorStatusFinal(alvo, 'funcionário', 'excluir')) return;
     setFuncionariosRH(prev => prev.filter(f => f.id !== id));
     addAuditLog('RH', 'EXCLUSAO', `Excluiu funcionário ${alvo?.nome || id}`);
   };
@@ -3811,13 +3984,14 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateFolhaPagamento = (id: string, fData: Partial<FolhaPagamento>) => {
     const alvo = folhaPagamento.find(x => x.id === id);
-    if (alvo && !podeEditarAteDiaCinco(alvo, 'folha de pagamento')) return;
+    if (bloqueadoPorStatusFinal(alvo, 'folha de pagamento')) return;
     setFolhaPagamento(prev => prev.map(f => f.id === id ? { ...f, ...fData } : f));
     addAuditLog('RH', 'ALTERACAO', `Atualizou folha de pagamento ${(alvo?.funcionarioNome + " - " + alvo?.competencia) || id}`);
   };
 
   const deleteFolhaPagamento = (id: string) => {
     const alvo = folhaPagamento.find(x => x.id === id);
+    if (bloqueadoPorStatusFinal(alvo, 'folha de pagamento', 'excluir')) return;
     setFolhaPagamento(prev => prev.filter(f => f.id !== id));
     addAuditLog('RH', 'EXCLUSAO', `Excluiu folha de pagamento ${(alvo?.funcionarioNome + " - " + alvo?.competencia) || id}`);
   };
@@ -3845,7 +4019,6 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateEscolaPnae = (id: string, eData: Partial<EscolaPnae>) => {
     const alvo = escolasPnae.find(x => x.id === id);
-    if (alvo && !podeEditarAteDiaCinco(alvo, 'escola')) return;
     setEscolasPnae(prev => prev.map(e => e.id === id ? { ...e, ...eData } : e));
     // Sincroniza o nome da escola nos pedidos já vinculados a ela (tanto no
     // nível do pedido quanto em cada item que aponta para essa escola).
@@ -3894,7 +4067,6 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateMotorista = (id: string, mData: Partial<Motorista>) => {
     const alvo = motoristas.find(x => x.id === id);
-    if (alvo && !podeEditarAteDiaCinco(alvo, 'motorista')) return;
     setMotoristas(prev => prev.map(m => m.id === id ? { ...m, ...mData } : m));
     addAuditLog('CADASTROS', 'ALTERACAO', `Atualizou motorista ${alvo?.nome || id}`);
   };
@@ -4134,12 +4306,14 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateNotaFiscal = (id: string, nfData: Partial<NotaFiscal>) => {
     const alvo = notasFiscais.find(x => x.id === id);
-    if (alvo && !podeEditarAteDiaCinco(alvo, 'nota fiscal')) return;
+    if (bloqueadoPorStatusFinal(alvo, 'nota fiscal')) return;
     setNotasFiscais(prev => prev.map(n => n.id === id ? { ...n, ...nfData } : n));
     addAuditLog('FISCAL', 'ALTERACAO', `Atualizou nota fiscal ${alvo?.numeroNota || id}`);
   };
 
   const deleteNotaFiscal = (id: string) => {
+    const alvo = notasFiscais.find(x => x.id === id);
+    if (bloqueadoPorStatusFinal(alvo, 'nota fiscal', 'excluir')) return;
     setNotasFiscais(prev => prev.filter(n => n.id !== id));
     addAuditLog('RELATORIOS', 'EXCLUSAO', `Excluiu a Nota Fiscal ID ${id}`);
   };
@@ -4614,6 +4788,9 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addChamadaPublica,
         updateChamadaPublica,
         deleteChamadaPublica,
+        rateiosChamadas: tenantRateiosChamadas,
+        salvarRateioChamada,
+        deleteRateioChamada,
         ofertasPAA: tenantOfertasPAA,
         addOfertaPAA,
         updateOfertaPAA,

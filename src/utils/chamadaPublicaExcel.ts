@@ -255,7 +255,7 @@ export async function parsePlanilhaChamadaPublica(file: File): Promise<ParsePlan
     let fonteRecurso = 'FNDE / PNAE Federal';
     let dataAbertura = new Date().toISOString().split('T')[0];
     let dataEncerramento = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    let status: 'ABERTA' | 'EM_ANALISE' | 'HOMOLOGADA' | 'ENCERRADA' = 'ABERTA';
+    let status: 'ABERTA' | 'EM_EXECUCAO' | 'ENCERRADA' = 'ABERTA';
     let observacoes = '';
 
     const escolasContempladas: EscolaContempladaChamada[] = [];
@@ -290,7 +290,7 @@ export async function parsePlanilhaChamadaPublica(file: File): Promise<ParsePlan
           else if (/encerramento|termino|fim|vigencia|prazo/i.test(k) && v) dataEncerramento = parseDate(val, dataEncerramento);
           else if (/status|situacao/i.test(k) && v) {
             const up = v.toUpperCase();
-            if (['ABERTA', 'EM_ANALISE', 'HOMOLOGADA', 'ENCERRADA'].includes(up)) {
+            if (['ABERTA', 'EM_EXECUCAO', 'ENCERRADA'].includes(up)) {
               status = up as any;
             }
           }

@@ -719,7 +719,7 @@ export const INITIAL_CHAMADAS_PUBLICAS: ChamadaPublica[] = [
     dataAbertura: '2026-07-01',
     dataEncerramento: '2026-08-30',
     valorTotalEdital: 176000.00,
-    status: 'HOMOLOGADA',
+    status: 'EM_EXECUCAO',
     observacoes: 'Aquisição de gêneros alimentícios da Agricultura Familiar para alimentação escolar de Trairi/CE.',
     itensSolicitados: [
       { produtoId: 'pdt-01', produtoNome: 'Mandioca In Natura Organica', unidade: 'KG', quantidadeTotal: 15000, precoMaximoUnitario: 4.80, valorTotalItem: 72000.00 },
@@ -1527,7 +1527,7 @@ export const INITIAL_PEDIDOS_PRODUTOR: PedidoProdutorPAA[] = [
   {
     id: 'ped-prod-01',
     tenantId: 'coop-01',
-    numeroPedido: 'PED-PAA-2026-001',
+    numeroPedido: 'PED-01/2026',
     programa: 'PNAE',
     chamadaPublicaId: 'chm-01',
     chamadaPublicaEdital: 'Chamada Pública PNAE 001/2026',

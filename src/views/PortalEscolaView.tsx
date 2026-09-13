@@ -36,7 +36,7 @@ const SeletorEstrelas: React.FC<{ valor: number; onChange: (v: number) => void; 
 );
 
 export const PortalEscolaView: React.FC = () => {
-  const { escolasPnae, entregasEscola, pedidosProdutorPAA, programacoesEntrega, confirmarEntregaEscola } = useCoop();
+  const { escolasPnae, entregasEscola, pedidosProdutorPAA, programacoesEntrega, chamadasPublicas, confirmarEntregaEscola } = useCoop();
   const [showComprovanteModal, setShowComprovanteModal] = useState(false);
   const [abaAtiva, setAbaAtiva] = useState<'pedidos' | 'comprovante'>('pedidos');
 
@@ -64,13 +64,20 @@ export const PortalEscolaView: React.FC = () => {
 
   // Programações oficiais do SisGepa destinadas a esta escola. Elas são a
   // fonte principal do comprovante: motorista, placa, data e itens previstos.
+  // Mostramos aqui apenas entregas ainda não concluídas (nem já marcadas como
+  // ENTREGUE, nem CANCELADA) e que não pertençam a uma Chamada Pública já
+  // ENCERRADA — são essas que a escola ainda precisa receber e assinar.
   const programacoesDaEscola = escolaAtual
     ? programacoesEntrega.filter(p =>
-        p.escolaId === escolaAtual.id ||
-        (p.escolasIds || []).includes(escolaAtual.id) ||
-        p.paradasEntrega?.some(parada => parada.escolaId === escolaAtual.id || parada.escolaNome.toLowerCase() === escolaAtual.nomeEscola.toLowerCase()) ||
-        (p.escolaNome || '').toLowerCase() === escolaAtual.nomeEscola.toLowerCase() ||
-        (p.escolaOrgaoDestino || '').toLowerCase() === escolaAtual.nomeEscola.toLowerCase()
+        (
+          p.escolaId === escolaAtual.id ||
+          (p.escolasIds || []).includes(escolaAtual.id) ||
+          p.paradasEntrega?.some(parada => parada.escolaId === escolaAtual.id || parada.escolaNome.toLowerCase() === escolaAtual.nomeEscola.toLowerCase()) ||
+          (p.escolaNome || '').toLowerCase() === escolaAtual.nomeEscola.toLowerCase() ||
+          (p.escolaOrgaoDestino || '').toLowerCase() === escolaAtual.nomeEscola.toLowerCase()
+        ) &&
+        p.status !== 'ENTREGUE' && p.status !== 'CANCELADA' &&
+        chamadasPublicas.find(c => c.id === p.chamadaPublicaId)?.status !== 'ENCERRADA'
       )
     : [];
 
@@ -134,20 +141,6 @@ export const PortalEscolaView: React.FC = () => {
       motoristaNome: programacao.motoristaNome || '',
       placaVeiculo: programacao.veiculoPlaca || '',
       itensRecebidos: itensDaProgramacao(programacao)
-    }));
-  };
-
-  const handleSelecionarPedidoComprovante = (pedidoId: string) => {
-    const pedido = pedidosProdutorPAA.find(p => p.id === pedidoId);
-    const itensParaEscola = pedido && escolaAtual
-      ? (pedido.itens || [])
-          .filter(it => it.escolaId === escolaAtual.id || (!it.escolaId && (pedido.escolaId === escolaAtual.id || (pedido.escolasIds || []).includes(escolaAtual.id))))
-          .map(it => ({ produto: it.produtoNome, qtdEsperada: Number(it.quantidadePedida) || 0, qtdRecebida: Number(it.quantidadePedida) || 0 }))
-      : [];
-    setComprovanteForm(prev => ({
-      ...prev,
-      pedidoId,
-      itensRecebidos: itensParaEscola.length > 0 ? itensParaEscola : [{ produto: '', qtdEsperada: 0, qtdRecebida: 0 }]
     }));
   };
 
@@ -491,23 +484,6 @@ export const PortalEscolaView: React.FC = () => {
                     {programacoesDaEscola.map(p => <option key={p.id} value={p.id}>{p.pedidoNumero || 'Entrega'} — {p.dataPrevista} — {p.motoristaNome || 'Motorista não informado'}</option>)}
                   </select>
                   <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Os produtos, quantidades, motorista e placa são preenchidos conforme o cronograma oficial.</p>
-                </div>
-              )}
-
-              {/* Vínculo com pedido (opcional) */}
-              {pedidosDaEscola.length > 0 && (
-                <div>
-                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">Vincular a um Pedido (opcional)</label>
-                  <select
-                    value={comprovanteForm.pedidoId}
-                    onChange={e => handleSelecionarPedidoComprovante(e.target.value)}
-                    className="w-full p-2.5 border border-slate-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white rounded-xl"
-                  >
-                    <option value="">Preencher produtos manualmente</option>
-                    {pedidosDaEscola.map(p => (
-                      <option key={p.id} value={p.id}>Pedido {p.numeroPedido} — {p.programaNome || p.programa}</option>
-                    ))}
-                  </select>
                 </div>
               )}
 
