@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import jsPDF from 'jspdf';
 import * as XLSX from '@e965/xlsx';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useCoop } from '../context/CoopContext';
 import {
   Landmark,
@@ -73,40 +72,17 @@ import {
   PedidoProdutorPAA,
   ItemPedidoProdutor,
   NotaFiscal,
-  SistemaTributarioNFe,
-  RateioChamadaPublica,
-  RateioProduto,
-  RateioProdutor
+  SistemaTributarioNFe
 } from '../types';
 import { ALERTA_CRONOGRAMA_TEXTO, calcularImpostosItem } from '../utils/tributacaoReforma';
 import { expandirItensHistoricoProducao } from '../utils/registroProducaoHelpers';
 import { playActionCompleteSound } from '../utils/actionSound';
 import { poloEquivale } from '../utils/poloHelpers';
-import { abrirLinkExterno, montarLinkWhatsApp } from '../utils/whatsappHelpers';
 import {
   baixarModeloPlanilhaChamadaPublica,
   parsePlanilhaChamadaPublica,
   ParsePlanilhaResult
 } from '../utils/chamadaPublicaExcel';
-
-type SaldoRateioRow = {
-  chave: string;
-  chamadaPublicaId: string;
-  edital: string;
-  programa: string;
-  fonteRecursos: string;
-  produtoId?: string;
-  produto: string;
-  unidade: string;
-  produtorId: string;
-  produtor: string;
-  escolaId: string;
-  escola: string;
-  rateado: number;
-  pedido: number;
-  saldo: number;
-  precoUnitario: number;
-};
 
 const FONTES_RECURSOS_OPTIONS = [
   'FNDE / PNAE Federal',
@@ -187,9 +163,6 @@ export const SisGepaView: React.FC = () => {
     addChamadaPublica,
     updateChamadaPublica,
     deleteChamadaPublica,
-    rateiosChamadas,
-    salvarRateioChamada,
-    deleteRateioChamada,
     ofertasPAA,
     addOfertaPAA,
     updateOfertaPAA,
@@ -228,13 +201,8 @@ export const SisGepaView: React.FC = () => {
     alert('Seu perfil de acesso tem permissão apenas de leitura neste módulo. Fale com um administrador para solicitar permissão de edição.');
   };
 
-  const [activeTab, setActiveTab] = useState<'chamadas' | 'ofertas' | 'rateio' | 'pedidos' | 'entregas' | 'saldos' | 'relatorios'>('chamadas');
+  const [activeTab, setActiveTab] = useState<'chamadas' | 'ofertas' | 'pedidos' | 'entregas' | 'relatorios'>('chamadas');
   const [relatorioSubTab, setRelatorioSubTab] = useState<'pedidos' | 'entregas'>('pedidos');
-  const [saldoFilterProduto, setSaldoFilterProduto] = useState('TODOS');
-  const [saldoFilterProdutor, setSaldoFilterProdutor] = useState('TODOS');
-  const [saldoFilterEscola, setSaldoFilterEscola] = useState('TODOS');
-  const [saldoFilterChamada, setSaldoFilterChamada] = useState('TODOS');
-  const [saldoApenasPendentes, setSaldoApenasPendentes] = useState(false);
 
   // Specific filters for Relatórios de Pedidos e Entregas
   const [relFilterProdutor, setRelFilterProdutor] = useState('TODOS');
@@ -311,7 +279,7 @@ export const SisGepaView: React.FC = () => {
     dataAbertura: new Date().toISOString().split('T')[0],
     dataEncerramento: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0],
     valorTotalEdital: 150000,
-    status: 'ABERTA' as 'ABERTA' | 'EM_EXECUCAO' | 'ENCERRADA',
+    status: 'ABERTA' as 'ABERTA' | 'EM_ANALISE' | 'HOMOLOGADA' | 'ENCERRADA',
     observacoes: '',
     itensSolicitados: [] as ItemChamadaPublica[]
   });
@@ -350,7 +318,7 @@ export const SisGepaView: React.FC = () => {
 
   // Form Pedido
   const [pedidoForm, setPedidoForm] = useState({
-    numeroPedido: '', // placeholder — o número real (PED-01/2026) é gerado ao abrir o formulário, em handleOpenPedido
+    numeroPedido: `PED-${Date.now().toString().slice(-5)}`,
     programaId: '',
     programaNome: '',
     programa: 'PAA' as 'PAA' | 'PNAE' | 'MERCADO_LIVRE' | string,
@@ -440,14 +408,6 @@ export const SisGepaView: React.FC = () => {
 
   const [selectedProdutoresIds, setSelectedProdutoresIds] = useState<string[]>([]);
   const [pedidoItens, setPedidoItens] = useState<ItemPedidoProdutor[]>([]);
-
-  // --- Rateio de Produtores (aba "Rateio de Produtores") ---
-  // Distribui a quantidade de cada produto do edital entre os produtores
-  // que o ofertaram e, dentro de cada produtor, entre as escolas
-  // contempladas na chamada pública. O resultado fica disponível para
-  // popular o Pedido diretamente (ver handleCarregarRateioNoPedido).
-  const [rateioChamadaId, setRateioChamadaId] = useState('');
-  const [rateioEmEdicao, setRateioEmEdicao] = useState<RateioChamadaPublica | null>(null);
 
   // Open Handlers
   const handleOpenChamada = (cp?: ChamadaPublica) => {
@@ -1575,31 +1535,14 @@ ${itensText}
 Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme o cronograma. Obrigado!`;
 
     if (cleanPhone) {
-      abrirLinkExterno(montarLinkWhatsApp(cleanPhone, msg));
+      window.open(`https://api.whatsapp.com/send?phone=55${cleanPhone}&text=${encodeURIComponent(msg)}`, '_blank');
     } else {
       const manualPhone = prompt(`Informe o número de WhatsApp (com DDD) para enviar o pedido para ${prodNome}:`, '85');
       if (manualPhone) {
-        abrirLinkExterno(montarLinkWhatsApp(manualPhone, msg));
+        const cleanM = manualPhone.replace(/\D/g, '');
+        window.open(`https://api.whatsapp.com/send?phone=55${cleanM}&text=${encodeURIComponent(msg)}`, '_blank');
       }
     }
-  };
-
-  // Gera o próximo número sequencial de pedido no formato PED-01/2026 —
-  // sigla + sequencial de 2 dígitos (ou mais, se passar de 99) + ano corrente.
-  // A numeração reinicia a cada ano civil, contando apenas os pedidos já
-  // registrados naquele ano.
-  const gerarProximoNumeroPedido = (): string => {
-    const anoAtual = new Date().getFullYear();
-    const regex = /^PED-(\d+)\/(\d{4})$/;
-    const maiorSequencialDoAno = pedidosProdutorPAA.reduce((maior, p) => {
-      const match = regex.exec(p.numeroPedido || '');
-      if (match && Number(match[2]) === anoAtual) {
-        return Math.max(maior, Number(match[1]));
-      }
-      return maior;
-    }, 0);
-    const proximoSequencial = String(maiorSequencialDoAno + 1).padStart(2, '0');
-    return `PED-${proximoSequencial}/${anoAtual}`;
   };
 
   const handleOpenPedido = (p?: PedidoProdutorPAA) => {
@@ -1657,7 +1600,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
 
       setEditingPedido(null);
       setPedidoForm({
-        numeroPedido: gerarProximoNumeroPedido(),
+        numeroPedido: `PED-${Date.now().toString().slice(-5)}`,
         programaId: defaultProg?.id || '',
         programaNome: defaultProg?.nome || 'PAA',
         programa: defaultProg?.tipo || 'PAA',
@@ -1938,283 +1881,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
     });
   };
 
-  // --- Helpers do Rateio de Produtores ---
-
-  // Ofertas SUBMETIDAs ou ACEITAs de um produto específico dentro de uma
-  // chamada. IMPORTANTE: uma proposta de oferta pode reunir vários produtos
-  // em `itens[]` (o cadastro só grava produtoId/produtoNome/quantidadeOfertada
-  // no nível raiz para o PRIMEIRO produto da lista — ver handleSaveOferta).
-  // Por isso é preciso procurar o produto tanto no nível raiz quanto dentro
-  // de `itens[]`; senão o rateio só enxerga o primeiro produto de cada
-  // proposta com múltiplos itens e "perde" os demais.
-  const getOfertasParaProdutoChamada = (
-    chamadaId: string,
-    produtoNome: string,
-    produtoId?: string
-  ): { produtorId: string; produtorNome: string; quantidadeOfertada: number }[] => {
-    const bate = (nome?: string, id?: string) =>
-      (!!produtoId && !!id && id === produtoId) ||
-      (!!nome && !!produtoNome && nome.trim().toLowerCase() === produtoNome.trim().toLowerCase());
-
-    const resolvidas: { produtorId: string; produtorNome: string; quantidadeOfertada: number }[] = [];
-
-    ofertasPAA.forEach(o => {
-      if (o.chamadaPublicaId !== chamadaId || o.status === 'RECUSADA') return;
-
-      if (o.itens && o.itens.length > 0) {
-        // Proposta com um ou mais produtos detalhados em itens[] — procura o
-        // item deste produto especificamente (pode não ser o primeiro).
-        const item = o.itens.find(it => bate(it.produtoNome, it.produtoId));
-        if (item) {
-          resolvidas.push({
-            produtorId: o.produtorId,
-            produtorNome: o.produtorNome,
-            quantidadeOfertada: Number(item.quantidadeOfertada ?? item.quantidadeKg) || 0
-          });
-        }
-        return;
-      }
-
-      // Proposta antiga / de produto único, sem itens[] detalhado.
-      if (bate(o.produtoNome, o.produtoId)) {
-        resolvidas.push({
-          produtorId: o.produtorId,
-          produtorNome: o.produtorNome,
-          quantidadeOfertada: Number(o.quantidadeOfertada ?? o.quantidadeKg) || 0
-        });
-      }
-    });
-
-    return resolvidas;
-  };
-
-  // Distribui `total` entre `pesos` (mesma ordem), proporcionalmente,
-  // arredondando para 2 casas e ajustando a sobra no último item para que a
-  // soma bata exatamente com `total`.
-  const distribuirProporcional = (total: number, pesos: number[]): number[] => {
-    const somaPesos = pesos.reduce((s, p) => s + p, 0);
-    if (somaPesos <= 0 || total <= 0) return pesos.map(() => 0);
-    const valores = pesos.map(p => Math.round((p / somaPesos) * total * 100) / 100);
-    const somaAtual = valores.reduce((s, v) => s + v, 0);
-    const diferenca = Math.round((total - somaAtual) * 100) / 100;
-    if (valores.length > 0) valores[valores.length - 1] = Math.round((valores[valores.length - 1] + diferenca) * 100) / 100;
-    return valores;
-  };
-
-  // Gera automaticamente um rateio sugerido para uma chamada pública: para
-  // cada produto do edital, reparte a quantidade solicitada entre os
-  // produtores que a ofertaram (proporcional à quantidade ofertada por
-  // cada um, sem nunca superar o total do edital) e, dentro de cada
-  // produtor, reparte entre as escolas contempladas (proporcional ao nº de
-  // alunos atendidos; igualmente se não houver essa informação).
-  const gerarRateioAutomatico = (chamada: ChamadaPublica): RateioChamadaPublica => {
-    const escolasEdital = chamada.escolasContempladas && chamada.escolasContempladas.length > 0
-      ? chamada.escolasContempladas
-      : [];
-
-    const itens: RateioProduto[] = (chamada.itensSolicitados || []).map(item => {
-      const ofertas = getOfertasParaProdutoChamada(chamada.id, item.produtoNome, item.produtoId);
-      const pesosProdutores = ofertas.map(o => Number(o.quantidadeOfertada) || 0);
-      const alocacoes = distribuirProporcional(item.quantidadeTotal, pesosProdutores);
-
-      const produtores: RateioProdutor[] = ofertas.map((o, idx) => {
-        const quantidadeAlocada = alocacoes[idx] || 0;
-        const pesosEscolas = escolasEdital.map(e => Number(e.alunosAtendidos) || 1);
-        const qtdsEscolas = distribuirProporcional(quantidadeAlocada, pesosEscolas.length > 0 ? pesosEscolas : [1]);
-        return {
-          produtorId: o.produtorId,
-          produtorNome: o.produtorNome,
-          quantidadeOfertada: Number(o.quantidadeOfertada) || 0,
-          quantidadeAlocada,
-          escolas: escolasEdital.length > 0
-            ? escolasEdital.map((e, eIdx) => ({
-                escolaId: e.id || e.nomeEscola,
-                escolaNome: e.nomeEscola,
-                quantidade: qtdsEscolas[eIdx] || 0
-              }))
-            : []
-        };
-      });
-
-      return {
-        produtoId: item.produtoId,
-        produtoNome: item.produtoNome,
-        unidade: item.unidade,
-        quantidadeTotalChamada: item.quantidadeTotal,
-        precoMaximoUnitario: item.precoMaximoUnitario,
-        produtores
-      };
-    });
-
-    return {
-      id: '',
-      tenantId: '',
-      chamadaPublicaId: chamada.id,
-      chamadaPublicaEdital: chamada.numeroEdital,
-      programaId: chamada.programaId,
-      programaNome: chamada.programaNome,
-      fonteRecursos: chamada.fonteRecurso || chamada.fonteRecursos,
-      itens,
-      dataAtualizacao: ''
-    };
-  };
-
-  const handleSelecionarChamadaRateio = (chamadaId: string) => {
-    setRateioChamadaId(chamadaId);
-    if (!chamadaId) { setRateioEmEdicao(null); return; }
-    const salvo = rateiosChamadas.find(r => r.chamadaPublicaId === chamadaId);
-    const chamada = chamadasPublicas.find(c => c.id === chamadaId);
-    if (salvo) {
-      setRateioEmEdicao(salvo);
-    } else if (chamada) {
-      setRateioEmEdicao(gerarRateioAutomatico(chamada));
-    } else {
-      setRateioEmEdicao(null);
-    }
-  };
-
-  const handleRegerarRateioAutomatico = () => {
-    const chamada = chamadasPublicas.find(c => c.id === rateioChamadaId);
-    if (!chamada) return;
-    if (!confirm('Isso vai substituir os ajustes manuais feitos neste rateio pela sugestão automática. Deseja continuar?')) return;
-    setRateioEmEdicao(gerarRateioAutomatico(chamada));
-  };
-
-  const handleQuantidadeProdutorRateio = (produtoIdx: number, produtorIdx: number, novaQtd: number) => {
-    setRateioEmEdicao(prev => {
-      if (!prev) return prev;
-      const itens = prev.itens.map((item, iIdx) => {
-        if (iIdx !== produtoIdx) return item;
-        const produtores = item.produtores.map((p, pIdx) => {
-          if (pIdx !== produtorIdx) return p;
-          // Redistribui a nova quantidade entre as escolas mantendo as
-          // proporções já usadas (ou igualmente, se ainda não havia rateio).
-          const pesos = p.escolas.length > 0 ? p.escolas.map(e => e.quantidade || 1) : [1];
-          const novasQtdsEscolas = distribuirProporcional(novaQtd, pesos);
-          return {
-            ...p,
-            quantidadeAlocada: novaQtd,
-            escolas: p.escolas.map((e, eIdx) => ({ ...e, quantidade: novasQtdsEscolas[eIdx] || 0 }))
-          };
-        });
-        return { ...item, produtores };
-      });
-      return { ...prev, itens };
-    });
-  };
-
-  const handleQuantidadeEscolaRateio = (produtoIdx: number, produtorIdx: number, escolaIdx: number, novaQtd: number) => {
-    setRateioEmEdicao(prev => {
-      if (!prev) return prev;
-      const itens = prev.itens.map((item, iIdx) => {
-        if (iIdx !== produtoIdx) return item;
-        const produtores = item.produtores.map((p, pIdx) => {
-          if (pIdx !== produtorIdx) return p;
-          const escolas = p.escolas.map((e, eIdx) => eIdx === escolaIdx ? { ...e, quantidade: novaQtd } : e);
-          return { ...p, escolas };
-        });
-        return { ...item, produtores };
-      });
-      return { ...prev, itens };
-    });
-  };
-
-  const handleSalvarRateioAtual = () => {
-    if (!canWrite) { blockWriteAction(); return; }
-    if (!rateioEmEdicao) return;
-    salvarRateioChamada({
-      chamadaPublicaId: rateioEmEdicao.chamadaPublicaId,
-      chamadaPublicaEdital: rateioEmEdicao.chamadaPublicaEdital,
-      programaId: rateioEmEdicao.programaId,
-      programaNome: rateioEmEdicao.programaNome,
-      fonteRecursos: rateioEmEdicao.fonteRecursos,
-      itens: rateioEmEdicao.itens,
-      observacoes: rateioEmEdicao.observacoes
-    });
-    alert('Rateio salvo com sucesso! Ele já pode ser carregado ao registrar o Pedido desta chamada pública.');
-  };
-
-  // Converte o rateio salvo de uma chamada em itens de pedido — um item por
-  // combinação (produtor, escola), já com a quantidade definida no rateio.
-  // É isso que faz o Pedido "nascer" com os dados do rateio.
-  const handleCarregarRateioNoPedido = (chamadaIdOverride?: string, opts?: { silencioso?: boolean }) => {
-    const chamadaAlvoId = chamadaIdOverride || pedidoForm.chamadaPublicaId;
-    const rateio = rateiosChamadas.find(r => r.chamadaPublicaId === chamadaAlvoId);
-    if (!rateio) {
-      if (!opts?.silencioso) alert('Esta chamada pública ainda não tem um rateio salvo. Acesse a aba "Rateio de Produtores" para criá-lo.');
-      return;
-    }
-
-    // O Pedido deve ficar na MESMA fonte de recurso do rateio (herdada da
-    // Chamada Pública). Se o usuário trocou manualmente a fonte no Pedido
-    // depois de selecionar a chamada, avisa antes de prosseguir.
-    if (!opts?.silencioso && rateio.fonteRecursos && pedidoForm.fonteRecursos && rateio.fonteRecursos !== pedidoForm.fonteRecursos) {
-      const prosseguir = confirm(
-        `Atenção: o rateio desta chamada foi feito na fonte de recurso "${rateio.fonteRecursos}", mas o Pedido está com a fonte "${pedidoForm.fonteRecursos}". Deseja ajustar o Pedido para "${rateio.fonteRecursos}" e continuar?`
-      );
-      if (!prosseguir) return;
-      setPedidoForm(prev => ({ ...prev, fonteRecursos: rateio.fonteRecursos! }));
-    } else if (rateio.fonteRecursos) {
-      setPedidoForm(prev => ({ ...prev, fonteRecursos: prev.fonteRecursos || rateio.fonteRecursos! }));
-    }
-
-    const itensFiltrados = pedidoForm.produtoId || pedidoForm.produtoNome
-      ? rateio.itens.filter(it =>
-          (pedidoForm.produtoId && it.produtoId === pedidoForm.produtoId) ||
-          (pedidoForm.produtoNome && it.produtoNome.toLowerCase() === pedidoForm.produtoNome.toLowerCase())
-        )
-      : rateio.itens;
-
-    if (itensFiltrados.length === 0) {
-      if (!opts?.silencioso) {
-        alert(pedidoForm.produtoNome
-          ? `Nenhum item do rateio corresponde ao produto "${pedidoForm.produtoNome}".`
-          : 'Este rateio ainda não tem produtos com produtores rateados. Acesse a aba "Rateio de Produtores" para completá-lo.'
-        );
-      }
-      return;
-    }
-
-    const novosItens: ItemPedidoProdutor[] = [];
-    itensFiltrados.forEach(item => {
-      item.produtores.filter(p => (p.quantidadeAlocada || 0) > 0).forEach(p => {
-        const prodObj = produtores.find(pr => pr.id === p.produtorId);
-        const escolasComQtd = p.escolas.filter(e => (e.quantidade || 0) > 0);
-        const linhasEscola = escolasComQtd.length > 0 ? escolasComQtd : [{ escolaId: '', escolaNome: '', quantidade: p.quantidadeAlocada }];
-        linhasEscola.forEach(e => {
-          novosItens.push({
-            produtorId: p.produtorId,
-            produtorNome: p.produtorNome,
-            produtoId: item.produtoId || '',
-            produtoNome: item.produtoNome,
-            unidadeMedida: item.unidade,
-            quantidadeOfertada: p.quantidadeOfertada,
-            quantidadePedida: e.quantidade,
-            precoUnitario: item.precoMaximoUnitario,
-            valorTotalItem: e.quantidade * item.precoMaximoUnitario,
-            polo: prodObj?.polo || 'Sede',
-            escolaId: e.escolaId,
-            escolaNome: e.escolaNome,
-            localEntrega: e.escolaNome || 'Sede',
-            escolasIds: e.escolaId ? [e.escolaId] : [],
-            escolasNomes: e.escolaNome ? [e.escolaNome] : []
-          });
-        });
-      });
-    });
-
-    setPedidoItens(novosItens);
-    sincronizarEscolasDoPedidoComItens(novosItens);
-    setSelectedProdutoresIds(Array.from(new Set(novosItens.map(it => it.produtorId))));
-
-    const totalProdutores = new Set(novosItens.map(it => it.produtorId)).size;
-    const totalProdutos = new Set(novosItens.map(it => it.produtoId || it.produtoNome)).size;
-    const totalEscolas = new Set(novosItens.map(it => it.escolaId).filter(Boolean)).size;
-    if (!opts?.silencioso) {
-      alert(`Rateio carregado: ${novosItens.length} itens (${totalProdutos} produto(s), ${totalProdutores} produtor(es), ${totalEscolas} escola(s)).`);
-    }
-  };
-
   const handleLoadOfertasToPedido = (prodId?: string) => {
     const ofertasAlvo = prodId 
       ? ofertasDoProgramaSelecionado.filter(o => o.produtorId === prodId)
@@ -2289,10 +1955,69 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
     }
   };
 
+  const handlePreencherPedidoComItensChamada = () => {
+    const chm = chamadasPublicas.find(c => c.id === pedidoForm.chamadaPublicaId);
+    if (!chm || !chm.itensSolicitados || chm.itensSolicitados.length === 0) {
+      alert('Selecione uma Chamada Pública que contenha produtos/gêneros solicitados cadastrados.');
+      return;
+    }
+
+    const novosItens: ItemPedidoProdutor[] = [];
+    const prodIdsAdicionados: string[] = [];
+
+    // Distribuir itens solicitados da Chamada Pública entre produtores cadastrados
+    chm.itensSolicitados.forEach((item, idx) => {
+      // Tenta encontrar produtor que cultiva o produto
+      const matchProds = produtores.filter(p => 
+        p.produtosCultivados?.some(cp => cp.toLowerCase().includes(item.produtoNome.toLowerCase())) ||
+        p.principaisCulturas?.toLowerCase().includes(item.produtoNome.toLowerCase())
+      );
+      const prodSelected = matchProds[0] || produtores[idx % Math.max(1, produtores.length)] || {
+        id: `prod-${idx + 1}`,
+        nome: `Produtor Familiar ${idx + 1}`,
+        polo: 'Sede'
+      };
+
+      const prodPolo = prodSelected.polo || 'Sede';
+      // Sugestão automática por polo — o usuário pode trocar livremente na
+      // coluna "Local de Entrega / Escola" da tabela de itens do pedido.
+      const escMatch = escolasPnae.find(e => poloEquivale(e.polo, prodPolo)) || escolasPnae[0];
+
+      // A quantidade inicial já respeita o saldo ainda disponível da
+      // Chamada Pública para este produto (descontando o que outros
+      // pedidos já reservaram) — nunca sugere mais do que ainda resta.
+      const saldoDisponivel = getSaldoDisponivelChamada(item.produtoId || '', item.produtoNome);
+      const qtdSugerida = saldoDisponivel !== null ? Math.max(0, Math.min(item.quantidadeTotal, saldoDisponivel)) : item.quantidadeTotal;
+
+      novosItens.push({
+        produtorId: prodSelected.id,
+        produtorNome: prodSelected.nome,
+        produtoId: item.produtoId,
+        produtoNome: item.produtoNome,
+        unidadeMedida: item.unidade,
+        quantidadeOfertada: item.quantidadeTotal,
+        quantidadePedida: qtdSugerida,
+        precoUnitario: item.precoMaximoUnitario,
+        valorTotalItem: qtdSugerida * item.precoMaximoUnitario,
+        polo: prodPolo,
+        escolaId: escMatch?.id || '',
+        escolaNome: escMatch?.nomeEscola || '',
+        localEntrega: escMatch?.localDeEntrega || escMatch?.nomeEscola || 'Sede',
+        escolasIds: escMatch ? [escMatch.id] : [],
+        escolasNomes: escMatch ? [escMatch.nomeEscola] : []
+      });
+      prodIdsAdicionados.push(prodSelected.id);
+    });
+
+    setPedidoItens(novosItens);
+    sincronizarEscolasDoPedidoComItens(novosItens);
+    setSelectedProdutoresIds(Array.from(new Set(prodIdsAdicionados)));
+  };
+
   const handleSavePedido = (e: React.FormEvent) => {
     e.preventDefault();
     if (pedidoItens.length === 0) {
-      alert('Atenção: Por favor, selecione a Chamada Pública e clique em "Carregar Rateio desta Chamada" para gerar os itens do pedido.');
+      alert('Atenção: Por favor, selecione os produtores e clique no botão "Carregar Produtos da Proposta de Oferta" para gerar os itens do pedido.');
       return;
     }
     if (!pedidoForm.escolasIds || pedidoForm.escolasIds.length === 0) {
@@ -2558,36 +2283,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
 
         addProgramacaoEntrega(novaEntregaPayload as any);
       });
-    }
-
-    // Encerramento automático da Chamada Pública: se, depois de salvar este
-    // pedido, todos os produtos do edital já estiverem totalmente cobertos
-    // pela soma de todos os pedidos vinculados a ela, a chamada é encerrada
-    // automaticamente e some da lista de chamadas disponíveis para novos
-    // pedidos (o seletor já filtra chamadas com status 'ENCERRADA').
-    if (pedidoForm.chamadaPublicaId) {
-      const chamadaVinculada = chamadasPublicas.find(c => c.id === pedidoForm.chamadaPublicaId);
-      if (chamadaVinculada && chamadaVinculada.status !== 'ENCERRADA' && chamadaVinculada.itensSolicitados && chamadaVinculada.itensSolicitados.length > 0) {
-        const outrosPedidosItens = pedidosProdutorPAA
-          .filter(p => p.chamadaPublicaId === chamadaVinculada.id && p.id !== targetPedidoId)
-          .flatMap(p => p.itens || []);
-        const todosItensAposEsteSalvamento = [...outrosPedidosItens, ...pedidoItens];
-
-        const totalmenteCoberto = chamadaVinculada.itensSolicitados.every(itemEdital => {
-          const totalPedido = todosItensAposEsteSalvamento
-            .filter(it =>
-              (itemEdital.produtoId && it.produtoId === itemEdital.produtoId) ||
-              (!itemEdital.produtoId && it.produtoNome?.toLowerCase() === itemEdital.produtoNome.toLowerCase())
-            )
-            .reduce((sum, it) => sum + (Number(it.quantidadePedida) || 0), 0);
-          return totalPedido >= itemEdital.quantidadeTotal - 0.01; // tolerância de arredondamento
-        });
-
-        if (totalmenteCoberto) {
-          updateChamadaPublica(chamadaVinculada.id, { status: 'ENCERRADA' });
-          alert(`Todos os produtos da Chamada Pública (Edital ${chamadaVinculada.numeroEdital}) já foram totalmente registrados em pedidos. O status dela foi alterado automaticamente para ENCERRADA e ela não aparecerá mais para novos pedidos.`);
-        }
-      }
     }
 
     setShowPedidoModal(false);
@@ -3418,19 +3113,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
       }
     });
 
-    // Valor total de cada item da entrega: não é armazenado diretamente na
-    // programação de entrega, então é calculado a partir do preço unitário
-    // do item correspondente no pedido de origem (mesmo Nº de Pedido +
-    // Produtor + Produto), multiplicado pela quantidade efetivamente entregue.
-    rows = rows.map(r => {
-      const pedidoOrigem = pedidosProdutorPAA.find(p => p.numeroPedido === r.numeroPedido);
-      const itemOrigem = pedidoOrigem?.itens?.find(
-        it => (it.produtorNome || 'Diversos') === r.produtor && (it.produtoNome || 'Diversos') === r.produto
-      );
-      const precoUnitario = itemOrigem?.precoUnitario || 0;
-      return { ...r, valorTotal: precoUnitario * (r.quantidadeEntregue || 0) };
-    });
-
     return rows.filter(r => {
       const matchProdutor = relFilterProdutor === 'TODOS' || r.produtor === relFilterProdutor;
       const matchEscola = relFilterEscola === 'TODOS' || r.escola === relFilterEscola;
@@ -3444,29 +3126,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
 
       return matchProdutor && matchEscola && matchProduto && matchMes && matchAno && matchPrograma && matchChamada && matchPedido && matchSearch;
     });
-  }, [programacoesEntrega, pedidosProdutorPAA, relFilterProdutor, relFilterEscola, relFilterProduto, relFilterMes, relFilterAno, relFilterPrograma, relFilterChamada, relFilterPedidoNum, searchTerm]);
-
-  // Nº do Pedido, Programa e Data exibidos no subtítulo do relatório oficial
-  // (em vez de repetidos em uma coluna por linha da tabela). Quando os
-  // registros filtrados têm mais de um valor distinto, mostra a contagem em
-  // vez de listar tudo, para não estourar o espaço do subtítulo.
-  const relatorioSubtitulo = useMemo(() => {
-    const rows = relatorioSubTab === 'pedidos' ? filteredRelPedidos : filteredRelEntregas;
-    const unicos = (valores: string[]) => Array.from(new Set(valores.filter(Boolean)));
-    const pedidos = unicos(rows.map(r => r.numeroPedido));
-    const programas = unicos(rows.map(r => r.programa));
-    const datas = unicos(rows.map(r => r.data));
-    const formatarData = (d: string) => {
-      if (!d) return '-';
-      const partes = d.includes('-') ? d.split('-').reverse() : d.split('/');
-      return partes.length === 3 ? partes.join('/') : d;
-    };
-    return {
-      pedido: pedidos.length === 0 ? '-' : pedidos.length === 1 ? pedidos[0] : `${pedidos.length} pedidos`,
-      programa: programas.length === 0 ? '-' : programas.length === 1 ? programas[0] : `${programas.length} programas`,
-      data: datas.length === 0 ? '-' : datas.length === 1 ? formatarData(datas[0]) : `${formatarData(datas[0])} a ${formatarData(datas[datas.length - 1])}`
-    };
-  }, [relatorioSubTab, filteredRelPedidos, filteredRelEntregas]);
+  }, [programacoesEntrega, relFilterProdutor, relFilterEscola, relFilterProduto, relFilterMes, relFilterAno, relFilterPrograma, relFilterChamada, relFilterPedidoNum, searchTerm]);
 
   const handleExportRelExcel = () => {
     const dataToExport = relatorioSubTab === 'pedidos' ? filteredRelPedidos : filteredRelEntregas;
@@ -3474,189 +3134,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, relatorioSubTab === 'pedidos' ? 'Relatorio_Pedidos' : 'Relatorio_Entregas');
     XLSX.writeFile(workbook, `SisGepa_${relatorioSubTab === 'pedidos' ? 'Pedidos' : 'Entregas'}_${Date.now()}.xlsx`);
-  };
-
-  const saldoRateioRows = useMemo<SaldoRateioRow[]>(() => {
-    const rows: SaldoRateioRow[] = [];
-    const pedidosAtivos = pedidosProdutorPAA.filter(p => p.status !== 'CANCELADO');
-    const normalizar = (value?: string) => (value || '').trim().toLowerCase();
-    const corresponde = (idA: string | undefined, nomeA: string | undefined, idB: string | undefined, nomeB: string | undefined) =>
-      (!!idA && !!idB && idA === idB) || (!!nomeA && !!nomeB && normalizar(nomeA) === normalizar(nomeB));
-    rateiosChamadas.forEach(rateio => {
-      const chamada = chamadasPublicas.find(c => c.id === rateio.chamadaPublicaId);
-      rateio.itens.forEach(item => item.produtores.forEach(produtor => produtor.escolas.forEach(escola => {
-        const pedido = pedidosAtivos.reduce((total, pedidoAtual) => total + pedidoAtual.itens.reduce((subtotal, pedidoItem) => {
-          if (pedidoAtual.chamadaPublicaId !== rateio.chamadaPublicaId) return subtotal;
-          if (!corresponde(item.produtoId, item.produtoNome, pedidoItem.produtoId, pedidoItem.produtoNome)) return subtotal;
-          if (!corresponde(produtor.produtorId, produtor.produtorNome, pedidoItem.produtorId, pedidoItem.produtorNome)) return subtotal;
-          if (!corresponde(escola.escolaId, escola.escolaNome, pedidoItem.escolaId || pedidoAtual.escolaId, pedidoItem.escolaNome || pedidoAtual.escolaNome)) return subtotal;
-          return subtotal + (Number(pedidoItem.quantidadePedida) || 0);
-        }, 0), 0);
-        const rateado = Number(escola.quantidade) || 0;
-        rows.push({
-          chave: `${rateio.chamadaPublicaId}-${item.produtoId || item.produtoNome}-${produtor.produtorId}-${escola.escolaId}`,
-          chamadaPublicaId: rateio.chamadaPublicaId,
-          edital: rateio.chamadaPublicaEdital || chamada?.numeroEdital || 'Sem edital',
-          programa: rateio.programaNome || chamada?.programaNome || chamada?.programa || '—',
-          fonteRecursos: rateio.fonteRecursos || chamada?.fonteRecurso || chamada?.fonteRecursos || '—',
-          produtoId: item.produtoId,
-          produto: item.produtoNome,
-          unidade: item.unidade || 'KG',
-          produtorId: produtor.produtorId,
-          produtor: produtor.produtorNome,
-          escolaId: escola.escolaId,
-          escola: escola.escolaNome,
-          rateado,
-          pedido,
-          saldo: Math.round((rateado - pedido) * 100) / 100,
-          precoUnitario: Number(item.precoMaximoUnitario) || 0
-        });
-      })));
-    });
-    return rows;
-  }, [rateiosChamadas, chamadasPublicas, pedidosProdutorPAA]);
-
-  const filteredSaldoRows = useMemo(() => saldoRateioRows.filter(row =>
-    (saldoFilterProduto === 'TODOS' || row.produto === saldoFilterProduto) &&
-    (saldoFilterProdutor === 'TODOS' || row.produtor === saldoFilterProdutor) &&
-    (saldoFilterEscola === 'TODOS' || row.escola === saldoFilterEscola) &&
-    (saldoFilterChamada === 'TODOS' || row.chamadaPublicaId === saldoFilterChamada) &&
-    (!saldoApenasPendentes || row.saldo > 0)
-  ), [saldoRateioRows, saldoFilterProduto, saldoFilterProdutor, saldoFilterEscola, saldoFilterChamada, saldoApenasPendentes]);
-
-  const saldoGraficoData = useMemo(() => {
-    const agrupado = new Map<string, { escola: string; produto: string; saldo: number }>();
-    filteredSaldoRows.filter(row => row.saldo > 0).forEach(row => {
-      const chave = `${row.escolaId || row.escola}|${row.produtoId || row.produto}`;
-      const atual = agrupado.get(chave);
-      if (atual) atual.saldo += row.saldo;
-      else agrupado.set(chave, { escola: row.escola, produto: row.produto, saldo: row.saldo });
-    });
-    return Array.from(agrupado.values())
-      .sort((a, b) => b.saldo - a.saldo)
-      .slice(0, 12)
-      .map(item => ({
-        ...item,
-        rotulo: `${item.escola} — ${item.produto}`
-      }));
-  }, [filteredSaldoRows]);
-
-  const handleExportSaldoExcel = () => {
-    const data = filteredSaldoRows.map(row => ({
-      Edital: row.edital, Programa: row.programa, 'Fonte de recurso': row.fonteRecursos,
-      Produto: row.produto, Unidade: row.unidade, Produtor: row.produtor, Escola: row.escola,
-      'Quantidade rateada': row.rateado, 'Quantidade já pedida': row.pedido, 'Saldo a pedir': row.saldo,
-      'Preço unitário': row.precoUnitario, 'Valor do saldo': Number((row.saldo * row.precoUnitario).toFixed(2))
-    }));
-    const worksheet = XLSX.utils.json_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Saldo_a_Pedir');
-    XLSX.writeFile(workbook, `SisGepa_Saldo_a_Pedir_${Date.now()}.xlsx`);
-  };
-
-  const handleExportSaldoPdf = () => {
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-    const linhasAgrupadas = filteredSaldoRows
-      .filter(row => row.saldo > 0)
-      .reduce<Map<string, { escola: string; produto: string; unidade: string; rateado: number; pedido: number; saldo: number; valor: number }>>((acc, row) => {
-        const chave = `${row.escolaId || row.escola}|${row.produtoId || row.produto}|${row.unidade}`;
-        const atual = acc.get(chave);
-        if (atual) {
-          atual.rateado += row.rateado;
-          atual.pedido += row.pedido;
-          atual.saldo += row.saldo;
-          atual.valor += row.saldo * row.precoUnitario;
-        } else {
-          acc.set(chave, { escola: row.escola, produto: row.produto, unidade: row.unidade, rateado: row.rateado, pedido: row.pedido, saldo: row.saldo, valor: row.saldo * row.precoUnitario });
-        }
-        return acc;
-      }, new Map<string, { escola: string; produto: string; unidade: string; rateado: number; pedido: number; saldo: number; valor: number }>());
-    const linhas = (Array.from(linhasAgrupadas.values()) as Array<{ escola: string; produto: string; unidade: string; rateado: number; pedido: number; saldo: number; valor: number }>)
-      .sort((a, b) => a.escola.localeCompare(b.escola) || b.saldo - a.saldo);
-
-    const dataEmissao = new Date().toLocaleString('pt-BR');
-    const margem = 14;
-    const largura = doc.internal.pageSize.getWidth();
-    const novaPagina = (alturaNecessaria = 10) => {
-      if (y + alturaNecessaria > doc.internal.pageSize.getHeight() - 14) {
-        doc.addPage();
-        y = 16;
-        return true;
-      }
-      return false;
-    };
-    let y = 16;
-    doc.setFillColor(6, 78, 59);
-    doc.rect(0, 0, largura, 28, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(16);
-    doc.text('SISGEPA — RELATÓRIO DE SALDO A PEDIR', margem, 12);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Produtos com maior saldo por escola | Emitido em ${dataEmissao}`, margem, 20);
-    y = 38;
-
-    const totalSaldo = linhas.reduce((s, row) => s + row.saldo, 0);
-    const totalValor = linhas.reduce((s, row) => s + row.valor, 0);
-    doc.setTextColor(30, 41, 59);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.text(`Resumo: ${linhas.length} produto(s) com saldo positivo | ${totalSaldo.toFixed(2)} unidades | Valor estimado: R$ ${totalValor.toFixed(2)}`, margem, y);
-    y += 9;
-
-    let escolaAtual = '';
-    linhas.forEach((row, index) => {
-      const altura = escolaAtual !== row.escola ? 20 : 8;
-      novaPagina(altura);
-      if (escolaAtual !== row.escola) {
-        escolaAtual = row.escola;
-        if (index > 0) y += 4;
-        doc.setFillColor(226, 232, 240);
-        doc.roundedRect(margem, y - 5, largura - (margem * 2), 9, 2, 2, 'F');
-        doc.setTextColor(15, 23, 42);
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(11);
-        doc.text(`Escola: ${row.escola}`, margem + 3, y + 1);
-        y += 10;
-        doc.setFontSize(8);
-        doc.setTextColor(71, 85, 105);
-        doc.text('Produto', margem, y);
-        doc.text('Rateado', 145, y, { align: 'right' });
-        doc.text('Já pedido', 180, y, { align: 'right' });
-        doc.text('Saldo a pedir', 220, y, { align: 'right' });
-        doc.text('Valor estimado', 280, y, { align: 'right' });
-        y += 5;
-      }
-      novaPagina(8);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8.5);
-      doc.setTextColor(30, 41, 59);
-      doc.text(`${row.produto} (${row.unidade})`, margem, y);
-      doc.text(row.rateado.toFixed(2), 145, y, { align: 'right' });
-      doc.text(row.pedido.toFixed(2), 180, y, { align: 'right' });
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(180, 83, 9);
-      doc.text(row.saldo.toFixed(2), 220, y, { align: 'right' });
-      doc.text(`R$ ${row.valor.toFixed(2)}`, 280, y, { align: 'right' });
-      y += 6;
-    });
-
-    if (linhas.length === 0) {
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
-      doc.setTextColor(71, 85, 105);
-      doc.text('Não há saldo positivo para os filtros selecionados.', margem, y);
-    }
-    const totalPaginas = doc.getNumberOfPages();
-    for (let pagina = 1; pagina <= totalPaginas; pagina++) {
-      doc.setPage(pagina);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(100, 116, 139);
-      doc.text(`SICOOP • SisGepa | Página ${pagina} de ${totalPaginas}`, largura - margem, doc.internal.pageSize.getHeight() - 7, { align: 'right' });
-    }
-    doc.save(`SisGepa_Relatorio_Saldo_Por_Escola_${Date.now()}.pdf`);
   };
 
   return (
@@ -3829,17 +3306,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
           </span>
         </button>
         <button
-          onClick={() => setActiveTab('rateio')}
-          className={`px-5 py-3 text-sm font-extrabold rounded-2xl flex items-center gap-2.5 transition-all whitespace-nowrap shadow-xs cursor-pointer ${
-            activeTab === 'rateio'
-              ? 'bg-emerald-700 text-white shadow-md ring-2 ring-emerald-600'
-              : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-          }`}
-        >
-          <Scale className={`w-4 h-4 ${activeTab === 'rateio' ? 'text-emerald-200' : 'text-emerald-700'}`} />
-          <span>Rateio de Produtores</span>
-        </button>
-        <button
           onClick={() => setActiveTab('pedidos')}
           className={`px-5 py-3 text-sm font-black rounded-2xl flex items-center gap-2.5 transition-all whitespace-nowrap shadow-xs cursor-pointer relative ${
             activeTab === 'pedidos'
@@ -3857,20 +3323,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
               {pendingPedidosCount}
             </span>
           )}
-        </button>
-        <button
-          onClick={() => setActiveTab('saldos')}
-          className={`px-5 py-3 text-sm font-extrabold rounded-2xl flex items-center gap-2.5 transition-all whitespace-nowrap shadow-xs cursor-pointer ${
-            activeTab === 'saldos'
-              ? 'bg-emerald-700 text-white shadow-md ring-2 ring-emerald-600'
-              : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-          }`}
-        >
-          <Calculator className={`w-4 h-4 ${activeTab === 'saldos' ? 'text-emerald-200' : 'text-emerald-700'}`} />
-          <span>Saldo a Pedir</span>
-          <span className={`px-2 py-0.5 rounded-full text-xs font-black ${activeTab === 'saldos' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'}`}>
-            {saldoRateioRows.filter(r => r.saldo > 0).length}
-          </span>
         </button>
         <button
           onClick={() => setActiveTab('entregas')}
@@ -3998,7 +3450,8 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                         <div className="flex items-center gap-1.5">
                           <span className={`px-2 py-0.5 font-black rounded text-[10px] ${
                             cp.status === 'ABERTA' ? 'bg-emerald-100 text-emerald-800' :
-                            cp.status === 'EM_EXECUCAO' ? 'bg-blue-100 text-blue-800' :
+                            cp.status === 'HOMOLOGADA' ? 'bg-blue-100 text-blue-800' :
+                            cp.status === 'EM_ANALISE' ? 'bg-amber-100 text-amber-800' :
                             'bg-slate-100 text-slate-700'
                           }`}>
                             {cp.status}
@@ -4138,7 +3591,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                           <span>Ver Detalhes</span>
                         </button>
 
-                        {cp.status !== 'ENCERRADA' && (
                         <button
                           type="button"
                           onClick={() => {
@@ -4159,13 +3611,10 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                               escolaId: escIds[0] || prev.escolaId,
                               escolaNome: escNomes.join(', ') || prev.escolaNome
                             }));
-                            // Pré-popula com o rateio já salvo desta chamada (produtor
-                            // + escola + quantidade). Sem rateio salvo, o pedido abre
-                            // vazio — o rateio precisa ser feito antes na aba "Rateio
-                            // de Produtores".
-                            if (rateiosChamadas.some(r => r.chamadaPublicaId === cp.id)) {
+                            // Se tiver itens, pré-popula
+                            if (cp.itensSolicitados && cp.itensSolicitados.length > 0) {
                               setTimeout(() => {
-                                handleCarregarRateioNoPedido(cp.id, { silencioso: true });
+                                handlePreencherPedidoComItensChamada();
                               }, 100);
                             }
                           }}
@@ -4174,7 +3623,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                           <ShoppingBag className="w-3.5 h-3.5" />
                           <span>Gerar Pedido Vinculado</span>
                         </button>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -4195,6 +3643,8 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                   <th className="p-3">Produtor Vinc.</th>
                   <th className="p-3">Produto Vinc.</th>
                   <th className="p-3">Programa / Chamada Pública</th>
+                  <th className="p-3">Qtd. Ofertada</th>
+                  <th className="p-3">Preço Unit.</th>
                   <th className="p-3">Valor Total</th>
                   <th className="p-3">Status</th>
                   <th className="p-3 text-right">Ações</th>
@@ -4203,7 +3653,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
               <tbody className="divide-y divide-slate-100">
                 {filteredOfertas.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-slate-400">
+                    <td colSpan={8} className="p-8 text-center text-slate-400">
                       Nenhuma proposta de oferta registrada ou compatível com os filtros.
                     </td>
                   </tr>
@@ -4235,24 +3685,18 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                         <div className="font-semibold text-slate-900">{o.programaNome || 'PAA/PNAE'}</div>
                         <div className="text-[10px] text-slate-500">{o.chamadaPublicaEdital || o.chamadaPublicaId || 'Edital Geral'}</div>
                       </td>
+                      <td className="p-3 text-slate-800 font-bold">
+                        {o.itens && o.itens.length > 0
+                          ? `${o.itens.reduce((s, i) => s + (i.quantidadeKg || 0), 0)} kg (${o.itens.length} prod.)`
+                          : `${o.quantidadeKg || o.quantidadeOfertada} kg`
+                        }
+                      </td>
+                      <td className="p-3 text-slate-600 font-medium">R$ {(o.precoUnitario || o.valorUnitario || 0).toFixed(2)}</td>
                       <td className="p-3 font-extrabold text-emerald-700">R$ {(o.valorTotal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                       <td className="p-3">
-                        <select
-                          value={o.status}
-                          onChange={e => {
-                            if (!canWrite) { blockWriteAction(); return; }
-                            updateOfertaPAA(o.id, { status: e.target.value as PropostaOfertaPAA['status'] });
-                          }}
-                          className={`px-2 py-1 rounded-md font-bold text-[10px] border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
-                            o.status === 'ACEITA' ? 'bg-emerald-100 text-emerald-800'
-                            : o.status === 'RECUSADA' ? 'bg-rose-100 text-rose-800'
-                            : 'bg-amber-100 text-amber-800'
-                          }`}
-                        >
-                          <option value="SUBMETIDA">SUBMETIDA</option>
-                          <option value="ACEITA">ACEITA</option>
-                          <option value="RECUSADA">RECUSADA</option>
-                        </select>
+                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-md font-bold text-[10px]">
+                          {o.status}
+                        </span>
                       </td>
                       <td className="p-3 text-right">
                         <div className="flex items-center justify-end gap-1">
@@ -4279,202 +3723,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
               </tbody>
             </table>
           </div>
-        </div>
-      )}
-
-      {/* Tab Rateio de Produtores */}
-      {activeTab === 'rateio' && (
-        <div className="space-y-4">
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-3">
-            <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-              <Scale className="w-5 h-5 text-emerald-700" />
-              Rateio das Quantidades por Produtor e Escola
-            </h3>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              Toda Chamada Pública nova precisa de um rateio antes de gerar os Pedidos: escolha o edital para dividir a quantidade de cada produto entre os produtores que o ofertaram e, dentro de cada produtor, entre as escolas contempladas. O rateio salvo aqui pode ser carregado diretamente ao registrar o Pedido daquela chamada.
-            </p>
-
-            {/* Chamadas ainda sem rateio — chamada de atenção para o fluxo
-                "sempre que inserir uma chamada, é preciso ratear". */}
-            {(() => {
-              const chamadasSemRateio = chamadasPublicas.filter(cp =>
-                (cp.itensSolicitados || []).length > 0 &&
-                !rateiosChamadas.some(r => r.chamadaPublicaId === cp.id)
-              );
-              if (chamadasSemRateio.length === 0) return null;
-              return (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 space-y-2">
-                  <p className="text-[11px] font-bold text-amber-800 flex items-center gap-1.5">
-                    <AlertTriangle className="w-3.5 h-3.5" /> {chamadasSemRateio.length} chamada(s) pública(s) ainda sem rateio:
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {chamadasSemRateio.map(cp => (
-                      <button
-                        key={cp.id}
-                        type="button"
-                        onClick={() => handleSelecionarChamadaRateio(cp.id)}
-                        className="px-3 py-1.5 bg-white hover:bg-amber-100 border border-amber-300 text-amber-900 rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
-                      >
-                        <Plus className="w-3 h-3" /> Novo Rateio: Edital {cp.numeroEdital}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
-
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-              <select
-                value={rateioChamadaId}
-                onChange={e => handleSelecionarChamadaRateio(e.target.value)}
-                className="flex-1 p-2.5 bg-white border border-slate-200 rounded-xl font-bold text-emerald-800 text-xs"
-              >
-                <option value="">Selecione a Chamada Pública / Edital...</option>
-                {chamadasPublicas.map(cp => {
-                  const temRateio = rateiosChamadas.some(r => r.chamadaPublicaId === cp.id);
-                  return (
-                    <option key={cp.id} value={cp.id}>
-                      {temRateio ? '✓' : '○'} Edital {cp.numeroEdital} - {cp.orgaoComprador} {cp.status === 'ENCERRADA' ? '[ENCERRADA]' : ''} {!temRateio ? '(sem rateio ainda)' : ''}
-                    </option>
-                  );
-                })}
-              </select>
-              {rateioEmEdicao && (
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => handleSelecionarChamadaRateio('')}
-                    className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer border border-slate-200"
-                    title="Fechar este rateio e escolher outra chamada"
-                  >
-                    <X className="w-3.5 h-3.5" /> Fechar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleRegerarRateioAutomatico}
-                    className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer border border-slate-200"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" /> Sugerir Automaticamente
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSalvarRateioAtual}
-                    className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
-                  >
-                    <Save className="w-3.5 h-3.5" /> Salvar Rateio
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {rateioEmEdicao && (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[11px] text-slate-500">
-              <span>Edital: <strong className="text-slate-700">{rateioEmEdicao.chamadaPublicaEdital}</strong></span>
-              {rateioEmEdicao.programaNome && <span>Programa: <strong className="text-slate-700">{rateioEmEdicao.programaNome}</strong></span>}
-              {rateioEmEdicao.fonteRecursos && <span>Fonte de Recurso: <strong className="text-emerald-700">{rateioEmEdicao.fonteRecursos}</strong></span>}
-            </div>
-          )}
-
-          {!rateioEmEdicao ? (
-            <div className="p-10 bg-white rounded-2xl border border-slate-200 text-center text-slate-500 text-xs font-medium">
-              Selecione uma Chamada Pública acima para montar o rateio.
-            </div>
-          ) : rateioEmEdicao.itens.length === 0 ? (
-            <div className="p-10 bg-white rounded-2xl border border-slate-200 text-center text-slate-500 text-xs font-medium">
-              Esta chamada pública não tem produtos cadastrados no edital. Cadastre os itens solicitados na aba "Chamadas Públicas" antes de ratear.
-            </div>
-          ) : (
-            rateioEmEdicao.itens.map((item, produtoIdx) => {
-              const totalAlocado = item.produtores.reduce((s, p) => s + (p.quantidadeAlocada || 0), 0);
-              const diffTotal = Math.round((item.quantidadeTotalChamada - totalAlocado) * 100) / 100;
-              return (
-                <div key={produtoIdx} className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-                  <div className="p-4 bg-emerald-950 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div>
-                      <h4 className="font-black text-sm flex items-center gap-2">
-                        <Sprout className="w-4 h-4 text-emerald-300" /> {item.produtoNome}
-                      </h4>
-                      <p className="text-[11px] text-emerald-200 font-mono mt-0.5">
-                        Edital: {item.quantidadeTotalChamada} {item.unidade} a R$ {item.precoMaximoUnitario.toFixed(2)}/{item.unidade}
-                      </p>
-                    </div>
-                    <span className={`px-2.5 py-1 rounded-full text-[11px] font-black shrink-0 ${
-                      diffTotal === 0 ? 'bg-emerald-500/30 text-emerald-200 border border-emerald-400/50'
-                      : diffTotal > 0 ? 'bg-amber-500/20 text-amber-200 border border-amber-400/50'
-                      : 'bg-rose-500/20 text-rose-200 border border-rose-400/50'
-                    }`}>
-                      {diffTotal === 0 ? 'Rateio completo ✓' : diffTotal > 0 ? `Faltam ${diffTotal} ${item.unidade}` : `Excede em ${Math.abs(diffTotal)} ${item.unidade}`}
-                    </span>
-                  </div>
-
-                  {item.produtores.length === 0 ? (
-                    <div className="p-5 text-xs text-slate-500 italic">
-                      Nenhum produtor ofertou este produto para esta chamada ainda. Cadastre propostas de oferta na aba "Propostas de Oferta".
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-slate-100">
-                      {item.produtores.map((p, produtorIdx) => {
-                        const somaEscolas = p.escolas.reduce((s, e) => s + (e.quantidade || 0), 0);
-                        const diffEscolas = Math.round((p.quantidadeAlocada - somaEscolas) * 100) / 100;
-                        return (
-                          <div key={produtorIdx} className="p-4 space-y-2.5">
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <Users className="w-4 h-4 text-emerald-700 shrink-0" />
-                                <span className="font-bold text-slate-900 text-xs truncate">{p.produtorNome}</span>
-                                <span className="text-[10px] text-slate-400 font-mono shrink-0">(ofertou {p.quantidadeOfertada} {item.unidade})</span>
-                              </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <label className="text-[11px] font-bold text-slate-500">Quantidade alocada:</label>
-                                <input
-                                  type="number"
-                                  min={0}
-                                  step="0.01"
-                                  value={p.quantidadeAlocada}
-                                  onChange={e => handleQuantidadeProdutorRateio(produtoIdx, produtorIdx, Number(e.target.value) || 0)}
-                                  className="w-32 p-1.5 border border-slate-200 rounded-lg text-xs font-mono font-bold text-emerald-800 text-right"
-                                />
-                                <span className="text-[11px] text-slate-500">{item.unidade}</span>
-                              </div>
-                            </div>
-
-                            {p.escolas.length > 0 && (
-                              <div className="pl-6 space-y-1">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                                    <GraduationCap className="w-3 h-3" /> Rateio entre as escolas do edital
-                                  </span>
-                                  <span className={`text-[10px] font-bold ${diffEscolas === 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
-                                    {diffEscolas === 0 ? 'Confere com o total do produtor ✓' : `Diferença de ${diffEscolas} ${item.unidade} em relação ao alocado`}
-                                  </span>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                  {p.escolas.map((esc, escolaIdx) => (
-                                    <div key={escolaIdx} className="flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
-                                      <span className="text-[11px] text-slate-700 truncate">{esc.escolaNome}</span>
-                                      <input
-                                        type="number"
-                                        min={0}
-                                        step="0.01"
-                                        value={esc.quantidade}
-                                        onChange={e => handleQuantidadeEscolaRateio(produtoIdx, produtorIdx, escolaIdx, Number(e.target.value) || 0)}
-                                        className="w-28 p-1.5 border border-slate-200 rounded text-xs font-mono font-bold text-emerald-800 text-right shrink-0"
-                                      />
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          )}
         </div>
       )}
 
@@ -4689,49 +3937,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                 )}
               </tbody>
             </table>
-          </div>
-        </div>
-      )}
-
-      {/* Tab Saldo a Pedir */}
-      {activeTab === 'saldos' && (
-        <div className="space-y-4">
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-              <div>
-                <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2"><Calculator className="w-5 h-5 text-emerald-700" /> Saldo de Produtos a Pedir</h3>
-                <p className="text-xs text-slate-500 mt-1">Conferência do rateio contra os pedidos já registrados, detalhada por produto, produtor e escola.</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={handleExportSaldoPdf} className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center gap-1.5"><Printer className="w-4 h-4 text-emerald-400" /> Relatório PDF</button>
-                <button type="button" onClick={handleExportSaldoExcel} className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5"><FileSpreadsheet className="w-4 h-4" /> Exportar Excel</button>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 text-xs">
-              <select value={saldoFilterChamada} onChange={e => setSaldoFilterChamada(e.target.value)} className="p-2 bg-slate-50 border border-slate-200 rounded-xl font-medium"><option value="TODOS">Todos os editais</option>{rateiosChamadas.map(r => <option key={r.chamadaPublicaId} value={r.chamadaPublicaId}>{r.chamadaPublicaEdital}</option>)}</select>
-              <select value={saldoFilterProduto} onChange={e => setSaldoFilterProduto(e.target.value)} className="p-2 bg-slate-50 border border-slate-200 rounded-xl font-medium"><option value="TODOS">Todos os produtos</option>{Array.from(new Set(saldoRateioRows.map(r => r.produto))).sort().map(p => <option key={p} value={p}>{p}</option>)}</select>
-              <select value={saldoFilterProdutor} onChange={e => setSaldoFilterProdutor(e.target.value)} className="p-2 bg-slate-50 border border-slate-200 rounded-xl font-medium"><option value="TODOS">Todos os produtores</option>{Array.from(new Set(saldoRateioRows.map(r => r.produtor))).sort().map(p => <option key={p} value={p}>{p}</option>)}</select>
-              <select value={saldoFilterEscola} onChange={e => setSaldoFilterEscola(e.target.value)} className="p-2 bg-slate-50 border border-slate-200 rounded-xl font-medium"><option value="TODOS">Todas as escolas</option>{Array.from(new Set(saldoRateioRows.map(r => r.escola))).sort().map(e => <option key={e} value={e}>{e}</option>)}</select>
-              <label className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl font-bold text-amber-900"><input type="checkbox" checked={saldoApenasPendentes} onChange={e => setSaldoApenasPendentes(e.target.checked)} className="accent-emerald-700" /> Mostrar somente saldo positivo</label>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="bg-white border border-slate-200 rounded-2xl p-4"><p className="text-[10px] uppercase font-black text-slate-500">Linhas exibidas</p><p className="text-2xl font-black text-slate-900 mt-1">{filteredSaldoRows.length}</p></div>
-            <div className="bg-white border border-emerald-200 rounded-2xl p-4"><p className="text-[10px] uppercase font-black text-emerald-700">Total rateado</p><p className="text-2xl font-black text-emerald-800 mt-1">{filteredSaldoRows.reduce((s, r) => s + r.rateado, 0).toFixed(2)} <span className="text-xs">un.</span></p></div>
-            <div className="bg-white border border-amber-200 rounded-2xl p-4"><p className="text-[10px] uppercase font-black text-amber-700">Saldo a pedir</p><p className="text-2xl font-black text-amber-800 mt-1">{filteredSaldoRows.reduce((s, r) => s + Math.max(r.saldo, 0), 0).toFixed(2)} <span className="text-xs">un.</span></p></div>
-          </div>
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs">
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <div>
-                <h3 className="text-sm font-extrabold text-slate-900">Maiores saldos a pedir por escola</h3>
-                <p className="text-[11px] text-slate-500">Top 12 combinações de escola e produto, conforme os filtros selecionados.</p>
-              </div>
-              <span className="text-[10px] font-black uppercase tracking-wide text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1">Unidades</span>
-            </div>
-            {saldoGraficoData.length === 0 ? <div className="h-24 flex items-center justify-center text-xs text-slate-500">Nenhum saldo positivo para exibir no gráfico.</div> : <ResponsiveContainer width="100%" height={Math.max(260, saldoGraficoData.length * 34)}><BarChart data={saldoGraficoData} layout="vertical" margin={{ top: 4, right: 24, left: 12, bottom: 4 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" /><XAxis type="number" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} /><YAxis type="category" dataKey="rotulo" width={230} tick={{ fontSize: 10, fill: '#334155' }} axisLine={false} tickLine={false} /><Tooltip formatter={(value: number) => [`${Number(value).toFixed(2)} un.`, 'Saldo a pedir']} contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 11 }} /><Bar dataKey="saldo" name="Saldo a pedir" fill="#d97706" radius={[0, 6, 6, 0]} barSize={18} /></BarChart></ResponsiveContainer>}
-          </div>
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-x-auto">
-            {filteredSaldoRows.length === 0 ? <div className="p-12 text-center text-slate-500 text-xs font-medium">Nenhum rateio salvo encontrado para os filtros selecionados.</div> : <table className="w-full text-left text-xs min-w-[1050px]"><thead className="bg-slate-900 text-white"><tr><th className="p-3">Edital / Programa</th><th className="p-3">Produto</th><th className="p-3">Produtor</th><th className="p-3">Escola</th><th className="p-3 text-right">Rateado</th><th className="p-3 text-right">Já pedido</th><th className="p-3 text-right">Saldo a pedir</th><th className="p-3 text-right">Valor saldo</th></tr></thead><tbody className="divide-y divide-slate-100">{filteredSaldoRows.map(row => <tr key={row.chave} className="hover:bg-slate-50"><td className="p-3"><div className="font-bold text-slate-900">{row.edital}</div><div className="text-[10px] text-slate-500">{row.programa} · {row.fonteRecursos}</div></td><td className="p-3 font-bold text-slate-800">{row.produto}<div className="text-[10px] text-slate-400">{row.unidade} · R$ {row.precoUnitario.toFixed(2)}</div></td><td className="p-3 text-slate-700">{row.produtor}</td><td className="p-3 text-slate-700">{row.escola}</td><td className="p-3 text-right font-mono">{row.rateado.toFixed(2)}</td><td className="p-3 text-right font-mono">{row.pedido.toFixed(2)}</td><td className={`p-3 text-right font-mono font-black ${row.saldo > 0 ? 'text-amber-700' : row.saldo < 0 ? 'text-rose-700' : 'text-emerald-700'}`}>{row.saldo.toFixed(2)}</td><td className="p-3 text-right font-mono font-bold">R$ {(Math.max(row.saldo, 0) * row.precoUnitario).toFixed(2)}</td></tr>)}</tbody></table>}
           </div>
         </div>
       )}
@@ -5183,16 +4388,8 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
           </div>
 
           {/* Table display */}
-          {/* IMPORTANT: a key baseada em relatorioSubTab força o React a
-              desmontar completamente a tabela anterior e montar uma nova do
-              zero ao trocar de aba. Sem isso, como as duas tabelas (Pedidos
-              e Entregas) têm exatamente a mesma árvore de elementos HTML
-              (div > div > table > thead > tbody), o React reconciliava-as
-              como uma única atualização — reaproveitando <tr>/<td> antigos
-              por posição — o que podia fazer colunas de uma aba "vazarem"
-              visualmente para a estrutura da outra durante a troca. */}
           {relatorioSubTab === 'pedidos' ? (
-            <div key="tabela-pedidos" className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
               <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                 <span className="text-xs font-bold text-slate-700">
                   Exibindo <strong className="text-emerald-700">{filteredRelPedidos.length}</strong> registro(s) de Pedidos
@@ -5246,7 +4443,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
               </div>
             </div>
           ) : (
-            <div key="tabela-entregas" className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
               <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                 <span className="text-xs font-bold text-slate-700">
                   Exibindo <strong className="text-emerald-700">{filteredRelEntregas.length}</strong> registro(s) de Entregas
@@ -5339,9 +4536,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                 <h4 className="text-sm font-bold text-emerald-800 uppercase pt-1">
                   Relatório Oficial de {relatorioSubTab === 'pedidos' ? 'Pedidos aos Produtores' : 'Programação de Entregas'}
                 </h4>
-                <p className="text-[11px] text-slate-600 font-semibold">
-                  Nº do Pedido: {relatorioSubtitulo.pedido} • Programa: {relatorioSubtitulo.programa} • Data: {relatorioSubtitulo.data}
-                </p>
                 <p className="text-[10px] text-slate-400">Emitido em: {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR')}</p>
               </div>
 
@@ -5358,50 +4552,60 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
               </div>
 
               {/* Table in Print Preview */}
-              {/* key força remontagem completa ao trocar de aba, pelo mesmo
-                  motivo explicado na tabela da listagem acima. */}
               {relatorioSubTab === 'pedidos' ? (
-                <table key="print-tabela-pedidos" className="w-full text-left border-collapse text-[11px]">
+                <table className="w-full text-left border-collapse text-[11px]">
                   <thead>
                     <tr className="bg-slate-200 text-slate-800 font-black border-b border-slate-300">
-                      <th className="p-2">Produtor</th>
-                      <th className="p-2">Produto</th>
+                      <th className="p-2">Nº Pedido</th>
+                      <th className="p-2">Programa</th>
                       <th className="p-2">Escola Destino</th>
-                      <th className="p-2 text-right">Quantidade</th>
+                      <th className="p-2">Produtor Rural</th>
+                      <th className="p-2">Produto</th>
+                      <th className="p-2 text-right">Qtd</th>
                       <th className="p-2 text-right">Valor Total</th>
+                      <th className="p-2">Data</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
                     {filteredRelPedidos.map(row => (
                       <tr key={row.id}>
+                        <td className="p-2 font-mono font-bold">{row.numeroPedido}</td>
+                        <td className="p-2">{row.programa}</td>
+                        <td className="p-2">{row.escola}</td>
                         <td className="p-2 font-bold">{row.produtor}</td>
                         <td className="p-2">{row.produto}</td>
-                        <td className="p-2">{row.escola}</td>
                         <td className="p-2 text-right font-mono">{row.quantidade} {row.unidade}</td>
                         <td className="p-2 text-right font-mono font-bold">R$ {row.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                        <td className="p-2">{row.data}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               ) : (
-                <table key="print-tabela-entregas" className="w-full text-left border-collapse text-[11px]">
+                <table className="w-full text-left border-collapse text-[11px]">
                   <thead>
                     <tr className="bg-slate-200 text-slate-800 font-black border-b border-slate-300">
-                      <th className="p-2">Produtor</th>
-                      <th className="p-2">Produto</th>
+                      <th className="p-2">Nº Pedido</th>
+                      <th className="p-2">Programa</th>
                       <th className="p-2">Escola Destino</th>
-                      <th className="p-2 text-right">Quantidade</th>
-                      <th className="p-2 text-right">Valor Total</th>
+                      <th className="p-2">Produtor Rural</th>
+                      <th className="p-2">Produto</th>
+                      <th className="p-2 text-right">Qtd Entregue</th>
+                      <th className="p-2">Motorista</th>
+                      <th className="p-2">Data Prevista</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
                     {filteredRelEntregas.map(row => (
                       <tr key={row.id}>
+                        <td className="p-2 font-mono font-bold">{row.numeroPedido}</td>
+                        <td className="p-2">{row.programa}</td>
+                        <td className="p-2">{row.escola}</td>
                         <td className="p-2 font-bold">{row.produtor}</td>
                         <td className="p-2">{row.produto}</td>
-                        <td className="p-2">{row.escola}</td>
                         <td className="p-2 text-right font-mono font-bold">{row.quantidadeEntregue} {row.unidade}</td>
-                        <td className="p-2 text-right font-mono font-bold">R$ {row.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                        <td className="p-2">{row.motorista}</td>
+                        <td className="p-2">{row.data}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -5566,7 +4770,8 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                     className="w-full p-2.5 bg-white border border-slate-200 rounded-xl font-bold"
                   >
                     <option value="ABERTA">ABERTA</option>
-                    <option value="EM_EXECUCAO">EM EXECUÇÃO</option>
+                    <option value="EM_ANALISE">EM ANÁLISE</option>
+                    <option value="HOMOLOGADA">HOMOLOGADA</option>
                     <option value="ENCERRADA">ENCERRADA</option>
                   </select>
                 </div>
@@ -6134,16 +5339,12 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                       className="w-full p-2.5 bg-white border-2 border-emerald-400 rounded-xl font-black text-emerald-950 shadow-xs"
                     >
                       <option value="">Selecione a Chamada Pública / Edital...</option>
-                      {chamadasPublicas
-                        .filter(cp => cp.status !== 'ENCERRADA' || cp.id === pedidoForm.chamadaPublicaId)
-                        .map(cp => (
+                      {chamadasPublicas.map(cp => (
                         <option key={cp.id} value={cp.id}>
                           Edital {cp.numeroEdital} - {cp.orgaoComprador} ({cp.programaNome || cp.programa} | R$ {(cp.valorTotalEdital || 0).toLocaleString('pt-BR')})
-                          {cp.status === 'ENCERRADA' ? ' [ENCERRADA]' : ''}
                         </option>
                       ))}
                     </select>
-                    <p className="text-[10px] text-slate-400 mt-1">Somente chamadas públicas ainda não encerradas ficam disponíveis para novos pedidos.</p>
                   </div>
 
                   <div>
@@ -6250,6 +5451,20 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                             Fonte: <strong>{chm.fonteRecurso || chm.fonteRecursos || pedidoForm.fonteRecursos}</strong> • Valor Edital: <strong>R$ {(chm.valorTotalEdital || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
                           </p>
                         </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          {chm.itensSolicitados && chm.itensSolicitados.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={handlePreencherPedidoComItensChamada}
+                              className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-black rounded-xl text-xs transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                              title="Preencher os itens do pedido com todos os gêneros da Chamada Pública"
+                            >
+                              <Sparkles className="w-4 h-4 text-emerald-950" />
+                              <span>⚡ Preencher com Itens do Edital ({totalItensChm})</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       {/* Resumo de Escolas e Produtos do Edital */}
@@ -6292,30 +5507,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                   );
                 })()}
 
-                {/* Carregar Rateio salvo da Chamada — preenche o pedido já com as
-                    quantidades definidas por produtor e por escola na aba "Rateio de Produtores". */}
-                {pedidoForm.chamadaPublicaId && rateiosChamadas.some(r => r.chamadaPublicaId === pedidoForm.chamadaPublicaId) && (
-                  <div className="bg-emerald-900 p-3.5 rounded-xl border border-emerald-700 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                    <span className="font-extrabold text-white text-xs flex items-center gap-1.5">
-                      <Scale className="w-4 h-4 text-emerald-300 shrink-0" />
-                      Esta chamada pública já tem um rateio salvo entre produtores e escolas.
-                      {pedidoForm.produtoNome && (
-                        <span className="text-emerald-300 font-normal">— filtrando por "{pedidoForm.produtoNome}"</span>
-                      )}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleCarregarRateioNoPedido()}
-                      className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-emerald-950 rounded-lg font-black text-[11px] shadow-sm transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
-                      title={pedidoForm.produtoNome
-                        ? `Preencher os itens do pedido com os dados do rateio somente para "${pedidoForm.produtoNome}" (produtor + escola + quantidade)`
-                        : 'Preencher os itens do pedido com os dados do rateio de TODOS os produtos (produtor + escola + quantidade). Selecione um produto acima para filtrar.'}
-                    >
-                      <PackageCheck className="w-3.5 h-3.5" /> Carregar Rateio {pedidoForm.produtoNome ? 'deste Produto' : 'desta Chamada'}
-                    </button>
-                  </div>
-                )}
-
                 {/* Proposta de Oferta / Inclusão Rápida no Pedido Vinculada ao Programa e Produto */}
                 <div className="bg-emerald-50/90 p-3.5 rounded-xl border border-emerald-300 space-y-2.5 shadow-xs">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -6327,6 +5518,16 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                         <>Carregar Produtos da Proposta de Oferta do Programa ({pedidoForm.programaNome || pedidoForm.programa}):</>
                       )}
                     </span>
+                    {ofertasDoProdutoSelecionado.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => handleLoadOfertasToPedido()}
+                        className="px-3 py-1.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-lg font-extrabold text-[11px] shadow-sm transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
+                        title={pedidoForm.produtoNome ? `Carregar todas as ofertas de ${pedidoForm.produtoNome}` : "Carregar todos os produtos e produtores com oferta para este programa"}
+                      >
+                        <PackageCheck className="w-3.5 h-3.5" /> Carregar Todas as Ofertas {pedidoForm.produtoNome ? `deste Produto (${ofertasDoProdutoSelecionado.length})` : `do Programa (${ofertasDoProgramaSelecionado.length})`}
+                      </button>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-1 bg-white/70 rounded-lg border border-emerald-200">
                     {ofertasDoProdutoSelecionado.length === 0 ? (
@@ -6503,16 +5704,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                             const prodObj = produtores.find(p => p.id === it.produtorId);
                             const prodPolo = prodObj?.polo || it.polo || 'Sede';
                             const escolasFiltradas = escolasPnae.filter(e => !e.polo || poloEquivale(e.polo, prodPolo));
-                            // O rateio pode atribuir uma escola de outro polo a este
-                            // produtor (é uma decisão explícita do rateio, não do
-                            // cadastro do produtor) — garante que ela sempre apareça
-                            // no seletor mesmo fora do filtro por polo, senão o campo
-                            // fica "vazio" mesmo com a escola corretamente vinculada.
-                            const escolaJaAtribuida = it.escolaId ? escolasPnae.find(e => e.id === it.escolaId) : undefined;
-                            const listaEscolasBase = escolasFiltradas.length > 0 ? escolasFiltradas : escolasPnae;
-                            const listaEscolas = escolaJaAtribuida && !listaEscolasBase.some(e => e.id === escolaJaAtribuida.id)
-                              ? [escolaJaAtribuida, ...listaEscolasBase]
-                              : listaEscolasBase;
+                            const listaEscolas = escolasFiltradas.length > 0 ? escolasFiltradas : escolasPnae;
                             const listaProdutoresOpcoes = produtoresComOfertaDoProduto.length > 0 ? produtoresComOfertaDoProduto : produtores;
 
                             return (

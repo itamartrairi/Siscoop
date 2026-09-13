@@ -13,7 +13,6 @@ import {
   Activity,
   Gift,
   Search,
-  Truck,
   PackageCheck
 } from 'lucide-react';
 import jsPDF from 'jspdf';
@@ -303,7 +302,7 @@ export const RelatoriosView: React.FC = () => {
       </div>
 
       {/* Report Types Selector Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-9 gap-2.5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5">
         {[
           { id: 'COOPERADOS', label: 'Cooperados', icon: Users, color: 'text-emerald-500' },
           { id: 'CAPITAL', label: 'Capital Social', icon: Wallet, color: 'text-blue-500' },
@@ -313,7 +312,6 @@ export const RelatoriosView: React.FC = () => {
           { id: 'MANDATOS', label: 'Diretoria', icon: Award, color: 'text-amber-600' },
           { id: 'ANIVERSARIANTES', label: 'Aniversariantes', icon: Gift, color: 'text-pink-500' },
           { id: 'AUDITORIA', label: 'Auditoria', icon: Activity, color: 'text-rose-500' },
-          { id: 'PEDIDOS_ENTREGAS', label: 'Pedidos e Entregas', icon: Truck, color: 'text-teal-600' },
         ].map(item => {
           const Icon = item.icon;
           const isSelected = selectedReportType === item.id;
