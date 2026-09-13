@@ -4389,7 +4389,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
 
           {/* Table display */}
           {relatorioSubTab === 'pedidos' ? (
-            <div key="tabela-pedidos" className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
               <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                 <span className="text-xs font-bold text-slate-700">
                   Exibindo <strong className="text-emerald-700">{filteredRelPedidos.length}</strong> registro(s) de Pedidos
@@ -4443,7 +4443,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
               </div>
             </div>
           ) : (
-            <div key="tabela-entregas" className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
               <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                 <span className="text-xs font-bold text-slate-700">
                   Exibindo <strong className="text-emerald-700">{filteredRelEntregas.length}</strong> registro(s) de Entregas
@@ -4551,110 +4551,65 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                 <div><strong>Pedido:</strong> {relFilterPedidoNum}</div>
               </div>
 
-              {/* Table in Print Preview — agrupado por Pedido, com Nº Pedido /
-                  Programa / Data no subtítulo de cada grupo (não mais como
-                  colunas da tabela). */}
+              {/* Table in Print Preview */}
               {relatorioSubTab === 'pedidos' ? (
-                <React.Fragment key="print-pedidos">
-                {(() => {
-                  type GrupoPedido = { numeroPedido: string; programa: string; data: string; itens: typeof filteredRelPedidos };
-                  const grupos = filteredRelPedidos.reduce((acc, row) => {
-                    const key = row.numeroPedido || 'SEM-NUMERO';
-                    if (!acc[key]) acc[key] = { numeroPedido: row.numeroPedido || 'Sem número', programa: row.programa, data: row.data, itens: [] };
-                    acc[key].itens.push(row);
-                    return acc;
-                  }, {} as Record<string, GrupoPedido>);
-
-                  return Object.keys(grupos).map(key => {
-                    const grupo = grupos[key];
-                    const totalGrupo = grupo.itens.reduce((s, it) => s + (it.valorTotal || 0), 0);
-                    return (
-                      <div key={grupo.numeroPedido} className="space-y-2 break-inside-avoid">
-                        <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 flex flex-wrap items-center gap-x-6 gap-y-1 text-[11px]">
-                          <span><strong>Nº Pedido:</strong> <span className="font-mono">{grupo.numeroPedido}</span></span>
-                          <span><strong>Programa:</strong> {grupo.programa}</span>
-                          <span><strong>Data:</strong> {grupo.data}</span>
-                        </div>
-                        <table className="w-full text-left border-collapse text-[11px]">
-                          <thead>
-                            <tr className="bg-slate-200 text-slate-800 font-black border-b border-slate-300">
-                              <th className="p-2">Produtor</th>
-                              <th className="p-2">Produto</th>
-                              <th className="p-2">Escola Destino</th>
-                              <th className="p-2 text-right">Quantidade</th>
-                              <th className="p-2 text-right">Valor Total</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-200">
-                            {grupo.itens.map(row => (
-                              <tr key={row.id}>
-                                <td className="p-2 font-bold">{row.produtor}</td>
-                                <td className="p-2">{row.produto}</td>
-                                <td className="p-2">{row.escola}</td>
-                                <td className="p-2 text-right font-mono">{row.quantidade} {row.unidade}</td>
-                                <td className="p-2 text-right font-mono font-bold">R$ {row.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                          <tfoot>
-                            <tr className="border-t-2 border-slate-300">
-                              <td colSpan={4} className="p-2 text-right font-black">Subtotal do Pedido:</td>
-                              <td className="p-2 text-right font-mono font-black text-emerald-800">R$ {totalGrupo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                            </tr>
-                          </tfoot>
-                        </table>
-                      </div>
-                    );
-                  });
-                })()}
-                </React.Fragment>
+                <table className="w-full text-left border-collapse text-[11px]">
+                  <thead>
+                    <tr className="bg-slate-200 text-slate-800 font-black border-b border-slate-300">
+                      <th className="p-2">Nº Pedido</th>
+                      <th className="p-2">Programa</th>
+                      <th className="p-2">Escola Destino</th>
+                      <th className="p-2">Produtor Rural</th>
+                      <th className="p-2">Produto</th>
+                      <th className="p-2 text-right">Qtd</th>
+                      <th className="p-2 text-right">Valor Total</th>
+                      <th className="p-2">Data</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {filteredRelPedidos.map(row => (
+                      <tr key={row.id}>
+                        <td className="p-2 font-mono font-bold">{row.numeroPedido}</td>
+                        <td className="p-2">{row.programa}</td>
+                        <td className="p-2">{row.escola}</td>
+                        <td className="p-2 font-bold">{row.produtor}</td>
+                        <td className="p-2">{row.produto}</td>
+                        <td className="p-2 text-right font-mono">{row.quantidade} {row.unidade}</td>
+                        <td className="p-2 text-right font-mono font-bold">R$ {row.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                        <td className="p-2">{row.data}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               ) : (
-                <React.Fragment key="print-entregas">
-                {(() => {
-                  type GrupoEntrega = { numeroPedido: string; programa: string; data: string; itens: typeof filteredRelEntregas };
-                  const grupos = filteredRelEntregas.reduce((acc, row) => {
-                    const key = row.numeroPedido || 'SEM-NUMERO';
-                    if (!acc[key]) acc[key] = { numeroPedido: row.numeroPedido || 'Sem número', programa: row.programa, data: row.data, itens: [] };
-                    acc[key].itens.push(row);
-                    return acc;
-                  }, {} as Record<string, GrupoEntrega>);
-
-                  return Object.keys(grupos).map(key => {
-                    const grupo = grupos[key];
-                    return (
-                    <div key={grupo.numeroPedido} className="space-y-2 break-inside-avoid">
-                      <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 flex flex-wrap items-center gap-x-6 gap-y-1 text-[11px]">
-                        <span><strong>Nº Pedido:</strong> <span className="font-mono">{grupo.numeroPedido}</span></span>
-                        <span><strong>Programa:</strong> {grupo.programa}</span>
-                        <span><strong>Data Prevista:</strong> {grupo.data}</span>
-                      </div>
-                      <table className="w-full text-left border-collapse text-[11px]">
-                        <thead>
-                          <tr className="bg-slate-200 text-slate-800 font-black border-b border-slate-300">
-                            <th className="p-2">Produtor</th>
-                            <th className="p-2">Produto</th>
-                            <th className="p-2">Escola Destino</th>
-                            <th className="p-2 text-right">Quantidade</th>
-                            <th className="p-2">Motorista</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-200">
-                          {grupo.itens.map(row => (
-                            <tr key={row.id}>
-                              <td className="p-2 font-bold">{row.produtor}</td>
-                              <td className="p-2">{row.produto}</td>
-                              <td className="p-2">{row.escola}</td>
-                              <td className="p-2 text-right font-mono font-bold">{row.quantidadeEntregue} {row.unidade}</td>
-                              <td className="p-2">{row.motorista}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    );
-                  });
-                })()}
-                </React.Fragment>
+                <table className="w-full text-left border-collapse text-[11px]">
+                  <thead>
+                    <tr className="bg-slate-200 text-slate-800 font-black border-b border-slate-300">
+                      <th className="p-2">Nº Pedido</th>
+                      <th className="p-2">Programa</th>
+                      <th className="p-2">Escola Destino</th>
+                      <th className="p-2">Produtor Rural</th>
+                      <th className="p-2">Produto</th>
+                      <th className="p-2 text-right">Qtd Entregue</th>
+                      <th className="p-2">Motorista</th>
+                      <th className="p-2">Data Prevista</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {filteredRelEntregas.map(row => (
+                      <tr key={row.id}>
+                        <td className="p-2 font-mono font-bold">{row.numeroPedido}</td>
+                        <td className="p-2">{row.programa}</td>
+                        <td className="p-2">{row.escola}</td>
+                        <td className="p-2 font-bold">{row.produtor}</td>
+                        <td className="p-2">{row.produto}</td>
+                        <td className="p-2 text-right font-mono font-bold">{row.quantidadeEntregue} {row.unidade}</td>
+                        <td className="p-2">{row.motorista}</td>
+                        <td className="p-2">{row.data}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
 
               <div className="pt-12 grid grid-cols-2 gap-8 text-center text-xs">
@@ -5405,33 +5360,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                   </div>
 
                   <div>
-                    <label className="block text-slate-700 font-bold mb-1">Programa Governamental *</label>
-                    <select
-                      value={pedidoForm.programaId}
-                      onChange={e => {
-                        const prog = programas.find(p => p.id === e.target.value);
-                        const novasFontes = getFontesRecursosParaPrograma(prog?.tipo, prog?.nome);
-                        setPedidoForm(prev => ({
-                          ...prev,
-                          programaId: e.target.value,
-                          programaNome: prog?.nome || '',
-                          programa: prog?.tipo || 'PAA',
-                          // Se a fonte já escolhida não faz sentido para o novo
-                          // programa, limpa — evita salvar um pedido do PAA com
-                          // fonte "Pré-Escola" (categoria exclusiva do PNAE).
-                          fonteRecursos: novasFontes.includes(prev.fonteRecursos) ? prev.fonteRecursos : ''
-                        }));
-                      }}
-                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl font-bold text-emerald-800"
-                    >
-                      <option value="">Selecione o Programa...</option>
-                      {programas.map(p => (
-                        <option key={p.id} value={p.id}>{p.nome} ({p.tipo})</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
                     <label className="block text-slate-700 font-bold mb-1">Fonte de Recursos *</label>
                     <select
                       required
@@ -5445,7 +5373,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                       ))}
                     </select>
                     {!pedidoForm.programaId && (
-                      <p className="text-[10px] text-slate-400 mt-1">Selecione o Programa acima para ver as fontes de recursos compatíveis.</p>
+                      <p className="text-[10px] text-slate-400 mt-1">Selecione a Chamada Pública acima para ver as fontes de recursos compatíveis.</p>
                     )}
                   </div>
 
