@@ -136,7 +136,7 @@ export const LoginView: React.FC<Props> = ({ onLoginSuccess, onOpenCooperativeSe
           <div className="flex items-center justify-center gap-1.5 mt-2">
             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-700/50 shadow-2xs">
               <Database className="w-3 h-3 text-amber-600 dark:text-amber-400" />
-              Firebase Firestore & Auth Ativo
+              Firebase Firestore Ativo • Cadastro local disponível
             </span>
           </div>
 
