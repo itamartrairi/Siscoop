@@ -61,6 +61,25 @@ import {
   Bell,
   RefreshCw
 } from 'lucide-react';
+
+type SaldoRateioRow = {
+  chave: string;
+  chamadaPublicaId: string;
+  edital: string;
+  programa: string;
+  fonteRecursos: string;
+  produtoId?: string;
+  produto: string;
+  unidade: string;
+  produtorId?: string;
+  produtor: string;
+  escolaId?: string;
+  escola: string;
+  rateado: number;
+  pedido: number;
+  saldo: number;
+  precoUnitario: number;
+};
 import {
   ChamadaPublica,
   ItemChamadaPublica,
@@ -168,6 +187,7 @@ export const SisGepaView: React.FC = () => {
     updateOfertaPAA,
     deleteOfertaPAA,
     pedidosProdutorPAA,
+    rateiosChamadas,
     addPedidoProdutorPAA,
     updatePedidoProdutorPAA,
     deletePedidoProdutorPAA,
@@ -213,6 +233,11 @@ export const SisGepaView: React.FC = () => {
   const [relFilterPrograma, setRelFilterPrograma] = useState('TODOS');
   const [relFilterChamada, setRelFilterChamada] = useState('TODOS');
   const [relFilterPedidoNum, setRelFilterPedidoNum] = useState('TODOS');
+  const [saldoFilterProduto, setSaldoFilterProduto] = useState('TODOS');
+  const [saldoFilterProdutor, setSaldoFilterProdutor] = useState('TODOS');
+  const [saldoFilterEscola, setSaldoFilterEscola] = useState('TODOS');
+  const [saldoFilterChamada, setSaldoFilterChamada] = useState('TODOS');
+  const [saldoApenasPendentes, setSaldoApenasPendentes] = useState(true);
 
   // Unified Search and Filter State
   const [searchTerm, setSearchTerm] = useState('');
