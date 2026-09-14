@@ -7,11 +7,14 @@ import {
   FileSpreadsheet,
   Pencil,
   Trash2,
-  X
+  X,
+  FileDown,
+  Printer
 } from 'lucide-react';
 import { FuncionarioRH, FolhaPagamento } from '../types';
 import { playActionCompleteSound } from '../utils/actionSound';
 import { calcularDescontosFolha } from '../utils/folhaPagamentoHelpers';
+import jsPDF from 'jspdf';
 
 export const RhView: React.FC = () => {
   const {
@@ -23,7 +26,8 @@ export const RhView: React.FC = () => {
     addFolhaPagamento,
     updateFolhaPagamento,
     deleteFolhaPagamento,
-    canWriteModule
+    canWriteModule,
+    config
   } = useCoop();
 
   const canWrite = canWriteModule('rh');
@@ -87,8 +91,8 @@ export const RhView: React.FC = () => {
 
   // Handlers
   const handleOpenFunc = (f?: FuncionarioRH) => {
-        if (!canWrite) { blockWriteAction(); return; }
-if (f) {
+    if (!canWrite) { blockWriteAction(); return; }
+    if (f) {
       setEditingFunc(f);
       setFuncForm({
         nome: f.nome,
@@ -127,8 +131,8 @@ if (f) {
   };
 
   const handleOpenFolha = (folha?: FolhaPagamento) => {
-        if (!canWrite) { blockWriteAction(); return; }
-if (folha) {
+    if (!canWrite) { blockWriteAction(); return; }
+    if (folha) {
       setEditingFolha(folha);
       setFolhaForm({
         funcionarioId: folha.funcionarioId || '',
@@ -162,9 +166,7 @@ if (folha) {
     setShowFolhaModal(true);
   };
 
-  // Recalcula INSS/IRPF/FGTS a partir do total de proventos atual — o
-  // usuário pode acionar de novo depois de mudar o valor bruto, ou ajustar
-  // cada campo manualmente por cima do valor calculado.
+  // Recalcula INSS/IRPF/FGTS a partir do total de proventos atual
   const handleRecalcularDescontos = () => {
     const { inss, irpf, fgts } = calcularDescontosFolha(folhaForm.totalProventos);
     setFolhaForm(prev => ({ ...prev, inss, irpf, fgts, totalDescontos: inss + irpf + prev.outrosDescontos }));
@@ -205,10 +207,7 @@ if (folha) {
   };
 
   // Gera a folha de pagamento do mês para TODOS os colaboradores com status
-  // ATIVO de uma vez — em vez de precisar abrir "Gerar Folha" um por um,
-  // como acontecia antes (cada geração criava só 1 registro, de 1
-  // funcionário). Pula quem já tem folha lançada para a mesma competência,
-  // para não duplicar caso o usuário gere a folha do mês mais de uma vez.
+  // ATIVO de uma vez
   const handleGerarFolhaMensal = () => {
     if (!canWrite) { blockWriteAction(); return; }
     if (!folhaMensalCompetencia.trim()) {
@@ -233,8 +232,6 @@ if (folha) {
       if (jaGerados.has(func.id)) { puladas++; return; }
       const ajuste = folhaMensalAjustes[func.id];
       const proventos = ajuste?.proventos ?? func.salarioBase ?? 0;
-      // Se o usuário não sobrescreveu manualmente o desconto desta linha,
-      // usa o INSS + IRPF calculados automaticamente a partir do provento.
       const { inss, irpf, fgts } = calcularDescontosFolha(proventos);
       const descontos = ajuste?.descontos ?? (inss + irpf);
       addFolhaPagamento({
@@ -261,8 +258,7 @@ if (folha) {
     }
   };
 
-  // Extrai mês/ano de "competencia" no formato "MM/AAAA" (o mesmo campo
-  // usado tanto no lançamento individual quanto na geração em massa).
+  // Extrai mês/ano de "competencia" no formato "MM/AAAA"
   const getMesAnoCompetencia = (competencia?: string): [string, string] => {
     if (!competencia) return ['', ''];
     const partes = competencia.split('/');
@@ -281,6 +277,310 @@ if (folha) {
     return true;
   });
 
+  // Totais consolidados da listagem atual
+  const totalProventosGeral = filteredFolhaPagamento.reduce((acc, curr) => acc + (curr.totalProventos || 0), 0);
+  const totalInssGeral = filteredFolhaPagamento.reduce((acc, curr) => acc + (curr.inss || 0), 0);
+  const totalIrpfGeral = filteredFolhaPagamento.reduce((acc, curr) => acc + (curr.irpf || 0), 0);
+  const totalOutrosDescontosGeral = filteredFolhaPagamento.reduce((acc, curr) => acc + (curr.outrosDescontos || 0), 0);
+  const totalDescontosGeral = filteredFolhaPagamento.reduce((acc, curr) => acc + (curr.totalDescontos || 0), 0);
+  const totalLiquidoGeral = filteredFolhaPagamento.reduce((acc, curr) => acc + (curr.totalLiquido || 0), 0);
+  const totalFgtsGeral = filteredFolhaPagamento.reduce((acc, curr) => acc + (curr.fgts || 0), 0);
+
+  // Exportação para PDF em Modo Paisagem (A4 Landscape)
+  const handleExportarPDFPaisagem = () => {
+    if (filteredFolhaPagamento.length === 0) {
+      alert('Nenhum registro de folha de pagamento para exportar com os filtros selecionados.');
+      return;
+    }
+
+    const doc = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    const pageWidth = 297;
+    const pageHeight = 210;
+    const marginLeft = 14;
+    const marginRight = 14;
+    const contentWidth = pageWidth - marginLeft - marginRight; // 269mm
+    let currentY = 16;
+    let pageNumber = 1;
+
+    const printHeader = () => {
+      // Faixa Superior / Marca
+      doc.setFillColor(16, 185, 129); // emerald-500
+      doc.rect(marginLeft, currentY, contentWidth, 2, 'F');
+      currentY += 7;
+
+      // Nome da Cooperativa e Título
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.setTextColor(15, 23, 42); // slate-900
+      const coopNome = (config?.nomeCooperativa || 'SICOOP - COOPERATIVA AGROPECUÁRIA').toUpperCase();
+      doc.text(coopNome, marginLeft, currentY);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(100, 116, 139); // slate-500
+      const cnpjTexto = config?.cnpj ? `CNPJ: ${config.cnpj}` : '';
+      if (cnpjTexto) {
+        doc.text(cnpjTexto, pageWidth - marginRight, currentY, { align: 'right' });
+      }
+      currentY += 6;
+
+      // Subtítulo do Relatório
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(4, 120, 87); // emerald-700
+      doc.text('RELATÓRIO GERAL DE FOLHA DE PAGAMENTO (SisRH)', marginLeft, currentY);
+
+      // Data e Hora de Emissão
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.setTextColor(100, 116, 139);
+      const dataEmissao = `Emissão: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+      doc.text(dataEmissao, pageWidth - marginRight, currentY, { align: 'right' });
+      currentY += 5.5;
+
+      // Metadados / Filtros Aplicados
+      let filtroDesc = 'Filtros: ';
+      if (filterFuncionarioId) {
+        const funcSel = funcionariosRH.find(f => f.id === filterFuncionarioId);
+        filtroDesc += `Colaborador: ${funcSel?.nome || 'Selecionado'} | `;
+      } else {
+        filtroDesc += 'Colaborador: Todos | ';
+      }
+      if (filterMes) {
+        const mesObj = MESES_FILTRO.find(m => m.valor === filterMes);
+        filtroDesc += `Mês: ${mesObj?.label || filterMes} | `;
+      } else {
+        filtroDesc += 'Mês: Todos | ';
+      }
+      if (filterAno) {
+        filtroDesc += `Ano: ${filterAno}`;
+      } else {
+        filtroDesc += 'Ano: Todos';
+      }
+      filtroDesc += ` (Total: ${filteredFolhaPagamento.length} registro(s))`;
+
+      doc.setFontSize(8);
+      doc.setTextColor(71, 85, 105);
+      doc.text(filtroDesc, marginLeft, currentY);
+      currentY += 5;
+
+      // Linha divisória
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.3);
+      doc.line(marginLeft, currentY, pageWidth - marginRight, currentY);
+      currentY += 4;
+
+      // Cabeçalho da Tabela
+      const colWidths = [56, 40, 20, 24, 20, 20, 20, 23, 26, 20];
+      const headers = [
+        'Colaborador',
+        'Cargo / Função',
+        'Comp.',
+        'Bruto (R$)',
+        'INSS (R$)',
+        'IRPF (R$)',
+        'Outros (R$)',
+        'Tot. Desc.',
+        'Líquido (R$)',
+        'FGTS (R$)'
+      ];
+
+      doc.setFillColor(241, 245, 249); // slate-100
+      doc.rect(marginLeft, currentY, contentWidth, 7, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      doc.setTextColor(51, 65, 85); // slate-700
+
+      let colX = marginLeft;
+      headers.forEach((h, idx) => {
+        const w = colWidths[idx];
+        const isRightAlign = idx >= 3;
+        if (isRightAlign) {
+          doc.text(h, colX + w - 2, currentY + 4.8, { align: 'right' });
+        } else {
+          doc.text(h, colX + 2, currentY + 4.8);
+        }
+        colX += w;
+      });
+
+      currentY += 7.5;
+    };
+
+    const printFooter = () => {
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.3);
+      doc.line(marginLeft, pageHeight - 12, pageWidth - marginRight, pageHeight - 12);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(148, 163, 184); // slate-400
+      doc.text('Siscoop Platform — Sistema Integrado de Gestão de Cooperativas', marginLeft, pageHeight - 7);
+      doc.text(`Página ${pageNumber}`, pageWidth - marginRight, pageHeight - 7, { align: 'right' });
+    };
+
+    printHeader();
+
+    const colWidths = [56, 40, 20, 24, 20, 20, 20, 23, 26, 20];
+
+    filteredFolhaPagamento.forEach((folha, idx) => {
+      // Verifica se precisa quebrar página
+      if (currentY > pageHeight - 26) {
+        printFooter();
+        doc.addPage('a4', 'landscape');
+        pageNumber++;
+        currentY = 16;
+        printHeader();
+      }
+
+      // Fundo zebrado
+      if (idx % 2 === 1) {
+        doc.setFillColor(248, 250, 252);
+        doc.rect(marginLeft, currentY - 0.8, contentWidth, 6.2, 'F');
+      }
+
+      const funcObj = funcionariosRH.find(f => f.id === folha.funcionarioId);
+      const cargoDepto = funcObj?.cargo || 'Colaborador';
+
+      const colaboradorNome = (folha.funcionarioNome || funcObj?.nome || '—').slice(0, 32);
+      const cargoTexto = cargoDepto.slice(0, 24);
+      const compTexto = folha.competencia || folha.competenciaMesAno || '—';
+      const brutoFormatado = (folha.totalProventos || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const inssFormatado = (folha.inss || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const irpfFormatado = (folha.irpf || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const outrosFormatado = (folha.outrosDescontos || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const descontosFormatado = (folha.totalDescontos || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const liquidoFormatado = (folha.totalLiquido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const fgtsFormatado = (folha.fgts || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(30, 41, 59); // slate-800
+
+      let colX = marginLeft;
+      // Colaborador
+      doc.setFont('helvetica', 'bold');
+      doc.text(colaboradorNome, colX + 2, currentY + 3.5);
+      colX += colWidths[0];
+
+      // Cargo
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 116, 139);
+      doc.text(cargoTexto, colX + 2, currentY + 3.5);
+      colX += colWidths[1];
+
+      // Comp
+      doc.setTextColor(71, 85, 105);
+      doc.text(compTexto, colX + 2, currentY + 3.5);
+      colX += colWidths[2];
+
+      // Bruto
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(15, 23, 42);
+      doc.text(brutoFormatado, colX + colWidths[3] - 2, currentY + 3.5, { align: 'right' });
+      colX += colWidths[3];
+
+      // INSS
+      doc.setTextColor(185, 28, 28);
+      doc.text(inssFormatado, colX + colWidths[4] - 2, currentY + 3.5, { align: 'right' });
+      colX += colWidths[4];
+
+      // IRPF
+      doc.setTextColor(185, 28, 28);
+      doc.text(irpfFormatado, colX + colWidths[5] - 2, currentY + 3.5, { align: 'right' });
+      colX += colWidths[5];
+
+      // Outros
+      doc.setTextColor(185, 28, 28);
+      doc.text(outrosFormatado, colX + colWidths[6] - 2, currentY + 3.5, { align: 'right' });
+      colX += colWidths[6];
+
+      // Total Desc
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(185, 28, 28);
+      doc.text(descontosFormatado, colX + colWidths[7] - 2, currentY + 3.5, { align: 'right' });
+      colX += colWidths[7];
+
+      // Líquido
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(4, 120, 87); // emerald-700
+      doc.text(liquidoFormatado, colX + colWidths[8] - 2, currentY + 3.5, { align: 'right' });
+      colX += colWidths[8];
+
+      // FGTS
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(71, 85, 105);
+      doc.text(fgtsFormatado, colX + colWidths[9] - 2, currentY + 3.5, { align: 'right' });
+
+      currentY += 6.2;
+    });
+
+    // Bloco de Totais Consolidados no Rodapé da Tabela
+    if (currentY > pageHeight - 32) {
+      printFooter();
+      doc.addPage('a4', 'landscape');
+      pageNumber++;
+      currentY = 16;
+      printHeader();
+    }
+
+    currentY += 2;
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineWidth(0.5);
+    doc.line(marginLeft, currentY, pageWidth - marginRight, currentY);
+    currentY += 1.5;
+
+    doc.setFillColor(241, 245, 249);
+    doc.rect(marginLeft, currentY, contentWidth, 7, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(15, 23, 42);
+
+    let totX = marginLeft;
+    doc.text(`TOTAIS CONSOLIDADOS (${filteredFolhaPagamento.length} reg.):`, totX + 2, currentY + 4.8);
+    totX += colWidths[0] + colWidths[1] + colWidths[2];
+
+    // Total Bruto
+    doc.text(totalProventosGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), totX + colWidths[3] - 2, currentY + 4.8, { align: 'right' });
+    totX += colWidths[3];
+
+    // Total INSS
+    doc.setTextColor(185, 28, 28);
+    doc.text(totalInssGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), totX + colWidths[4] - 2, currentY + 4.8, { align: 'right' });
+    totX += colWidths[4];
+
+    // Total IRPF
+    doc.text(totalIrpfGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), totX + colWidths[5] - 2, currentY + 4.8, { align: 'right' });
+    totX += colWidths[5];
+
+    // Total Outros
+    doc.text(totalOutrosDescontosGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), totX + colWidths[6] - 2, currentY + 4.8, { align: 'right' });
+    totX += colWidths[6];
+
+    // Total Geral Descontos
+    doc.text(totalDescontosGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), totX + colWidths[7] - 2, currentY + 4.8, { align: 'right' });
+    totX += colWidths[7];
+
+    // Total Líquido Geral
+    doc.setTextColor(4, 120, 87);
+    doc.text(totalLiquidoGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), totX + colWidths[8] - 2, currentY + 4.8, { align: 'right' });
+    totX += colWidths[8];
+
+    // Total FGTS Geral
+    doc.setTextColor(71, 85, 105);
+    doc.text(totalFgtsGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), totX + colWidths[9] - 2, currentY + 4.8, { align: 'right' });
+
+    printFooter();
+
+    const competenciaNome = filterMes && filterAno ? `-${filterMes}-${filterAno}` : (filterAno ? `-${filterAno}` : '');
+    doc.save(`folha-pagamento-sisrh${competenciaNome}.pdf`);
+    playActionCompleteSound();
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
@@ -294,7 +594,7 @@ if (folha) {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {activeTab === 'funcionarios' && (
             <button
               onClick={() => handleOpenFunc()}
@@ -304,12 +604,21 @@ if (folha) {
             </button>
           )}
           {activeTab === 'folha' && (
-            <button
-              onClick={handleOpenFolhaMensal}
-              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" /> Gerar Folha do Mês (Todos os Colaboradores)
-            </button>
+            <>
+              <button
+                onClick={handleExportarPDFPaisagem}
+                className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2"
+                title="Exportar listagem filtrada para relatório PDF em orientação Paisagem (A4)"
+              >
+                <FileDown className="w-4 h-4 text-emerald-400" /> Exportar PDF (Paisagem)
+              </button>
+              <button
+                onClick={handleOpenFolhaMensal}
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" /> Gerar Folha do Mês
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -397,7 +706,7 @@ if (folha) {
       {/* Tab Folha de Pagamento */}
       {activeTab === 'folha' && (
         <div className="space-y-4">
-          {/* Filtros: Funcionário, Mês e Ano */}
+          {/* Filtros e Barra de Ações */}
           <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-slate-500 font-bold text-[10px] uppercase mb-1">Funcionário</label>
@@ -438,78 +747,153 @@ if (folha) {
                 ))}
               </select>
             </div>
-            {(filterFuncionarioId || filterMes || filterAno) && (
-              <div className="sm:col-span-3 flex items-center justify-between text-[11px] text-slate-500">
-                <span>{filteredFolhaPagamento.length} de {folhaPagamento.length} folha(s) exibida(s)</span>
+            <div className="sm:col-span-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-slate-500 pt-1 border-t border-slate-100">
+              <div className="flex items-center gap-3">
+                <span><strong>{filteredFolhaPagamento.length}</strong> de {folhaPagamento.length} folha(s) exibida(s)</span>
+                {(filterFuncionarioId || filterMes || filterAno) && (
+                  <button
+                    type="button"
+                    onClick={() => { setFilterFuncionarioId(''); setFilterMes(''); setFilterAno(''); }}
+                    className="text-emerald-700 font-bold hover:underline"
+                  >
+                    Limpar filtros
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => { setFilterFuncionarioId(''); setFilterMes(''); setFilterAno(''); }}
-                  className="text-emerald-700 font-bold hover:underline"
+                  onClick={() => handleOpenFolha()}
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5"
                 >
-                  Limpar filtros
+                  <Plus className="w-3.5 h-3.5" /> Lançamento Avulso
                 </button>
               </div>
-            )}
+            </div>
           </div>
 
-          {filteredFolhaPagamento.length === 0 && (
+          {/* Tabela da Folha de Pagamento */}
+          {filteredFolhaPagamento.length === 0 ? (
             <div className="bg-white p-8 rounded-2xl border border-slate-200/80 shadow-xs text-center text-slate-400 italic text-sm">
               Nenhuma folha de pagamento encontrada com os filtros selecionados.
             </div>
-          )}
-
-          {filteredFolhaPagamento.map(folha => (
-            <div key={folha.id} className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-3 relative">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="font-extrabold text-slate-900 text-sm">{folha.funcionarioNome || 'Funcionário não vinculado'}</span>
-                  <span className="text-[11px] text-slate-500 block">Competência: {folha.competencia}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 font-bold rounded-lg text-xs">
-                    {folha.status}
-                  </span>
-                  <button
-                    onClick={() => handleOpenFolha(folha)}
-                    className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-emerald-700"
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (!canWrite) { blockWriteAction(); return; }
-                      if (confirm(`Deseja excluir a folha de ${folha.competencia}?`)) deleteFolhaPagamento(folha.id);
-                    }}
-                    className="p-1 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-xs pt-3 border-t border-slate-100">
-                <div>
-                  <span className="text-slate-500 block">Total Proventos:</span>
-                  <span className="font-bold text-slate-900">R$ {(folha.totalProventos || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block">INSS:</span>
-                  <span className="font-bold text-rose-700">- R$ {(folha.inss || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block">IRPF:</span>
-                  <span className="font-bold text-rose-700">- R$ {(folha.irpf || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block">Outros Descontos:</span>
-                  <span className="font-bold text-rose-700">- R$ {(folha.outrosDescontos || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block">Líquido a Pagar:</span>
-                  <span className="font-extrabold text-emerald-700 text-sm">R$ {(folha.totalLiquido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                </div>
+          ) : (
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-500 font-bold uppercase border-b border-slate-200 text-[11px]">
+                      <th className="p-3.5">Colaborador</th>
+                      <th className="p-3.5">Competência</th>
+                      <th className="p-3.5 text-right">Salário Bruto</th>
+                      <th className="p-3.5 text-right">INSS</th>
+                      <th className="p-3.5 text-right">IRPF</th>
+                      <th className="p-3.5 text-right">Outros Desc.</th>
+                      <th className="p-3.5 text-right">Total Descontos</th>
+                      <th className="p-3.5 text-right font-black text-emerald-800">Líquido a Pagar</th>
+                      <th className="p-3.5 text-right text-slate-400">FGTS (Encargo)</th>
+                      <th className="p-3.5 text-center">Status</th>
+                      <th className="p-3.5 text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredFolhaPagamento.map(folha => {
+                      const func = funcionariosRH.find(f => f.id === folha.funcionarioId);
+                      return (
+                        <tr key={folha.id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="p-3.5">
+                            <span className="font-extrabold text-slate-900 block">{folha.funcionarioNome || func?.nome || 'Funcionário não vinculado'}</span>
+                            <span className="text-[10px] text-slate-500">{func?.cargo || 'Colaborador'}</span>
+                          </td>
+                          <td className="p-3.5 font-semibold text-slate-700 whitespace-nowrap">
+                            {folha.competencia || folha.competenciaMesAno || '—'}
+                          </td>
+                          <td className="p-3.5 text-right font-bold text-slate-900 whitespace-nowrap">
+                            R$ {(folha.totalProventos || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                          <td className="p-3.5 text-right font-medium text-rose-600 whitespace-nowrap">
+                            - R$ {(folha.inss || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                          <td className="p-3.5 text-right font-medium text-rose-600 whitespace-nowrap">
+                            - R$ {(folha.irpf || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                          <td className="p-3.5 text-right font-medium text-rose-600 whitespace-nowrap">
+                            - R$ {(folha.outrosDescontos || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                          <td className="p-3.5 text-right font-bold text-rose-700 whitespace-nowrap">
+                            - R$ {(folha.totalDescontos || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                          <td className="p-3.5 text-right font-black text-emerald-700 bg-emerald-50/30 whitespace-nowrap text-[13px]">
+                            R$ {(folha.totalLiquido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                          <td className="p-3.5 text-right text-slate-500 whitespace-nowrap" title="FGTS (Encargo do empregador - informativo)">
+                            R$ {(folha.fgts || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                          <td className="p-3.5 text-center">
+                            <span className={`px-2.5 py-1 rounded-full font-bold text-[10px] uppercase ${
+                              folha.status === 'PAGA' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
+                            }`}>
+                              {folha.status}
+                            </span>
+                          </td>
+                          <td className="p-3.5 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={() => handleOpenFolha(folha)}
+                                className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-emerald-700 transition-colors"
+                                title="Editar lançamento"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (!canWrite) { blockWriteAction(); return; }
+                                  if (confirm(`Deseja excluir a folha de ${folha.competencia}?`)) deleteFolhaPagamento(folha.id);
+                                }}
+                                className="p-1.5 hover:bg-rose-50 rounded-lg text-slate-400 hover:text-rose-600 transition-colors"
+                                title="Excluir lançamento"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-slate-100/80 font-black text-slate-900 border-t-2 border-slate-300">
+                      <td className="p-3.5 uppercase text-[11px]" colSpan={2}>
+                        Total Consolidado ({filteredFolhaPagamento.length} itens)
+                      </td>
+                      <td className="p-3.5 text-right whitespace-nowrap">
+                        R$ {totalProventosGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="p-3.5 text-right text-rose-700 whitespace-nowrap">
+                        - R$ {totalInssGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="p-3.5 text-right text-rose-700 whitespace-nowrap">
+                        - R$ {totalIrpfGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="p-3.5 text-right text-rose-700 whitespace-nowrap">
+                        - R$ {totalOutrosDescontosGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="p-3.5 text-right text-rose-800 whitespace-nowrap">
+                        - R$ {totalDescontosGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="p-3.5 text-right text-emerald-800 bg-emerald-100/50 whitespace-nowrap text-sm">
+                        R$ {totalLiquidoGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="p-3.5 text-right text-slate-600 whitespace-nowrap">
+                        R$ {totalFgtsGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td colSpan={2}></td>
+                    </tr>
+                  </tfoot>
+                </table>
               </div>
             </div>
-          ))}
+          )}
         </div>
       )}
 
