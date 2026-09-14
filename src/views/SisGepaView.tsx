@@ -1577,6 +1577,21 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
     return `PED-${proximoSequencial}/${anoAtual}`;
   };
 
+  // Garante que pedidos da mesma Chamada Pública / Edital compartilhem o mesmo
+  // número de pedido, independentemente da fonte de recursos utilizada.
+  const getNumeroPedidoParaChamada = (chamadaId?: string, numeroEdital?: string): string => {
+    if (chamadaId || numeroEdital) {
+      const pedidoExistente = pedidosProdutorPAA.find(p =>
+        (chamadaId && p.chamadaPublicaId === chamadaId) ||
+        (numeroEdital && p.chamadaPublicaEdital === numeroEdital)
+      );
+      if (pedidoExistente?.numeroPedido) {
+        return pedidoExistente.numeroPedido;
+      }
+    }
+    return gerarProximoNumeroPedido();
+  };
+
   const handleOpenPedido = (p?: PedidoProdutorPAA) => {
     if (p) {
       setEditingPedido(p);
@@ -1632,7 +1647,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
 
       setEditingPedido(null);
       setPedidoForm({
-        numeroPedido: gerarProximoNumeroPedido(),
+        numeroPedido: defaultChm ? getNumeroPedidoParaChamada(defaultChm.id, defaultChm.numeroEdital) : gerarProximoNumeroPedido(),
         programaId: defaultProg?.id || '',
         programaNome: defaultProg?.nome || 'PAA',
         programa: defaultProg?.tipo || 'PAA',
@@ -2355,6 +2370,19 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
     };
 
     const targetPedidoId = editingPedido ? editingPedido.id : `ped-prod-${Date.now().toString().slice(-6)}`;
+
+    // Garante que todos os pedidos vinculados à mesma chamada pública / edital compartilhem o mesmo número de pedido para todas as fontes de recursos
+    if (payload.chamadaPublicaId || payload.chamadaPublicaEdital) {
+      const outrosPedidosDaMesmaChamada = pedidosProdutorPAA.filter(p =>
+        p.id !== targetPedidoId &&
+        ((payload.chamadaPublicaId && p.chamadaPublicaId === payload.chamadaPublicaId) ||
+         (payload.chamadaPublicaEdital && p.chamadaPublicaEdital === payload.chamadaPublicaEdital)) &&
+        p.numeroPedido !== payload.numeroPedido
+      );
+      outrosPedidosDaMesmaChamada.forEach(outro => {
+        updatePedidoProdutorPAA(outro.id, { numeroPedido: payload.numeroPedido });
+      });
+    }
 
     // Registra (ou atualiza) o FUNRURAL retido como conta a pagar no módulo
     // financeiro (SisFin) — é a cooperativa quem recolhe essa contribuição
@@ -4895,7 +4923,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                   <thead>
                     <tr className="bg-slate-100 text-slate-700 font-black uppercase text-[10px] tracking-wider border-b border-slate-200">
                       <th className="p-3">Nº Pedido</th>
-                      <th className="p-3">Programa</th>
                       <th className="p-3">Edital / Chamada</th>
                       <th className="p-3">Escola Destino</th>
                       <th className="p-3">Produtor Rural</th>
@@ -4909,7 +4936,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                   <tbody className="divide-y divide-slate-100">
                     {filteredRelPedidos.length === 0 ? (
                       <tr>
-                        <td colSpan={10} className="p-8 text-center text-slate-400 font-medium">
+                        <td colSpan={9} className="p-8 text-center text-slate-400 font-medium">
                           Nenhum pedido encontrado com os filtros selecionados.
                         </td>
                       </tr>
@@ -4917,7 +4944,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                       filteredRelPedidos.map(row => (
                         <tr key={row.id} className="hover:bg-slate-50/80 transition-colors">
                           <td className="p-3 font-mono font-bold text-slate-900">{row.numeroPedido || 'N/A'}</td>
-                          <td className="p-3"><span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 font-bold rounded text-[10px]">{row.programa}</span></td>
                           <td className="p-3 text-slate-600 truncate max-w-[150px]">{row.chamadaPublica || 'N/A'}</td>
                           <td className="p-3 font-medium text-slate-900">{row.escola || 'N/A'}</td>
                           <td className="p-3 font-bold text-emerald-900">{row.produtor}</td>
@@ -5031,6 +5057,15 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                 <h4 className="text-sm font-bold text-emerald-800 uppercase pt-1">
                   Relatório Oficial de {relatorioSubTab === 'pedidos' ? 'Pedidos aos Produtores' : 'Programação de Entregas'}
                 </h4>
+                {relatorioSubTab === 'pedidos' && (
+                  <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] font-semibold text-slate-700 pt-1">
+                    <span><strong>Nº do Pedido:</strong> {relFilterPedidoNum !== 'TODOS' ? relFilterPedidoNum : (Array.from(new Set(filteredRelPedidos.map(r => r.numeroPedido).filter(Boolean))).join(', ') || 'Todos')}</span>
+                    <span className="text-slate-300">•</span>
+                    <span><strong>Programa:</strong> {relFilterPrograma !== 'TODOS' ? relFilterPrograma : (Array.from(new Set(filteredRelPedidos.map(r => r.programa).filter(Boolean))).join(', ') || 'Todos')}</span>
+                    <span className="text-slate-300">•</span>
+                    <span><strong>Data:</strong> {Array.from(new Set(filteredRelPedidos.map(r => r.data).filter(Boolean))).join(', ') || 'Todas'}</span>
+                  </div>
+                )}
                 <p className="text-[10px] text-slate-400">Emitido em: {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR')}</p>
               </div>
 
@@ -5051,27 +5086,21 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                 <table className="w-full text-left border-collapse text-[11px]">
                   <thead>
                     <tr className="bg-slate-200 text-slate-800 font-black border-b border-slate-300">
-                      <th className="p-2">Nº Pedido</th>
-                      <th className="p-2">Programa</th>
                       <th className="p-2">Escola Destino</th>
                       <th className="p-2">Produtor Rural</th>
                       <th className="p-2">Produto</th>
                       <th className="p-2 text-right">Qtd</th>
                       <th className="p-2 text-right">Valor Total</th>
-                      <th className="p-2">Data</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
                     {filteredRelPedidos.map(row => (
                       <tr key={row.id}>
-                        <td className="p-2 font-mono font-bold">{row.numeroPedido}</td>
-                        <td className="p-2">{row.programa}</td>
                         <td className="p-2">{row.escola}</td>
                         <td className="p-2 font-bold">{row.produtor}</td>
                         <td className="p-2">{row.produto}</td>
                         <td className="p-2 text-right font-mono">{row.quantidade} {row.unidade}</td>
                         <td className="p-2 text-right font-mono font-bold">R$ {row.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                        <td className="p-2">{row.data}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -5808,11 +5837,13 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                         if (chm) {
                           const chmEscolasIds = chm.escolasContempladas?.map(esc => esc.escolaId).filter(Boolean) || chm.escolasIds || (chm.escolaId ? [chm.escolaId] : []);
                           const chmEscolasNomes = chm.escolasContempladas?.map(esc => esc.nomeEscola) || chm.escolasNomes || (chm.escolaNome ? chm.escolaNome.split(', ') : []);
+                          const numPedidoDaChamada = getNumeroPedidoParaChamada(chm.id, chm.numeroEdital);
 
                           setPedidoForm(prev => ({
                             ...prev,
                             chamadaPublicaId: chm.id,
                             chamadaPublicaEdital: chm.numeroEdital,
+                            numeroPedido: numPedidoDaChamada,
                             programaId: chm.programaId || prev.programaId,
                             programaNome: chm.programaNome || prev.programaNome,
                             programa: (chm.programa as any) || prev.programa,
