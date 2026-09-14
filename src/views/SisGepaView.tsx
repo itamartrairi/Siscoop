@@ -3268,42 +3268,126 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
     return Array.from(setProds).sort();
   }, [produtos, pedidosProdutorPAA, programacoesEntrega]);
 
-  const relOptionsProgramas = useMemo(() => {
-    const setProg = new Set<string>();
-    programas.forEach(p => p.nome && setProg.add(p.nome));
-    pedidosProdutorPAA.forEach(ped => {
-      const p = ped.programaNome || ped.programa;
-      if (p) setProg.add(p);
-    });
-    programacoesEntrega.forEach(ent => {
-      if (ent.programaNome) setProg.add(ent.programaNome);
-    });
-    return Array.from(setProg).sort();
-  }, [programas, pedidosProdutorPAA, programacoesEntrega]);
-
   const relOptionsChamadas = useMemo(() => {
     const setChamadas = new Set<string>();
+    chamadasPublicas.forEach(ch => ch.numeroEdital && setChamadas.add(ch.numeroEdital));
     pedidosProdutorPAA.forEach(ped => ped.chamadaPublicaEdital && setChamadas.add(ped.chamadaPublicaEdital));
     programacoesEntrega.forEach(ent => ent.chamadaPublicaEdital && setChamadas.add(ent.chamadaPublicaEdital));
     return Array.from(setChamadas).sort();
-  }, [pedidosProdutorPAA, programacoesEntrega]);
+  }, [chamadasPublicas, pedidosProdutorPAA, programacoesEntrega]);
+
+  const relOptionsProgramas = useMemo(() => {
+    const setProg = new Set<string>();
+    const chm = chamadasPublicas.find(c => c.numeroEdital === relFilterChamada || c.id === relFilterChamada);
+
+    if (relFilterChamada !== 'TODOS') {
+      if (chm?.programaNome) setProg.add(chm.programaNome);
+      if (chm?.programa) setProg.add(chm.programa);
+      pedidosProdutorPAA.forEach(ped => {
+        if (ped.chamadaPublicaEdital === relFilterChamada || (chm && ped.chamadaPublicaId === chm.id)) {
+          const p = ped.programaNome || ped.programa;
+          if (p) setProg.add(p);
+        }
+      });
+      programacoesEntrega.forEach(ent => {
+        if (ent.chamadaPublicaEdital === relFilterChamada || (chm && ent.chamadaPublicaId === chm.id)) {
+          if (ent.programaNome) setProg.add(ent.programaNome);
+        }
+      });
+    }
+
+    if (setProg.size === 0) {
+      programas.forEach(p => p.nome && setProg.add(p.nome));
+      pedidosProdutorPAA.forEach(ped => {
+        const p = ped.programaNome || ped.programa;
+        if (p) setProg.add(p);
+      });
+      programacoesEntrega.forEach(ent => {
+        if (ent.programaNome) setProg.add(ent.programaNome);
+      });
+    }
+    return Array.from(setProg).sort();
+  }, [programas, pedidosProdutorPAA, programacoesEntrega, relFilterChamada, chamadasPublicas]);
 
   const relOptionsPedidosNum = useMemo(() => {
     const setNums = new Set<string>();
-    pedidosProdutorPAA.forEach(ped => ped.numeroPedido && setNums.add(ped.numeroPedido));
-    programacoesEntrega.forEach(ent => ent.pedidoNumero && setNums.add(ent.pedidoNumero));
+    const chm = chamadasPublicas.find(c => c.numeroEdital === relFilterChamada || c.id === relFilterChamada);
+
+    pedidosProdutorPAA.forEach(ped => {
+      if (relFilterChamada === 'TODOS' || ped.chamadaPublicaEdital === relFilterChamada || (chm && ped.chamadaPublicaId === chm.id)) {
+        if (ped.numeroPedido) setNums.add(ped.numeroPedido);
+      }
+    });
+    programacoesEntrega.forEach(ent => {
+      if (relFilterChamada === 'TODOS' || ent.chamadaPublicaEdital === relFilterChamada || (chm && ent.chamadaPublicaId === chm.id)) {
+        if (ent.pedidoNumero) setNums.add(ent.pedidoNumero);
+      }
+    });
+
+    if (setNums.size === 0 && relFilterChamada === 'TODOS') {
+      pedidosProdutorPAA.forEach(ped => ped.numeroPedido && setNums.add(ped.numeroPedido));
+      programacoesEntrega.forEach(ent => ent.pedidoNumero && setNums.add(ent.pedidoNumero));
+    }
     return Array.from(setNums).sort();
-  }, [pedidosProdutorPAA, programacoesEntrega]);
+  }, [pedidosProdutorPAA, programacoesEntrega, relFilterChamada, chamadasPublicas]);
+
+  const handleRelFilterChamadaChange = (chamadaEscolhida: string) => {
+    setRelFilterChamada(chamadaEscolhida);
+    if (chamadaEscolhida === 'TODOS') {
+      setRelFilterPrograma('TODOS');
+      setRelFilterPedidoNum('TODOS');
+      setRelFilterAno('TODOS');
+      setRelFilterMes('TODOS');
+      return;
+    }
+
+    // Busca chamada pública, pedidos e entregas vinculados
+    const chm = chamadasPublicas.find(c => c.numeroEdital === chamadaEscolhida || c.id === chamadaEscolhida);
+    const peds = pedidosProdutorPAA.filter(p => p.chamadaPublicaEdital === chamadaEscolhida || (chm && p.chamadaPublicaId === chm.id));
+    const ents = programacoesEntrega.filter(e => e.chamadaPublicaEdital === chamadaEscolhida || (chm && e.chamadaPublicaId === chm.id));
+
+    // 1. Programa correspondente
+    const prog = chm?.programaNome || chm?.programa || peds[0]?.programaNome || peds[0]?.programa || ents[0]?.programaNome;
+    if (prog) {
+      setRelFilterPrograma(prog);
+    }
+
+    // 2. Pedido correspondente
+    const numPed = peds[0]?.numeroPedido || ents[0]?.pedidoNumero;
+    if (numPed) {
+      setRelFilterPedidoNum(numPed);
+    }
+
+    // 3. Ano e Mês correspondentes
+    const dataRef = peds[0]?.dataPedido || ents[0]?.dataPrevista || chm?.dataAbertura || '';
+    if (dataRef) {
+      let ano = '';
+      let mes = '';
+      if (dataRef.includes('-')) {
+        const parts = dataRef.split('-');
+        ano = parts[0];
+        mes = String(parseInt(parts[1] || '1', 10)).padStart(2, '0');
+      } else if (dataRef.includes('/')) {
+        const parts = dataRef.split('/');
+        if (parts.length === 3) {
+          ano = parts[2];
+          mes = String(parseInt(parts[1] || '1', 10)).padStart(2, '0');
+        }
+      }
+      if (ano) setRelFilterAno(ano);
+      if (mes) setRelFilterMes(mes);
+    }
+  };
 
   const handleClearRelFilters = () => {
+    setRelFilterChamada('TODOS');
+    setRelFilterPrograma('TODOS');
+    setRelFilterPedidoNum('TODOS');
+    setRelFilterAno('TODOS');
+    setRelFilterMes('TODOS');
     setRelFilterProdutor('TODOS');
     setRelFilterEscola('TODOS');
     setRelFilterProduto('TODOS');
-    setRelFilterMes('TODOS');
-    setRelFilterAno('TODOS');
-    setRelFilterPrograma('TODOS');
-    setRelFilterChamada('TODOS');
-    setRelFilterPedidoNum('TODOS');
     setSearchTerm('');
   };
 
@@ -3321,12 +3405,12 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
       if (dataPed.includes('-')) {
         const parts = dataPed.split('-');
         ano = parts[0];
-        mes = parts[1];
+        mes = String(parseInt(parts[1] || '1', 10)).padStart(2, '0');
       } else if (dataPed.includes('/')) {
         const parts = dataPed.split('/');
         if (parts.length === 3) {
           ano = parts[2];
-          mes = parts[1];
+          mes = String(parseInt(parts[1] || '1', 10)).padStart(2, '0');
         }
       }
 
@@ -4841,8 +4925,87 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
               </div>
             </div>
 
-            {/* Filter grid */}
+            {/* Filter grid — Chamada Pública primeiro, seguido de Programa, Nº Pedido, Ano, Mês, etc. */}
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5 text-xs">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 mb-1">Chamada Pública</label>
+                <select
+                  value={relFilterChamada}
+                  onChange={e => handleRelFilterChamadaChange(e.target.value)}
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-xs font-semibold text-slate-800"
+                >
+                  <option value="TODOS">Todas as Chamadas</option>
+                  {relOptionsChamadas.map(ch => (
+                    <option key={ch} value={ch}>{ch}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 mb-1">Programa</label>
+                <select
+                  value={relFilterPrograma}
+                  onChange={e => setRelFilterPrograma(e.target.value)}
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-xs"
+                >
+                  <option value="TODOS">Todos os Programas</option>
+                  {relOptionsProgramas.map(prog => (
+                    <option key={prog} value={prog}>{prog}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 mb-1">Nº Pedido</label>
+                <select
+                  value={relFilterPedidoNum}
+                  onChange={e => setRelFilterPedidoNum(e.target.value)}
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-xs"
+                >
+                  <option value="TODOS">Todos os Pedidos</option>
+                  {relOptionsPedidosNum.map(num => (
+                    <option key={num} value={num}>{num}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 mb-1">Ano</label>
+                <select
+                  value={relFilterAno}
+                  onChange={e => setRelFilterAno(e.target.value)}
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-xs"
+                >
+                  <option value="TODOS">Todos os Anos</option>
+                  <option value="2026">2026</option>
+                  <option value="2025">2025</option>
+                  <option value="2024">2024</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 mb-1">Mês</label>
+                <select
+                  value={relFilterMes}
+                  onChange={e => setRelFilterMes(e.target.value)}
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-xs"
+                >
+                  <option value="TODOS">Todos os Meses</option>
+                  <option value="01">Janeiro</option>
+                  <option value="02">Fevereiro</option>
+                  <option value="03">Março</option>
+                  <option value="04">Abril</option>
+                  <option value="05">Maio</option>
+                  <option value="06">Junho</option>
+                  <option value="07">Julho</option>
+                  <option value="08">Agosto</option>
+                  <option value="09">Setembro</option>
+                  <option value="10">Outubro</option>
+                  <option value="11">Novembro</option>
+                  <option value="12">Dezembro</option>
+                </select>
+              </div>
+
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 mb-1">Produtor</label>
                 <select
@@ -4881,85 +5044,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                   <option value="TODOS">Todos os Produtos</option>
                   {relOptionsProdutos.map(prod => (
                     <option key={prod} value={prod}>{prod}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 mb-1">Mês</label>
-                <select
-                  value={relFilterMes}
-                  onChange={e => setRelFilterMes(e.target.value)}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-xs"
-                >
-                  <option value="TODOS">Todos os Meses</option>
-                  <option value="01">Janeiro</option>
-                  <option value="02">Fevereiro</option>
-                  <option value="03">Março</option>
-                  <option value="04">Abril</option>
-                  <option value="05">Maio</option>
-                  <option value="06">Junho</option>
-                  <option value="07">Julho</option>
-                  <option value="08">Agosto</option>
-                  <option value="09">Setembro</option>
-                  <option value="10">Outubro</option>
-                  <option value="11">Novembro</option>
-                  <option value="12">Dezembro</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 mb-1">Ano</label>
-                <select
-                  value={relFilterAno}
-                  onChange={e => setRelFilterAno(e.target.value)}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-xs"
-                >
-                  <option value="TODOS">Todos os Anos</option>
-                  <option value="2026">2026</option>
-                  <option value="2025">2025</option>
-                  <option value="2024">2024</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 mb-1">Programa</label>
-                <select
-                  value={relFilterPrograma}
-                  onChange={e => setRelFilterPrograma(e.target.value)}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-xs"
-                >
-                  <option value="TODOS">Todos os Programas</option>
-                  {relOptionsProgramas.map(prog => (
-                    <option key={prog} value={prog}>{prog}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 mb-1">Chamada Pública</label>
-                <select
-                  value={relFilterChamada}
-                  onChange={e => setRelFilterChamada(e.target.value)}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-xs"
-                >
-                  <option value="TODOS">Todas as Chamadas</option>
-                  {relOptionsChamadas.map(ch => (
-                    <option key={ch} value={ch}>{ch}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 mb-1">Nº Pedido</label>
-                <select
-                  value={relFilterPedidoNum}
-                  onChange={e => setRelFilterPedidoNum(e.target.value)}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-xs"
-                >
-                  <option value="TODOS">Todos os Pedidos</option>
-                  {relOptionsPedidosNum.map(num => (
-                    <option key={num} value={num}>{num}</option>
                   ))}
                 </select>
               </div>
