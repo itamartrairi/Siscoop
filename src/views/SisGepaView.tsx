@@ -3377,13 +3377,8 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
 
   const filteredRelEntregas = useMemo(() => {
     let rows: any[] = [];
-    const entregaIdsMapped = new Set<string>();
 
     programacoesEntrega.forEach(ent => {
-      entregaIdsMapped.add(ent.id);
-      if (ent.pedidoId) entregaIdsMapped.add(ent.pedidoId);
-      if (ent.pedidoNumero) entregaIdsMapped.add(ent.pedidoNumero);
-
       const progName = ent.programaNome || '';
       const chamada = ent.chamadaPublicaEdital || '';
       // Garantir que pega o número do pedido vinculado se não tiver explícito
@@ -3412,7 +3407,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
       if (ent.itens && ent.itens.length > 0) {
         ent.itens.forEach((it, idx) => {
           rows.push({
-            id: `${ent.id}-${it.produtoNome || ''}-${it.produtorNome || ''}-${idx}`,
+            id: `ent-${ent.id}-${it.produtoNome || ''}-${it.produtorNome || ''}-${idx}`,
             numeroPedido: numPed || 'N/A',
             entregaId: ent.id,
             programa: progName,
@@ -3433,7 +3428,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
         });
       } else {
         rows.push({
-          id: ent.id,
+          id: `ent-${ent.id}`,
           numeroPedido: numPed || 'N/A',
           entregaId: ent.id,
           programa: progName,
@@ -3454,60 +3449,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
       }
     });
 
-    // Também incluir remessas de pedidos que têm cronograma mas não estavam em programacoesEntrega
-    pedidosProdutorPAA.forEach(ped => {
-      if (entregaIdsMapped.has(ped.id) || entregaIdsMapped.has(ped.numeroPedido)) return;
-
-      const progName = ped.programaNome || ped.programa || '';
-      const chamada = ped.chamadaPublicaEdital || '';
-      const numPed = ped.numeroPedido || '';
-      const escolaPed = ped.escolaNome || '';
-
-      if (ped.cronogramaEntregas && ped.cronogramaEntregas.length > 0) {
-        ped.cronogramaEntregas.forEach((parc, pIdx) => {
-          const dataEnt = parc.dataPrevista || ped.dataPrevistaEntrega || '';
-          let ano = '';
-          let mes = '';
-          if (dataEnt.includes('-')) {
-            const parts = dataEnt.split('-');
-            ano = parts[0];
-            mes = String(parseInt(parts[1] || '1', 10)).padStart(2, '0');
-          } else if (dataEnt.includes('/')) {
-            const parts = dataEnt.split('/');
-            if (parts.length === 3) {
-              ano = parts[2];
-              mes = String(parseInt(parts[1] || '1', 10)).padStart(2, '0');
-            }
-          }
-
-          if (ped.itens && ped.itens.length > 0) {
-            ped.itens.forEach((it, itIdx) => {
-              const qtdPrev = Math.round(((it.quantidadePedida || 0) * (parc.percentual || 50)) / 100);
-              rows.push({
-                id: `ped-${ped.id}-rem-${pIdx}-${it.produtoNome || ''}-${itIdx}`,
-                numeroPedido: numPed,
-                entregaId: `rem-${ped.id}-${parc.numero}`,
-                programa: progName,
-                chamadaPublica: chamada,
-                escola: escolaPed,
-                produtor: it.produtorNome || 'Diversos',
-                produto: it.produtoNome || '',
-                quantidadePrevista: qtdPrev,
-                quantidadeEntregue: qtdPrev,
-                unidade: it.unidade || 'kg',
-                data: dataEnt,
-                mes: mes || '01',
-                ano: ano || '2026',
-                motorista: 'Equipe de Logística',
-                veiculo: 'Frotas da Cooperativa',
-                status: parc.entregueConfirmada ? 'ENTREGUE' : (ped.status === 'CONFIRMADO' ? 'EM_TRANSITO' : 'AGENDADA')
-              });
-            });
-          }
-        });
-      }
-    });
-
     return rows.filter(r => {
       const matchProdutor = relFilterProdutor === 'TODOS' || r.produtor === relFilterProdutor ||
         (r.produtor && relFilterProdutor && r.produtor.toLowerCase().includes(relFilterProdutor.toLowerCase()));
@@ -3524,27 +3465,11 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
           relFilterProduto.toLowerCase().includes(r.produto.toLowerCase())
         ));
 
-      const matchMes = relFilterMes === 'TODOS' || r.mes === relFilterMes || String(parseInt(r.mes || '0', 10)).padStart(2, '0') === relFilterMes;
+      const matchMes = relFilterMes === 'TODOS' || r.mes === relFilterMes;
       const matchAno = relFilterAno === 'TODOS' || r.ano === relFilterAno;
-
-      const matchPrograma = relFilterPrograma === 'TODOS' || r.programa === relFilterPrograma ||
-        (r.programa && relFilterPrograma && (
-          r.programa.toLowerCase().includes(relFilterPrograma.toLowerCase()) ||
-          relFilterPrograma.toLowerCase().includes(r.programa.toLowerCase())
-        ));
-
-      const matchChamada = relFilterChamada === 'TODOS' || r.chamadaPublica === relFilterChamada ||
-        (r.chamadaPublica && relFilterChamada && (
-          r.chamadaPublica.toLowerCase().includes(relFilterChamada.toLowerCase()) ||
-          relFilterChamada.toLowerCase().includes(r.chamadaPublica.toLowerCase())
-        ));
-
-      const matchPedido = relFilterPedidoNum === 'TODOS' || r.numeroPedido === relFilterPedidoNum ||
-        (r.numeroPedido && relFilterPedidoNum && (
-          r.numeroPedido.toLowerCase().includes(relFilterPedidoNum.toLowerCase()) ||
-          relFilterPedidoNum.toLowerCase().includes(r.numeroPedido.toLowerCase())
-        ));
-
+      const matchPrograma = relFilterPrograma === 'TODOS' || r.programa === relFilterPrograma;
+      const matchChamada = relFilterChamada === 'TODOS' || r.chamadaPublica === relFilterChamada;
+      const matchPedido = relFilterPedidoNum === 'TODOS' || r.numeroPedido === relFilterPedidoNum;
       const st = (searchTerm || '').trim().toLowerCase();
       const matchSearch = !st ||
         (r.numeroPedido || '').toLowerCase().includes(st) ||
@@ -5034,18 +4959,17 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
 
           {/* Table display */}
           {relatorioSubTab === 'pedidos' ? (
-            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+            <div key="rel-pedidos-wrapper" className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
               <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                 <span className="text-xs font-bold text-slate-700">
                   Exibindo <strong className="text-emerald-700">{filteredRelPedidos.length}</strong> registro(s) de Pedidos
                 </span>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
+                <table key="table-rel-pedidos" className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="bg-slate-100 text-slate-700 font-black uppercase text-[10px] tracking-wider border-b border-slate-200">
                       <th className="p-3">Nº Pedido</th>
-                      <th className="p-3">Edital / Chamada</th>
                       <th className="p-3">Escola Destino</th>
                       <th className="p-3">Produtor Rural</th>
                       <th className="p-3">Produto</th>
@@ -5058,15 +4982,14 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                   <tbody className="divide-y divide-slate-100">
                     {filteredRelPedidos.length === 0 ? (
                       <tr>
-                        <td colSpan={9} className="p-8 text-center text-slate-400 font-medium">
+                        <td colSpan={8} className="p-8 text-center text-slate-400 font-medium">
                           Nenhum pedido encontrado com os filtros selecionados.
                         </td>
                       </tr>
                     ) : (
                       filteredRelPedidos.map(row => (
-                        <tr key={row.id} className="hover:bg-slate-50/80 transition-colors">
+                        <tr key={`ped-row-${row.id}`} className="hover:bg-slate-50/80 transition-colors">
                           <td className="p-3 font-mono font-bold text-slate-900">{row.numeroPedido || 'N/A'}</td>
-                          <td className="p-3 text-slate-600 truncate max-w-[150px]">{row.chamadaPublica || 'N/A'}</td>
                           <td className="p-3 font-medium text-slate-900">{row.escola || 'N/A'}</td>
                           <td className="p-3 font-bold text-emerald-900">{row.produtor}</td>
                           <td className="p-3 text-slate-700 font-medium">{row.produto}</td>
@@ -5086,14 +5009,14 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
               </div>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+            <div key="rel-entregas-wrapper" className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
               <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                 <span className="text-xs font-bold text-slate-700">
                   Exibindo <strong className="text-emerald-700">{filteredRelEntregas.length}</strong> registro(s) de Entregas
                 </span>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
+                <table key="table-rel-entregas" className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="bg-slate-100 text-slate-700 font-black uppercase text-[10px] tracking-wider border-b border-slate-200">
                       <th className="p-3">Nº Pedido</th>
@@ -5116,7 +5039,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                       </tr>
                     ) : (
                       filteredRelEntregas.map(row => (
-                        <tr key={row.id} className="hover:bg-slate-50/80 transition-colors">
+                        <tr key={`ent-row-${row.id}`} className="hover:bg-slate-50/80 transition-colors">
                           <td className="p-3 font-mono font-bold text-slate-900">{row.numeroPedido || 'N/A'}</td>
                           <td className="p-3 font-medium text-slate-900">{row.escola || 'N/A'}</td>
                           <td className="p-3 font-bold text-emerald-900">{row.produtor}</td>

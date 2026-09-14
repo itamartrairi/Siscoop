@@ -1845,66 +1845,7 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
               </div>
             </div>
 
-            {/* Migração de dados legados (sem cooperativa/tenantId) — somente ADMIN */}
-            {currentUser?.role === 'ADMIN' && (
-              <div className="p-5 bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl border border-rose-500/30 space-y-3 shadow-lg">
-                <div className="flex items-center gap-3 border-b border-slate-700/60 pb-3">
-                  <div className="p-2.5 bg-rose-500/20 text-rose-400 rounded-2xl border border-rose-500/30">
-                    <RefreshCw className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-white text-sm">Migrar Dados Legados para esta Cooperativa</div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">
-                      Atribui a cooperativa atual (<strong className="text-slate-200">{currentTenant?.name}</strong>) a
-                      registros do Firestore gravados antes do isolamento por cooperativa e que ainda estão sem
-                      <code className="mx-1 px-1 py-0.5 bg-slate-950 rounded text-rose-300">tenantId</code>
-                      (cooperados, transações de capital, contas financeiras, assembleias e backups).
-                    </div>
-                  </div>
-                </div>
-
-                <div className="text-[10px] text-amber-300/90 bg-amber-950/40 border border-amber-700/40 rounded-xl p-2.5">
-                  ⚠️ Requer que as novas <code className="px-1 bg-slate-950 rounded">firestore.rules</code> já
-                  estejam publicadas e que este usuário seja reconhecido como admin pelas regras (e-mail cadastrado
-                  em <code className="px-1 bg-slate-950 rounded">firestore.rules</code> ou documento em{' '}
-                  <code className="px-1 bg-slate-950 rounded">admins/{'{uid}'}</code>). Rode apenas uma vez por
-                  cooperativa nova; rodar de novo não duplica nada, mas não desfaz sozinho — confira o resultado
-                  antes de repetir.
-                </div>
-
-                {migrationMessage && (
-                  <div className={`p-3 rounded-xl text-xs font-medium border ${migrationMessage.success ? 'bg-emerald-950/80 border-emerald-600/60 text-emerald-300' : 'bg-rose-950/80 border-rose-600/60 text-rose-300'}`}>
-                    {migrationMessage.message}
-                  </div>
-                )}
-
-                {migrationResults && (
-                  <div className="flex flex-wrap gap-2">
-                    {migrationResults.map(r => (
-                      <span
-                        key={r.collection}
-                        className={`px-2 py-0.5 rounded font-mono text-[10px] border ${r.error ? 'bg-rose-950/80 text-rose-300 border-rose-700/50' : 'bg-slate-900/80 text-emerald-300 border-emerald-700/50'}`}
-                        title={r.error || ''}
-                      >
-                        {r.collection}: {r.error ? 'erro' : `${r.migrated}/${r.found} migrado(s)`}
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={handleMigrateLegacyData}
-                    disabled={isMigratingLegacy}
-                    className="px-4 py-2 bg-rose-700 hover:bg-rose-600 text-white font-bold rounded-xl shadow-md text-xs flex items-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isMigratingLegacy ? 'animate-spin' : ''}`} />
-                    <span>{isMigratingLegacy ? 'Migrando...' : `Migrar Dados Legados para "${currentTenant?.name || 'esta cooperativa'}"`}</span>
-                  </button>
-                </div>
-              </div>
-            )}
+            
 
             {/* Google Workspace & Drive Picker Integration Card */}
             <div className="p-5 bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl border border-blue-500/30 space-y-4 shadow-lg">
