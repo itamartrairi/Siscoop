@@ -1,3 +1,4 @@
+import { formatarData } from '../utils/dateHelpers';
 import React from 'react';
 import { useCoop } from '../context/CoopContext';
 import { X, Printer, Download, CheckCircle2, ShieldCheck } from 'lucide-react';
@@ -60,7 +61,7 @@ export const ReceiptModal: React.FC<Props> = ({ transacaoId, reciboData, onClose
     doc.text(`Valor: R$ ${valorFormatado}`, 20, 50);
     doc.text(`Cooperado: ${details!.cooperadoNome} (${details!.cooperadoMatricula})`, 20, 60);
     doc.text(`CPF: ${details!.cooperadoCpf}`, 20, 68);
-    doc.text(`Data: ${details!.data}`, 20, 76);
+    doc.text(`Data: ${formatarData(details!.data)}`, 20, 76);
     doc.text(`Forma de Pagamento: ${details!.formaPagamento}`, 20, 84);
 
     doc.setFontSize(10);
@@ -118,7 +119,7 @@ export const ReceiptModal: React.FC<Props> = ({ transacaoId, reciboData, onClose
               <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 text-xs font-semibold font-mono">
                 <CheckCircle2 className="w-3.5 h-3.5" /> {details.numeroRecibo}
               </span>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">Emissão: {details.data}</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">Emissão: {formatarData(details.data)}</p>
             </div>
           </div>
 

@@ -1,3 +1,4 @@
+import { formatarData } from '../utils/dateHelpers';
 import React, { useState } from 'react';
 import { useCoop } from '../context/CoopContext';
 import {
@@ -229,7 +230,7 @@ export const PortalCooperadoView: React.FC = () => {
                   <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
                     <td className="p-3 font-mono">
                       <div className="font-bold text-slate-900 dark:text-white">{t.numeroDocumento}</div>
-                      <div className="text-[10px] text-slate-400">{t.data}</div>
+                      <div className="text-[10px] text-slate-400">{formatarData(t.data)}</div>
                     </td>
                     <td className="p-3 font-semibold text-emerald-700 dark:text-emerald-400">{t.tipo}</td>
                     <td className="p-3 text-slate-600 dark:text-slate-300">{t.formaPagamento}</td>

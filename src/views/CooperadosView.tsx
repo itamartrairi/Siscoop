@@ -1,3 +1,4 @@
+import { formatarData } from '../utils/dateHelpers';
 import React, { useState } from 'react';
 import { useCoop } from '../context/CoopContext';
 import { ImportarCsvModal } from '../components/ImportarCsvModal';
@@ -293,7 +294,7 @@ export const CooperadosView: React.FC = () => {
     doc.setFontSize(10);
     doc.text(`Nome: ${c.nome}`, 20, 45);
     doc.text(`CPF: ${c.cpf} | RG: ${c.rg}`, 20, 52);
-    doc.text(`Data Nasc: ${c.dataNascimento} | Sexo: ${c.sexo}`, 20, 59);
+    doc.text(`Data Nasc: ${formatarData(c.dataNascimento)} | Sexo: ${c.sexo}`, 20, 59);
     doc.text(`Profissão: ${c.profissao} | Escolaridade: ${c.escolaridade}`, 20, 66);
     doc.text(`Situação: ${c.situacao} | Data Filiação: ${c.dataFiliacao}`, 20, 73);
     doc.text(`Categoria: ${c.categoria}`, 20, 80);
@@ -1229,7 +1230,7 @@ export const CooperadosView: React.FC = () => {
                               <tr key={tx.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50">
                                 <td className="p-3 font-mono">
                                   <div className="font-bold text-slate-900 dark:text-white">{tx.numeroDocumento}</div>
-                                  <div className="text-[10px] text-slate-400">{tx.data}</div>
+                                  <div className="text-[10px] text-slate-400">{formatarData(tx.data)}</div>
                                 </td>
                                 <td className="p-3">
                                   <span className={`px-2 py-0.5 rounded font-bold text-[10px] ${
@@ -1566,7 +1567,7 @@ export const CooperadosView: React.FC = () => {
                       <div>
                         <div className="font-semibold text-slate-800 dark:text-slate-200">{h.acao}</div>
                         <div className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">{h.detalhes}</div>
-                        <div className="text-[10px] text-slate-400 mt-1 font-mono">{h.usuario} • {h.data}</div>
+                        <div className="text-[10px] text-slate-400 mt-1 font-mono">{h.usuario} • {formatarData(h.data)}</div>
                       </div>
                     </div>
                   ))}
@@ -1830,7 +1831,7 @@ export const CooperadosView: React.FC = () => {
                           <div>
                             <span className="font-bold text-slate-800 dark:text-slate-200">{t.numeroDocumento}</span>
                             <span className="text-slate-500 ml-2">({t.tipo})</span>
-                            <span className="text-slate-400 ml-2 font-mono">{t.data}</span>
+                            <span className="text-slate-400 ml-2 font-mono">{formatarData(t.data)}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">

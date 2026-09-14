@@ -1,3 +1,4 @@
+import { formatarData } from '../utils/dateHelpers';
 import React, { useState, useMemo } from 'react';
 import { useCoop } from '../context/CoopContext';
 import {
@@ -482,7 +483,7 @@ if (f) {
                   </tr>
                 ) : solicitacoesFiltradas.map(s => (
                   <tr key={s.id} className="hover:bg-slate-50/80">
-                    <td className="p-3 text-slate-600 font-mono">{s.dataSolicitacao}</td>
+                    <td className="p-3 text-slate-600 font-mono">{formatarData(s.dataSolicitacao)}</td>
                     <td className="p-3 font-bold text-slate-900">
                       {s.itens?.length ? `${s.itens.length} produto(s) solicitado(s)` : s.itemDescricao}
                       {s.itens?.length ? <div className="text-[10px] text-emerald-700 font-semibold mt-1">{s.itens.map(i => `${i.descricao} (${i.quantidade} ${i.unidade})`).join(' · ')}</div> : null}
@@ -611,8 +612,8 @@ if (f) {
                         <div className="text-[10px] text-emerald-700 font-semibold">{o.itens?.length || 0} produto(s) • {o.solicitacaoId ? 'Vinculada à solicitação' : 'Compra avulsa'}</div>
                         <div className="text-[10px] text-slate-500 font-normal">{o.observacoes}</div>
                       </td>
-                      <td className="p-3 text-slate-600 font-semibold">{o.dataEmissao}</td>
-                      <td className="p-3 text-slate-600 font-semibold">{o.dataPrevisaoEntrega}</td>
+                      <td className="p-3 text-slate-600 font-semibold">{formatarData(o.dataEmissao)}</td>
+                      <td className="p-3 text-slate-600 font-semibold">{formatarData(o.dataPrevisaoEntrega)}</td>
                       <td className="p-3 text-slate-700 font-medium">{o.condicoesPagamento}</td>
                       <td className="p-3 font-extrabold text-emerald-700 text-sm">
                         R$ {(o.valorTotal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}

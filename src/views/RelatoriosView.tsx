@@ -1,3 +1,4 @@
+import { formatarData } from '../utils/dateHelpers';
 import React, { useState, useMemo } from 'react';
 import { useCoop } from '../context/CoopContext';
 import {
@@ -168,11 +169,11 @@ export const RelatoriosView: React.FC = () => {
       } else if (selectedReportType === 'INADIMPLENCIA') {
         lineText = `${item.matricula} | ${item.nome} | Subscrito: R$ ${item.capitalSubscrito} | Débito: R$ ${item.capitalSubscrito - item.capitalIntegralizado}`;
       } else if (selectedReportType === 'ASSEMBLEIAS') {
-        lineText = `${item.data} | ${item.titulo} | Local: ${item.local} | Status: ${item.status}`;
+        lineText = `${formatarData(item.data)} | ${item.titulo} | Local: ${item.local} | Status: ${item.status}`;
       } else if (selectedReportType === 'MANDATOS') {
         lineText = `${item.cargo}: ${item.nome} (${item.inicioMandato} até ${item.fimMandato})`;
       } else if (selectedReportType === 'AUDITORIA') {
-        lineText = `${item.data} | ${item.usuario} | ${item.acao} | ${item.detalhes}`;
+        lineText = `${formatarData(item.data)} | ${item.usuario} | ${item.acao} | ${item.detalhes}`;
       } else if (selectedReportType === 'PEDIDOS_ENTREGAS') {
         lineText = `Ped: ${item.numeroPedido} | Escola: ${item.escola} | Produtor: ${item.produtor} | Produto: ${item.produto} (${item.quantidade} ${item.unidade}) | R$ ${item.valorTotal}`;
       }
@@ -303,7 +304,7 @@ export const RelatoriosView: React.FC = () => {
       </div>
 
       {/* Report Types Selector Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-9 gap-2.5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5">
         {[
           { id: 'COOPERADOS', label: 'Cooperados', icon: Users, color: 'text-emerald-500' },
           { id: 'CAPITAL', label: 'Capital Social', icon: Wallet, color: 'text-blue-500' },
@@ -313,7 +314,6 @@ export const RelatoriosView: React.FC = () => {
           { id: 'MANDATOS', label: 'Diretoria', icon: Award, color: 'text-amber-600' },
           { id: 'ANIVERSARIANTES', label: 'Aniversariantes', icon: Gift, color: 'text-pink-500' },
           { id: 'AUDITORIA', label: 'Auditoria', icon: Activity, color: 'text-rose-500' },
-          { id: 'PEDIDOS_ENTREGAS', label: 'Pedidos e Entregas', icon: Truck, color: 'text-teal-600' },
         ].map(item => {
           const Icon = item.icon;
           const isSelected = selectedReportType === item.id;
@@ -509,7 +509,7 @@ export const RelatoriosView: React.FC = () => {
                     {(selectedReportType === 'CAPITAL' || selectedReportType === 'INTEGRALIZACOES') && (
                       <>
                         <td className="p-4 font-mono font-bold text-emerald-600 dark:text-emerald-300">{item.numeroDocumento}</td>
-                        <td className="p-4 font-mono text-slate-600 dark:text-white">{item.data}</td>
+                        <td className="p-4 font-mono text-slate-600 dark:text-white">{formatarData(item.data)}</td>
                         <td className="p-4 font-semibold text-slate-900 dark:text-white">{item.cooperadoNome}</td>
                         <td className="p-4 dark:text-white">{item.tipo}</td>
                         <td className="p-4 dark:text-white">{item.formaPagamento}</td>
@@ -529,7 +529,7 @@ export const RelatoriosView: React.FC = () => {
                     {selectedReportType === 'ASSEMBLEIAS' && (
                       <>
                         <td className="p-4 font-semibold text-slate-900 dark:text-white">{item.titulo}</td>
-                        <td className="p-4 font-mono text-slate-600 dark:text-white">{item.data}</td>
+                        <td className="p-4 font-mono text-slate-600 dark:text-white">{formatarData(item.data)}</td>
                         <td className="p-4 dark:text-white">{item.local}</td>
                         <td className="p-4 dark:text-white">{item.tipo}</td>
                         <td className="p-4 text-center">
@@ -557,13 +557,13 @@ export const RelatoriosView: React.FC = () => {
                         <td className="p-4 font-mono font-bold text-emerald-600 dark:text-emerald-300">{item.matricula}</td>
                         <td className="p-4 font-semibold text-slate-900 dark:text-white">{item.nome}</td>
                         <td className="p-4 dark:text-white">{item.categoria}</td>
-                        <td className="p-4 font-mono text-slate-600 dark:text-white">{item.dataNascimento || '15/05/1975'}</td>
+                        <td className="p-4 font-mono text-slate-600 dark:text-white">{formatarData(item.dataNascimento) || '15/05/1975'}</td>
                         <td className="p-4 font-mono text-slate-600 dark:text-white">{item.celular || item.telefone || '(16) 99999-9999'}</td>
                       </>
                     )}
                     {selectedReportType === 'AUDITORIA' && (
                       <>
-                        <td className="p-4 font-mono text-slate-600 dark:text-white">{item.data}</td>
+                        <td className="p-4 font-mono text-slate-600 dark:text-white">{formatarData(item.data)}</td>
                         <td className="p-4 font-bold text-indigo-600 dark:text-indigo-300">{item.modulo}</td>
                         <td className="p-4 font-semibold text-slate-900 dark:text-white">{item.usuario}</td>
                         <td className="p-4 dark:text-white">{item.acao}</td>

@@ -1,3 +1,4 @@
+import { formatarData } from '../utils/dateHelpers';
 import React, { useState } from 'react';
 import { useCoop } from '../context/CoopContext';
 import {
@@ -399,7 +400,7 @@ if (p) {
                     <tr key={l.id} className="hover:bg-emerald-50/30 transition-colors">
                       <td className="px-5 py-4 align-top">
                         <div className="font-mono font-black text-slate-900">#{l.numeroLancamento}</div>
-                        <div className="text-[11px] text-slate-500 mt-1">{l.data}</div>
+                        <div className="text-[11px] text-slate-500 mt-1">{formatarData(l.data)}</div>
                         {!prazo.aberto && <span className="inline-block mt-2 px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[9px] font-bold">Período encerrado</span>}
                       </td>
                       <td className="px-5 py-4 align-top min-w-[280px]">

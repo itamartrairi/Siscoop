@@ -1,3 +1,4 @@
+import { formatarData } from '../utils/dateHelpers';
 import React, { useState, useMemo } from 'react';
 import jsPDF from 'jspdf';
 import * as XLSX from '@e965/xlsx';
@@ -3895,7 +3896,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                         </div>
                         <div className="text-right">
                           <span className="text-slate-500 block text-[10px] font-semibold">Prazo de Vigência:</span>
-                          <span className="font-bold text-slate-800 text-[11px]">{cp.dataAbertura} até {cp.dataEncerramento}</span>
+                          <span className="font-bold text-slate-800 text-[11px]">{formatarData(cp.dataAbertura)} até {formatarData(cp.dataEncerramento)}</span>
                         </div>
                       </div>
 
@@ -4356,7 +4357,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                           <div>
                             <div className="font-bold text-slate-900 flex items-center gap-1">
                               <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                              <span>{p.dataPrevistaEntrega}</span>
+                              <span>{formatarData(p.dataPrevistaEntrega)}</span>
                             </div>
                             <span className="text-[10px] text-slate-500">Entrega Única</span>
                           </div>
@@ -4587,7 +4588,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                           <td className="p-3 font-bold text-slate-900">
                             <div className="flex items-center gap-1.5">
                               <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                              <span>{pe.dataPrevista}</span>
+                              <span>{formatarData(pe.dataPrevista)}</span>
                             </div>
                             {pe.horarioSaidaPrevisto && (
                               <div className="text-[10px] text-slate-500 font-normal flex items-center gap-1 mt-0.5">
@@ -4950,7 +4951,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                           <td className="p-3 text-slate-700 font-medium">{row.produto}</td>
                           <td className="p-3 text-right font-mono font-bold text-slate-900">{row.quantidade} {row.unidade}</td>
                           <td className="p-3 text-right font-mono font-bold text-emerald-700">R$ {row.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                          <td className="p-3 text-slate-500">{row.data}</td>
+                          <td className="p-3 text-slate-500">{formatarData(row.data)}</td>
                           <td className="p-3">
                             <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded text-[10px]">
                               {row.status}
@@ -4975,7 +4976,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                   <thead>
                     <tr className="bg-slate-100 text-slate-700 font-black uppercase text-[10px] tracking-wider border-b border-slate-200">
                       <th className="p-3">Nº Pedido</th>
-                      <th className="p-3">Programa</th>
                       <th className="p-3">Escola Destino</th>
                       <th className="p-3">Produtor Rural</th>
                       <th className="p-3">Produto</th>
@@ -4989,7 +4989,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                   <tbody className="divide-y divide-slate-100">
                     {filteredRelEntregas.length === 0 ? (
                       <tr>
-                        <td colSpan={10} className="p-8 text-center text-slate-400 font-medium">
+                        <td colSpan={9} className="p-8 text-center text-slate-400 font-medium">
                           Nenhuma entrega encontrada com os filtros selecionados.
                         </td>
                       </tr>
@@ -4997,14 +4997,13 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                       filteredRelEntregas.map(row => (
                         <tr key={row.id} className="hover:bg-slate-50/80 transition-colors">
                           <td className="p-3 font-mono font-bold text-slate-900">{row.numeroPedido || 'N/A'}</td>
-                          <td className="p-3"><span className="px-2 py-0.5 bg-teal-50 text-teal-800 font-bold rounded text-[10px]">{row.programa}</span></td>
                           <td className="p-3 font-medium text-slate-900">{row.escola || 'N/A'}</td>
                           <td className="p-3 font-bold text-emerald-900">{row.produtor}</td>
                           <td className="p-3 text-slate-700 font-medium">{row.produto}</td>
                           <td className="p-3 text-right font-mono text-slate-700">{row.quantidadePrevista} {row.unidade}</td>
                           <td className="p-3 text-right font-mono font-bold text-emerald-700">{row.quantidadeEntregue} {row.unidade}</td>
                           <td className="p-3 text-slate-600">{row.motorista} ({row.veiculo || 'N/A'})</td>
-                          <td className="p-3 text-slate-500">{row.data}</td>
+                          <td className="p-3 text-slate-500">{formatarData(row.data)}</td>
                           <td className="p-3">
                             <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded text-[10px]">
                               {row.status}
@@ -5055,15 +5054,23 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                 <h3 className="text-base font-black uppercase text-slate-900">{config?.nomeCooperativa || 'Cooperativa da Agricultura Familiar'}</h3>
                 <p className="text-[11px] text-slate-600">CNPJ: {config?.cnpj || '00.000.000/0001-00'} • Sistema SisGepa PAA & PNAE</p>
                 <h4 className="text-sm font-bold text-emerald-800 uppercase pt-1">
-                  Relatório Oficial de {relatorioSubTab === 'pedidos' ? 'Pedidos aos Produtores' : 'Programação de Entregas'}
+                  {relatorioSubTab === 'pedidos' ? 'Relatório Oficial de Pedidos aos Produtores' : 'Relatório de Entregas'}
                 </h4>
-                {relatorioSubTab === 'pedidos' && (
+                {relatorioSubTab === 'pedidos' ? (
                   <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] font-semibold text-slate-700 pt-1">
                     <span><strong>Nº do Pedido:</strong> {relFilterPedidoNum !== 'TODOS' ? relFilterPedidoNum : (Array.from(new Set(filteredRelPedidos.map(r => r.numeroPedido).filter(Boolean))).join(', ') || 'Todos')}</span>
                     <span className="text-slate-300">•</span>
                     <span><strong>Programa:</strong> {relFilterPrograma !== 'TODOS' ? relFilterPrograma : (Array.from(new Set(filteredRelPedidos.map(r => r.programa).filter(Boolean))).join(', ') || 'Todos')}</span>
                     <span className="text-slate-300">•</span>
-                    <span><strong>Data:</strong> {Array.from(new Set(filteredRelPedidos.map(r => r.data).filter(Boolean))).join(', ') || 'Todas'}</span>
+                    <span><strong>Data:</strong> {Array.from(new Set(filteredRelPedidos.map(r => formatarData(r.data)).filter(Boolean))).join(', ') || 'Todas'}</span>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] font-semibold text-slate-700 pt-1">
+                    <span><strong>Nº do Pedido:</strong> {relFilterPedidoNum !== 'TODOS' ? relFilterPedidoNum : (Array.from(new Set(filteredRelEntregas.map(r => r.numeroPedido).filter(Boolean))).join(', ') || 'Todos')}</span>
+                    <span className="text-slate-300">•</span>
+                    <span><strong>Programa:</strong> {relFilterPrograma !== 'TODOS' ? relFilterPrograma : (Array.from(new Set(filteredRelEntregas.map(r => r.programa).filter(Boolean))).join(', ') || 'Todos')}</span>
+                    <span className="text-slate-300">•</span>
+                    <span><strong>Data:</strong> {Array.from(new Set(filteredRelEntregas.map(r => formatarData(r.data)).filter(Boolean))).join(', ') || 'Todas'}</span>
                   </div>
                 )}
                 <p className="text-[10px] text-slate-400">Emitido em: {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR')}</p>
@@ -5110,26 +5117,22 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                   <thead>
                     <tr className="bg-slate-200 text-slate-800 font-black border-b border-slate-300">
                       <th className="p-2">Nº Pedido</th>
-                      <th className="p-2">Programa</th>
                       <th className="p-2">Escola Destino</th>
                       <th className="p-2">Produtor Rural</th>
                       <th className="p-2">Produto</th>
                       <th className="p-2 text-right">Qtd Entregue</th>
                       <th className="p-2">Motorista</th>
-                      <th className="p-2">Data Prevista</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
                     {filteredRelEntregas.map(row => (
                       <tr key={row.id}>
                         <td className="p-2 font-mono font-bold">{row.numeroPedido}</td>
-                        <td className="p-2">{row.programa}</td>
                         <td className="p-2">{row.escola}</td>
                         <td className="p-2 font-bold">{row.produtor}</td>
                         <td className="p-2">{row.produto}</td>
                         <td className="p-2 text-right font-mono font-bold">{row.quantidadeEntregue} {row.unidade}</td>
                         <td className="p-2">{row.motorista}</td>
-                        <td className="p-2">{row.data}</td>
                       </tr>
                     ))}
                   </tbody>

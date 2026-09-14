@@ -1,3 +1,4 @@
+import { formatarData } from '../utils/dateHelpers';
 import React, { useState } from 'react';
 import { useCoop } from '../context/CoopContext';
 import {
@@ -436,7 +437,7 @@ if (c) {
                       )}
                     </td>
                     <td className="p-3 text-slate-700">{c.pessoaNome}</td>
-                    <td className="p-3 text-slate-600 font-mono">{c.dataVencimento}</td>
+                    <td className="p-3 text-slate-600 font-mono">{formatarData(c.dataVencimento)}</td>
                     <td className={`p-3 font-bold ${c.tipo === 'RECEBER' ? 'text-emerald-700' : 'text-slate-900'}`}>
                       R$ {(c.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </td>
@@ -503,7 +504,7 @@ if (c) {
               <tbody className="divide-y divide-slate-100">
                 {(extratoBancario?.lancamentos || []).map(l => (
                   <tr key={l.id} className="hover:bg-slate-50/80">
-                    <td className="p-3 text-slate-600 font-mono">{l.data}</td>
+                    <td className="p-3 text-slate-600 font-mono">{formatarData(l.data)}</td>
                     <td className="p-3 font-bold text-slate-900">{l.historico}</td>
                     <td className="p-3">
                       <span className={`px-2 py-0.5 rounded font-bold text-[10px] ${

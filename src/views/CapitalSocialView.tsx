@@ -1,3 +1,4 @@
+import { formatarData } from '../utils/dateHelpers';
 import React, { useState } from 'react';
 import { useCoop } from '../context/CoopContext';
 import {
@@ -333,7 +334,7 @@ export const CapitalSocialView: React.FC = () => {
                     <tr key={tx.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition-colors">
                       <td className="p-4 font-mono">
                         <div className="font-semibold text-slate-900 dark:text-white">{tx.numeroDocumento}</div>
-                        <div className="text-[11px] text-slate-400">{tx.data}</div>
+                        <div className="text-[11px] text-slate-400">{formatarData(tx.data)}</div>
                       </td>
 
                       <td className="p-4">
@@ -409,7 +410,7 @@ export const CapitalSocialView: React.FC = () => {
                     </td>
 
                     <td className="p-4 font-mono text-slate-700 dark:text-slate-300">
-                      {p.dataVencimento}
+                      {formatarData(p.dataVencimento)}
                     </td>
 
                     <td className="p-4 font-mono font-bold text-slate-900 dark:text-white">
@@ -751,7 +752,7 @@ export const CapitalSocialView: React.FC = () => {
               </div>
               <div className="flex justify-between items-center text-[11px] text-slate-400">
                 <span>Vencimento Original:</span>
-                <span className="font-mono">{selectedBaixaParcela.dataVencimento}</span>
+                <span className="font-mono">{formatarData(selectedBaixaParcela.dataVencimento)}</span>
               </div>
             </div>
 
