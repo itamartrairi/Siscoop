@@ -1985,10 +1985,11 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
   const distribuirProporcional = (total: number, pesos: number[]): number[] => {
     const somaPesos = pesos.reduce((s, p) => s + p, 0);
     if (somaPesos <= 0 || total <= 0) return pesos.map(() => 0);
-    const valores = pesos.map(p => Math.round((p / somaPesos) * total * 100) / 100);
+    const isTotalInteiro = Number.isInteger(total);
+    const valores = pesos.map(p => isTotalInteiro ? Math.round((p / somaPesos) * total) : Math.round((p / somaPesos) * total * 100) / 100);
     const somaAtual = valores.reduce((s, v) => s + v, 0);
-    const diferenca = Math.round((total - somaAtual) * 100) / 100;
-    if (valores.length > 0) valores[valores.length - 1] = Math.round((valores[valores.length - 1] + diferenca) * 100) / 100;
+    const diferenca = isTotalInteiro ? (total - somaAtual) : Math.round((total - somaAtual) * 100) / 100;
+    if (valores.length > 0) valores[valores.length - 1] = isTotalInteiro ? (valores[valores.length - 1] + diferenca) : Math.round((valores[valores.length - 1] + diferenca) * 100) / 100;
     return valores;
   };
 
@@ -2173,16 +2174,24 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
         const escolasComQtd = p.escolas.filter(e => (e.quantidade || 0) > 0);
         const linhasEscola = escolasComQtd.length > 0 ? escolasComQtd : [{ escolaId: '', escolaNome: '', quantidade: p.quantidadeAlocada }];
         linhasEscola.forEach(e => {
+          // Se houver números decimais na quantidade rateada, arredonda para número inteiro
+          const qtdBruta = Number(e.quantidade) || 0;
+          const qtdArredondada = Math.round(qtdBruta);
+          const qtdOfertadaBruta = Number(p.quantidadeOfertada) || 0;
+          const qtdOfertadaArredondada = Math.round(qtdOfertadaBruta);
+          const precoUnit = Number(item.precoMaximoUnitario) || 0;
+          const valorTotal = Math.round(qtdArredondada * precoUnit * 100) / 100;
+
           novosItens.push({
             produtorId: p.produtorId,
             produtorNome: p.produtorNome,
             produtoId: item.produtoId || '',
             produtoNome: item.produtoNome,
             unidadeMedida: item.unidade,
-            quantidadeOfertada: p.quantidadeOfertada,
-            quantidadePedida: e.quantidade,
-            precoUnitario: item.precoMaximoUnitario,
-            valorTotalItem: e.quantidade * item.precoMaximoUnitario,
+            quantidadeOfertada: qtdOfertadaArredondada,
+            quantidadePedida: qtdArredondada,
+            precoUnitario: precoUnit,
+            valorTotalItem: valorTotal,
             polo: prodObj?.polo || 'Sede',
             escolaId: e.escolaId,
             escolaNome: e.escolaNome,
