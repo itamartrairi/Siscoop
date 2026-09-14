@@ -3,8 +3,6 @@ import { useCoop } from '../context/CoopContext';
 import {
   CircleDollarSign,
   Plus,
-  ArrowUpRight,
-  ArrowDownRight,
   Landmark,
   BarChart3,
   FileText,
@@ -176,11 +174,6 @@ if (c) {
     });
   };
 
-  const totalPagar = contasPagarReceber.filter(c => c.tipo === 'PAGAR' && c.status === 'PENDENTE').reduce((acc, c) => acc + (c.valor || 0), 0);
-  const totalFixas = contasPagarReceber.filter(c => c.classificacaoDespesa === 'FIXA' && c.status !== 'CANCELADO').reduce((acc, c) => acc + (c.valor || 0), 0);
-  const totalVariaveis = contasPagarReceber.filter(c => c.classificacaoDespesa === 'VARIAVEL' && c.status !== 'CANCELADO').reduce((acc, c) => acc + (c.valor || 0), 0);
-  const totalReceber = contasPagarReceber.filter(c => c.tipo === 'RECEBER' && c.status === 'PENDENTE').reduce((acc, c) => acc + (c.valor || 0), 0);
-
   const dataNoPeriodo = (data?: string) => {
     if (!data) return false;
     const anoOk = filtroAno === 'TODAS' || data.startsWith(filtroAno);
@@ -319,55 +312,6 @@ if (c) {
               <Plus className="w-4 h-4" /> Nova Conta (Pagar / Receber)
             </button>
           )}
-        </div>
-      </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="p-5 bg-white rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
-          <div>
-            <span className="text-xs font-bold text-slate-500">Contas a Receber (Pendente)</span>
-            <div className="text-xl font-black text-emerald-700 mt-1">R$ {totalReceber.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-          </div>
-          <div className="p-3 bg-emerald-50 text-emerald-700 rounded-xl">
-            <ArrowDownRight className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="p-5 bg-white rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
-          <div>
-            <span className="text-xs font-bold text-slate-500">Contas a Pagar (Pendente)</span>
-            <div className="text-xl font-black text-rose-700 mt-1">R$ {totalPagar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-          </div>
-          <div className="p-3 bg-rose-50 text-rose-700 rounded-xl">
-            <ArrowUpRight className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="p-5 bg-white rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
-          <div>
-            <span className="text-xs font-bold text-slate-500">Saldo Atual da Conta Bancária</span>
-            <div className="text-xl font-black text-slate-900 mt-1">R$ {(extratoBancario?.saldoAtual || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-          </div>
-          <div className="p-3 bg-slate-100 text-slate-700 rounded-xl">
-            <Landmark className="w-5 h-5" />
-          </div>
-        </div>
-      </div>
-
-      {/* KPI Fixas vs Variáveis */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="p-5 bg-indigo-50 rounded-2xl border border-indigo-200/80 shadow-xs flex items-center justify-between">
-          <div>
-            <span className="text-xs font-bold text-indigo-700">Despesas/Receitas Fixas (total)</span>
-            <div className="text-xl font-black text-indigo-800 mt-1">R$ {totalFixas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-          </div>
-        </div>
-        <div className="p-5 bg-amber-50 rounded-2xl border border-amber-200/80 shadow-xs flex items-center justify-between">
-          <div>
-            <span className="text-xs font-bold text-amber-700">Despesas/Receitas Variáveis (total)</span>
-            <div className="text-xl font-black text-amber-800 mt-1">R$ {totalVariaveis.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-          </div>
         </div>
       </div>
 
