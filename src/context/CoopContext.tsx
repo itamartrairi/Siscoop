@@ -2838,12 +2838,12 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // nunca dados de outra cooperativa. Registros muito antigos sem tenantId
   // (dados de exemplo/legado) continuam visíveis para não sumir da tela.
   const activeTenantId = currentTenant?.id || 'coop-01';
-  const tenantCooperados = cooperados.filter(c => !c.tenantId || c.tenantId === activeTenantId);
-  const tenantTransacoesCapital = transacoesCapital.filter(t => !t.tenantId || t.tenantId === activeTenantId);
-  const tenantAssembleias = assembleias.filter(a => !a.tenantId || a.tenantId === activeTenantId);
-  const tenantMandatos = mandatos.filter(m => !m.tenantId || m.tenantId === activeTenantId);
-  const tenantAuditoriaLogs = auditoriaLogs.filter(l => !l.tenantId || l.tenantId === activeTenantId);
-  const tenantWebhooks = webhooks.filter(w => !w.tenantId || w.tenantId === activeTenantId);
+  const tenantCooperados = cooperados.filter(c => pertenceAoTenant(c, activeTenantId));
+  const tenantTransacoesCapital = transacoesCapital.filter(t => pertenceAoTenant(t, activeTenantId));
+  const tenantAssembleias = assembleias.filter(a => pertenceAoTenant(a, activeTenantId));
+  const tenantMandatos = mandatos.filter(m => pertenceAoTenant(m, activeTenantId));
+  const tenantAuditoriaLogs = auditoriaLogs.filter(l => pertenceAoTenant(l, activeTenantId));
+  const tenantWebhooks = webhooks.filter(w => pertenceAoTenant(w, activeTenantId));
 
   // SICOOP PLATFORM Modules — isolamento por tenant (antes expostos sem filtro,
   // então uma cooperativa via os produtores, propostas PAA/PNAE, compras,
@@ -2854,32 +2854,32 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // listas filtradas por tenant são a fonte usada em todas as telas,
   // dropdowns e relatórios que exibem produtores/produtos/escolas.
   const tenantProdutores = produtores
-    .filter(p => !p.tenantId || p.tenantId === activeTenantId)
+    .filter(p => pertenceAoTenant(p, activeTenantId))
     .sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { sensitivity: 'base' }));
   const tenantProdutos = produtos
-    .filter(p => !p.tenantId || p.tenantId === activeTenantId)
+    .filter(p => pertenceAoTenant(p, activeTenantId))
     .sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { sensitivity: 'base' }));
-  const tenantRegistrosProducao = registrosProducao.filter(r => !r.tenantId || r.tenantId === activeTenantId);
-  const tenantProgramas = programas.filter(p => !p.tenantId || p.tenantId === activeTenantId);
-  const tenantChamadasPublicas = chamadasPublicas.filter(c => !c.tenantId || c.tenantId === activeTenantId);
-  const tenantRateiosChamadas = rateiosChamadas.filter(r => !r.tenantId || r.tenantId === activeTenantId);
-  const tenantOfertasPAA = ofertasPAA.filter(o => !o.tenantId || o.tenantId === activeTenantId);
-  const tenantProgramacoesEntrega = programacoesEntrega.filter(p => !p.tenantId || p.tenantId === activeTenantId);
-  const tenantPrestacoesContas = prestacoesContas.filter(p => !p.tenantId || p.tenantId === activeTenantId);
-  const tenantPedidosProdutorPAA = pedidosProdutorPAA.filter(p => !p.tenantId || p.tenantId === activeTenantId);
-  const tenantOrdensCompra = ordensCompra.filter(o => !o.tenantId || o.tenantId === activeTenantId);
-  const tenantPlanoContas = planoContas.filter(p => !p.tenantId || p.tenantId === activeTenantId);
-  const tenantLancamentosContabeis = lancamentosContabeis.filter(l => !l.tenantId || l.tenantId === activeTenantId);
-  const tenantPatrimonio = patrimonio.filter(p => !p.tenantId || p.tenantId === activeTenantId);
-  const tenantContasPagarReceber = contasPagarReceber.filter(c => !c.tenantId || c.tenantId === activeTenantId);
-  const tenantSolicitacoesCompra = solicitacoesCompra.filter(s => !s.tenantId || s.tenantId === activeTenantId);
-  const tenantFornecedores = fornecedores.filter(f => !f.tenantId || f.tenantId === activeTenantId);
-  const tenantEstoque = estoque.filter(e => !e.tenantId || e.tenantId === activeTenantId);
-  const tenantMovimentacoesEstoque = movimentacoesEstoque.filter(m => !m.tenantId || m.tenantId === activeTenantId);
-  const tenantFuncionariosRH = funcionariosRH.filter(f => !f.tenantId || f.tenantId === activeTenantId);
-  const tenantFolhaPagamento = folhaPagamento.filter(f => !f.tenantId || f.tenantId === activeTenantId);
+  const tenantRegistrosProducao = registrosProducao.filter(r => pertenceAoTenant(r, activeTenantId));
+  const tenantProgramas = programas.filter(p => pertenceAoTenant(p, activeTenantId));
+  const tenantChamadasPublicas = chamadasPublicas.filter(c => pertenceAoTenant(c, activeTenantId));
+  const tenantRateiosChamadas = rateiosChamadas.filter(r => pertenceAoTenant(r, activeTenantId));
+  const tenantOfertasPAA = ofertasPAA.filter(o => pertenceAoTenant(o, activeTenantId));
+  const tenantProgramacoesEntrega = programacoesEntrega.filter(p => pertenceAoTenant(p, activeTenantId));
+  const tenantPrestacoesContas = prestacoesContas.filter(p => pertenceAoTenant(p, activeTenantId));
+  const tenantPedidosProdutorPAA = pedidosProdutorPAA.filter(p => pertenceAoTenant(p, activeTenantId));
+  const tenantOrdensCompra = ordensCompra.filter(o => pertenceAoTenant(o, activeTenantId));
+  const tenantPlanoContas = planoContas.filter(p => pertenceAoTenant(p, activeTenantId));
+  const tenantLancamentosContabeis = lancamentosContabeis.filter(l => pertenceAoTenant(l, activeTenantId));
+  const tenantPatrimonio = patrimonio.filter(p => pertenceAoTenant(p, activeTenantId));
+  const tenantContasPagarReceber = contasPagarReceber.filter(c => pertenceAoTenant(c, activeTenantId));
+  const tenantSolicitacoesCompra = solicitacoesCompra.filter(s => pertenceAoTenant(s, activeTenantId));
+  const tenantFornecedores = fornecedores.filter(f => pertenceAoTenant(f, activeTenantId));
+  const tenantEstoque = estoque.filter(e => pertenceAoTenant(e, activeTenantId));
+  const tenantMovimentacoesEstoque = movimentacoesEstoque.filter(m => pertenceAoTenant(m, activeTenantId));
+  const tenantFuncionariosRH = funcionariosRH.filter(f => pertenceAoTenant(f, activeTenantId));
+  const tenantFolhaPagamento = folhaPagamento.filter(f => pertenceAoTenant(f, activeTenantId));
   const tenantEscolasPnae = escolasPnae
-    .filter(e => !e.tenantId || e.tenantId === activeTenantId)
+    .filter(e => pertenceAoTenant(e, activeTenantId))
     .sort((a, b) => (a.nomeEscola || '').localeCompare(b.nomeEscola || '', 'pt-BR', { sensitivity: 'base' }));
   // extratoBancario é armazenado como um objeto único (não uma lista), então
   // não dá pra filtrar como as outras coleções. Se o objeto salvo pertence a
@@ -2899,10 +2899,10 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         saidasMes: 0,
         lancamentos: []
       };
-  const tenantMotoristas = motoristas.filter(m => !m.tenantId || m.tenantId === activeTenantId);
-  const tenantEntregasEscola = entregasEscola.filter(e => !e.tenantId || e.tenantId === activeTenantId);
-  const tenantRomaneiosMotorista = romaneiosMotorista.filter(r => !r.tenantId || r.tenantId === activeTenantId);
-  const tenantNotasFiscais = notasFiscais.filter(n => !n.tenantId || n.tenantId === activeTenantId);
+  const tenantMotoristas = motoristas.filter(m => pertenceAoTenant(m, activeTenantId));
+  const tenantEntregasEscola = entregasEscola.filter(e => pertenceAoTenant(e, activeTenantId));
+  const tenantRomaneiosMotorista = romaneiosMotorista.filter(r => pertenceAoTenant(r, activeTenantId));
+  const tenantNotasFiscais = notasFiscais.filter(n => pertenceAoTenant(n, activeTenantId));
 
 
   // SICOOP PLATFORM Helper Actions

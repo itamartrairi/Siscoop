@@ -3223,40 +3223,61 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
     return pedidosProdutorPAA.filter(p => p.status === 'PENDENTE').length;
   }, [pedidosProdutorPAA]);
 
-  // Options for Relatórios de Pedidos e Entregas
+  // Options for Relatórios de Pedidos e Entregas (agregando pedidos e programações de entrega)
   const relOptionsProdutores = useMemo(() => {
     const setNames = new Set<string>();
-    produtores.forEach(p => setNames.add(p.nome));
+    produtores.forEach(p => p.nome && setNames.add(p.nome));
     pedidosProdutorPAA.forEach(ped => ped.itens?.forEach(it => it.produtorNome && setNames.add(it.produtorNome)));
+    programacoesEntrega.forEach(ent => ent.itens?.forEach(it => it.produtorNome && setNames.add(it.produtorNome)));
     return Array.from(setNames).sort();
-  }, [produtores, pedidosProdutorPAA]);
+  }, [produtores, pedidosProdutorPAA, programacoesEntrega]);
 
   const relOptionsEscolas = useMemo(() => {
     const setEscolas = new Set<string>();
-    escolasPnae.forEach(e => setEscolas.add(e.nome));
-    pedidosProdutorPAA.forEach(ped => ped.escolaNome && setEscolas.add(ped.escolaNome));
+    escolasPnae.forEach(e => e.nome && setEscolas.add(e.nome));
+    pedidosProdutorPAA.forEach(ped => {
+      if (ped.escolaNome) {
+        ped.escolaNome.split(',').forEach(s => s.trim() && setEscolas.add(s.trim()));
+      }
+      ped.escolasNomes?.forEach(e => e && setEscolas.add(e.trim()));
+    });
+    programacoesEntrega.forEach(ent => {
+      if (ent.escolaNome) {
+        ent.escolaNome.split(',').forEach(s => s.trim() && setEscolas.add(s.trim()));
+      }
+      ent.escolasNomes?.forEach(e => e && setEscolas.add(e.trim()));
+      ent.paradasEntrega?.forEach(p => p.escolaNome && setEscolas.add(p.escolaNome.trim()));
+    });
     return Array.from(setEscolas).sort();
-  }, [escolasPnae, pedidosProdutorPAA]);
+  }, [escolasPnae, pedidosProdutorPAA, programacoesEntrega]);
 
   const relOptionsProdutos = useMemo(() => {
     const setProds = new Set<string>();
-    produtos.forEach(p => setProds.add(p.nome));
+    produtos.forEach(p => p.nome && setProds.add(p.nome));
     pedidosProdutorPAA.forEach(ped => ped.itens?.forEach(it => it.produtoNome && setProds.add(it.produtoNome)));
+    programacoesEntrega.forEach(ent => ent.itens?.forEach(it => it.produtoNome && setProds.add(it.produtoNome)));
     return Array.from(setProds).sort();
-  }, [produtos, pedidosProdutorPAA]);
+  }, [produtos, pedidosProdutorPAA, programacoesEntrega]);
 
   const relOptionsProgramas = useMemo(() => {
     const setProg = new Set<string>();
-    programas.forEach(p => setProg.add(p.nome));
-    pedidosProdutorPAA.forEach(ped => (ped.programaNome || ped.programa) && setProg.add(ped.programaNome || ped.programa));
+    programas.forEach(p => p.nome && setProg.add(p.nome));
+    pedidosProdutorPAA.forEach(ped => {
+      const p = ped.programaNome || ped.programa;
+      if (p) setProg.add(p);
+    });
+    programacoesEntrega.forEach(ent => {
+      if (ent.programaNome) setProg.add(ent.programaNome);
+    });
     return Array.from(setProg).sort();
-  }, [programas, pedidosProdutorPAA]);
+  }, [programas, pedidosProdutorPAA, programacoesEntrega]);
 
   const relOptionsChamadas = useMemo(() => {
     const setChamadas = new Set<string>();
     pedidosProdutorPAA.forEach(ped => ped.chamadaPublicaEdital && setChamadas.add(ped.chamadaPublicaEdital));
+    programacoesEntrega.forEach(ent => ent.chamadaPublicaEdital && setChamadas.add(ent.chamadaPublicaEdital));
     return Array.from(setChamadas).sort();
-  }, [pedidosProdutorPAA]);
+  }, [pedidosProdutorPAA, programacoesEntrega]);
 
   const relOptionsPedidosNum = useMemo(() => {
     const setNums = new Set<string>();
@@ -3356,11 +3377,22 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
 
   const filteredRelEntregas = useMemo(() => {
     let rows: any[] = [];
+    const entregaIdsMapped = new Set<string>();
+
     programacoesEntrega.forEach(ent => {
+      entregaIdsMapped.add(ent.id);
+      if (ent.pedidoId) entregaIdsMapped.add(ent.pedidoId);
+      if (ent.pedidoNumero) entregaIdsMapped.add(ent.pedidoNumero);
+
       const progName = ent.programaNome || '';
       const chamada = ent.chamadaPublicaEdital || '';
-      const numPed = ent.pedidoNumero || '';
-      const escolaPed = ent.escolaNome || '';
+      // Garantir que pega o número do pedido vinculado se não tiver explícito
+      let numPed = ent.pedidoNumero || '';
+      if (!numPed && ent.pedidoId) {
+        const pedRel = pedidosProdutorPAA.find(p => p.id === ent.pedidoId);
+        if (pedRel) numPed = pedRel.numeroPedido;
+      }
+      const escolaPed = ent.escolaNome || ent.escolaOrgaoDestino || '';
       const dataEnt = ent.dataPrevista || '';
 
       let ano = '';
@@ -3368,20 +3400,20 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
       if (dataEnt.includes('-')) {
         const parts = dataEnt.split('-');
         ano = parts[0];
-        mes = parts[1];
+        mes = String(parseInt(parts[1] || '1', 10)).padStart(2, '0');
       } else if (dataEnt.includes('/')) {
         const parts = dataEnt.split('/');
         if (parts.length === 3) {
           ano = parts[2];
-          mes = parts[1];
+          mes = String(parseInt(parts[1] || '1', 10)).padStart(2, '0');
         }
       }
 
       if (ent.itens && ent.itens.length > 0) {
-        ent.itens.forEach(it => {
+        ent.itens.forEach((it, idx) => {
           rows.push({
-            id: ent.id + '-' + (it.produtoNome || ''),
-            numeroPedido: numPed,
+            id: `${ent.id}-${it.produtoNome || ''}-${it.produtorNome || ''}-${idx}`,
+            numeroPedido: numPed || 'N/A',
             entregaId: ent.id,
             programa: progName,
             chamadaPublica: chamada,
@@ -3402,7 +3434,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
       } else {
         rows.push({
           id: ent.id,
-          numeroPedido: numPed,
+          numeroPedido: numPed || 'N/A',
           entregaId: ent.id,
           programa: progName,
           chamadaPublica: chamada,
@@ -3422,20 +3454,109 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
       }
     });
 
+    // Também incluir remessas de pedidos que têm cronograma mas não estavam em programacoesEntrega
+    pedidosProdutorPAA.forEach(ped => {
+      if (entregaIdsMapped.has(ped.id) || entregaIdsMapped.has(ped.numeroPedido)) return;
+
+      const progName = ped.programaNome || ped.programa || '';
+      const chamada = ped.chamadaPublicaEdital || '';
+      const numPed = ped.numeroPedido || '';
+      const escolaPed = ped.escolaNome || '';
+
+      if (ped.cronogramaEntregas && ped.cronogramaEntregas.length > 0) {
+        ped.cronogramaEntregas.forEach((parc, pIdx) => {
+          const dataEnt = parc.dataPrevista || ped.dataPrevistaEntrega || '';
+          let ano = '';
+          let mes = '';
+          if (dataEnt.includes('-')) {
+            const parts = dataEnt.split('-');
+            ano = parts[0];
+            mes = String(parseInt(parts[1] || '1', 10)).padStart(2, '0');
+          } else if (dataEnt.includes('/')) {
+            const parts = dataEnt.split('/');
+            if (parts.length === 3) {
+              ano = parts[2];
+              mes = String(parseInt(parts[1] || '1', 10)).padStart(2, '0');
+            }
+          }
+
+          if (ped.itens && ped.itens.length > 0) {
+            ped.itens.forEach((it, itIdx) => {
+              const qtdPrev = Math.round(((it.quantidadePedida || 0) * (parc.percentual || 50)) / 100);
+              rows.push({
+                id: `ped-${ped.id}-rem-${pIdx}-${it.produtoNome || ''}-${itIdx}`,
+                numeroPedido: numPed,
+                entregaId: `rem-${ped.id}-${parc.numero}`,
+                programa: progName,
+                chamadaPublica: chamada,
+                escola: escolaPed,
+                produtor: it.produtorNome || 'Diversos',
+                produto: it.produtoNome || '',
+                quantidadePrevista: qtdPrev,
+                quantidadeEntregue: qtdPrev,
+                unidade: it.unidade || 'kg',
+                data: dataEnt,
+                mes: mes || '01',
+                ano: ano || '2026',
+                motorista: 'Equipe de Logística',
+                veiculo: 'Frotas da Cooperativa',
+                status: parc.entregueConfirmada ? 'ENTREGUE' : (ped.status === 'CONFIRMADO' ? 'EM_TRANSITO' : 'AGENDADA')
+              });
+            });
+          }
+        });
+      }
+    });
+
     return rows.filter(r => {
-      const matchProdutor = relFilterProdutor === 'TODOS' || r.produtor === relFilterProdutor;
-      const matchEscola = relFilterEscola === 'TODOS' || r.escola === relFilterEscola;
-      const matchProduto = relFilterProduto === 'TODOS' || r.produto === relFilterProduto;
-      const matchMes = relFilterMes === 'TODOS' || r.mes === relFilterMes;
+      const matchProdutor = relFilterProdutor === 'TODOS' || r.produtor === relFilterProdutor ||
+        (r.produtor && relFilterProdutor && r.produtor.toLowerCase().includes(relFilterProdutor.toLowerCase()));
+
+      const matchEscola = relFilterEscola === 'TODOS' || r.escola === relFilterEscola ||
+        (r.escola && relFilterEscola && (
+          r.escola.toLowerCase().includes(relFilterEscola.toLowerCase()) ||
+          relFilterEscola.toLowerCase().includes(r.escola.toLowerCase())
+        ));
+
+      const matchProduto = relFilterProduto === 'TODOS' || r.produto === relFilterProduto ||
+        (r.produto && relFilterProduto && (
+          r.produto.toLowerCase().includes(relFilterProduto.toLowerCase()) ||
+          relFilterProduto.toLowerCase().includes(r.produto.toLowerCase())
+        ));
+
+      const matchMes = relFilterMes === 'TODOS' || r.mes === relFilterMes || String(parseInt(r.mes || '0', 10)).padStart(2, '0') === relFilterMes;
       const matchAno = relFilterAno === 'TODOS' || r.ano === relFilterAno;
-      const matchPrograma = relFilterPrograma === 'TODOS' || r.programa === relFilterPrograma;
-      const matchChamada = relFilterChamada === 'TODOS' || r.chamadaPublica === relFilterChamada;
-      const matchPedido = relFilterPedidoNum === 'TODOS' || r.numeroPedido === relFilterPedidoNum;
-      const matchSearch = !searchTerm || r.numeroPedido.toLowerCase().includes(searchTerm.toLowerCase()) || r.escola.toLowerCase().includes(searchTerm.toLowerCase()) || r.produtor.toLowerCase().includes(searchTerm.toLowerCase()) || r.produto.toLowerCase().includes(searchTerm.toLowerCase());
+
+      const matchPrograma = relFilterPrograma === 'TODOS' || r.programa === relFilterPrograma ||
+        (r.programa && relFilterPrograma && (
+          r.programa.toLowerCase().includes(relFilterPrograma.toLowerCase()) ||
+          relFilterPrograma.toLowerCase().includes(r.programa.toLowerCase())
+        ));
+
+      const matchChamada = relFilterChamada === 'TODOS' || r.chamadaPublica === relFilterChamada ||
+        (r.chamadaPublica && relFilterChamada && (
+          r.chamadaPublica.toLowerCase().includes(relFilterChamada.toLowerCase()) ||
+          relFilterChamada.toLowerCase().includes(r.chamadaPublica.toLowerCase())
+        ));
+
+      const matchPedido = relFilterPedidoNum === 'TODOS' || r.numeroPedido === relFilterPedidoNum ||
+        (r.numeroPedido && relFilterPedidoNum && (
+          r.numeroPedido.toLowerCase().includes(relFilterPedidoNum.toLowerCase()) ||
+          relFilterPedidoNum.toLowerCase().includes(r.numeroPedido.toLowerCase())
+        ));
+
+      const st = (searchTerm || '').trim().toLowerCase();
+      const matchSearch = !st ||
+        (r.numeroPedido || '').toLowerCase().includes(st) ||
+        (r.escola || '').toLowerCase().includes(st) ||
+        (r.produtor || '').toLowerCase().includes(st) ||
+        (r.produto || '').toLowerCase().includes(st) ||
+        (r.programa || '').toLowerCase().includes(st) ||
+        (r.motorista || '').toLowerCase().includes(st);
 
       return matchProdutor && matchEscola && matchProduto && matchMes && matchAno && matchPrograma && matchChamada && matchPedido && matchSearch;
     });
-  }, [programacoesEntrega, relFilterProdutor, relFilterEscola, relFilterProduto, relFilterMes, relFilterAno, relFilterPrograma, relFilterChamada, relFilterPedidoNum, searchTerm]);
+  }, [programacoesEntrega, pedidosProdutorPAA, relFilterProdutor, relFilterEscola, relFilterProduto, relFilterMes, relFilterAno, relFilterPrograma, relFilterChamada, relFilterPedidoNum, searchTerm]);
 
   const handleExportRelExcel = () => {
     const dataToExport = relatorioSubTab === 'pedidos' ? filteredRelPedidos : filteredRelEntregas;
@@ -5116,7 +5237,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                 <table className="w-full text-left border-collapse text-[11px]">
                   <thead>
                     <tr className="bg-slate-200 text-slate-800 font-black border-b border-slate-300">
-                      <th className="p-2">Nº Pedido</th>
                       <th className="p-2">Escola Destino</th>
                       <th className="p-2">Produtor Rural</th>
                       <th className="p-2">Produto</th>
@@ -5127,7 +5247,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                   <tbody className="divide-y divide-slate-200">
                     {filteredRelEntregas.map(row => (
                       <tr key={row.id}>
-                        <td className="p-2 font-mono font-bold">{row.numeroPedido}</td>
                         <td className="p-2">{row.escola}</td>
                         <td className="p-2 font-bold">{row.produtor}</td>
                         <td className="p-2">{row.produto}</td>

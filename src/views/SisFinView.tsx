@@ -13,7 +13,8 @@ import {
   TrendingUp,
   WalletCards,
   Scale,
-  PieChart as PieChartIcon
+  PieChart as PieChartIcon,
+  Printer
 } from 'lucide-react';
 import { ContaPagarReceber } from '../types';
 import { playActionCompleteSound } from '../utils/actionSound';
@@ -196,7 +197,24 @@ if (c) {
     (filtroCategoria === 'TODAS' || c.categoria === filtroCategoria) &&
     (filtroConta === 'TODAS' || (c.centroCusto || c.categoria) === filtroConta)
   );
-  const receitasDre = contasFiltradas.filter(c => c.tipo === 'RECEBER' && c.status !== 'CANCELADO').reduce((sum, c) => sum + c.valor, 0);
+  const totalContasReceber = contasFiltradas.filter(c => c.tipo === 'RECEBER' && c.status !== 'CANCELADO').reduce((sum, c) => sum + c.valor, 0);
+  const totalContasPagar = contasFiltradas.filter(c => c.tipo === 'PAGAR' && c.status !== 'CANCELADO').reduce((sum, c) => sum + c.valor, 0);
+
+  // DRE Empresarial Completo
+  const dreReceitaBruta = totalContasReceber;
+  const dreDeducoes = Math.round(dreReceitaBruta * 0.0565 * 100) / 100; // Impostos e retenções sobre vendas (ex: ICMS/PIS/COFINS/Devoluções ~5.65%)
+  const dreReceitaLiquida = Math.max(0, dreReceitaBruta - dreDeducoes);
+  const dreCpv = contasFiltradas.filter(c => c.tipo === 'PAGAR' && c.classificacaoDespesa !== 'FIXA').reduce((sum, c) => sum + c.valor, 0);
+  const dreLucroBruto = dreReceitaLiquida - dreCpv;
+  const dreDespesasAdm = contasFiltradas.filter(c => c.tipo === 'PAGAR' && c.classificacaoDespesa === 'FIXA').reduce((sum, c) => sum + c.valor, 0);
+  const dreEbitda = dreLucroBruto - dreDespesasAdm;
+  const dreReceitasFin = (extratoDoPeriodo || []).filter(l => l.tipo === 'CREDITO' && (l.descricao?.toLowerCase().includes('rendimento') || l.descricao?.toLowerCase().includes('juros'))).reduce((s, l) => s + (l.valor || 0), 0);
+  const dreDespesasFin = (extratoDoPeriodo || []).filter(l => l.tipo === 'DEBITO' && (l.descricao?.toLowerCase().includes('tarifa') || l.descricao?.toLowerCase().includes('juros') || l.descricao?.toLowerCase().includes('iof'))).reduce((s, l) => s + (l.valor || 0), 0) || (contasFiltradas.filter(c => c.tipo === 'PAGAR' && c.categoria === 'FINANCEIRA').reduce((s, c) => s + c.valor, 0));
+  const dreResultadoFin = dreReceitasFin - dreDespesasFin;
+  const dreLair = dreEbitda + dreResultadoFin;
+  const dreProvisaoTributos = dreLair > 0 ? Math.round(dreLair * 0.15 * 100) / 100 : 0;
+  const dreResultadoLiquido = dreLair - dreProvisaoTributos;
+    const receitasDre = contasFiltradas.filter(c => c.tipo === 'RECEBER' && c.status !== 'CANCELADO').reduce((sum, c) => sum + c.valor, 0);
   const despesasDre = contasFiltradas.filter(c => c.tipo === 'PAGAR' && c.status !== 'CANCELADO').reduce((sum, c) => sum + c.valor, 0);
   const custosFixos = contasFiltradas.filter(c => c.tipo === 'PAGAR' && c.classificacaoDespesa === 'FIXA').reduce((sum, c) => sum + c.valor, 0);
   const custosVariaveis = contasFiltradas.filter(c => c.tipo === 'PAGAR' && c.classificacaoDespesa !== 'FIXA').reduce((sum, c) => sum + c.valor, 0);
@@ -249,7 +267,19 @@ if (c) {
     doc.setFillColor(4, 120, 87); doc.rect(0, 0, 210, 30, 'F'); doc.setTextColor(255, 255, 255); doc.setFontSize(17); doc.text('SICOOP', 14, 13); doc.setFontSize(10); doc.text(titulos[tipo], 14, 22);
     doc.setTextColor(30, 41, 59); doc.setFontSize(10); doc.text(`Período: ${filtroMes}/${filtroAno}`, 14, 42); doc.text(`Categoria: ${filtroCategoria} | Conta: ${filtroConta}`, 14, 49);
     let y = 65; doc.setFont('helvetica', 'bold');
-    const linhas: [string, string][] = tipo === 'DRE' ? [['Receita operacional', dinheiro(receitasDre)], ['(-) Custos fixos', dinheiro(custosFixos)], ['(-) Custos variáveis', dinheiro(custosVariaveis)], ['Resultado operacional', dinheiro(receitasDre - despesasDre)]]
+    const linhas: [string, string][] = tipo === 'DRE' ? [
+        ['1.0 RECEITA OPERACIONAL BRUTA', dinheiro(dreReceitaBruta)],
+        ['2.0 (-) DEDUÇÕES E TRIBUTOS SOBRE VENDAS', `- ${dinheiro(dreDeducoes)}`],
+        ['3.0 (=) RECEITA OPERACIONAL LÍQUIDA', dinheiro(dreReceitaLiquida)],
+        ['4.0 (-) CUSTOS DAS MERCADORIAS/PRODUTOS (CPV)', `- ${dinheiro(dreCpv)}`],
+        ['5.0 (=) LUCRO BRUTO / MARGEM BRUTA', dinheiro(dreLucroBruto)],
+        ['6.0 (-) DESPESAS OPERACIONAIS E FIXAS', `- ${dinheiro(dreDespesasAdm)}`],
+        ['7.0 (=) RESULTADO OPERACIONAL (EBITDA)', dinheiro(dreEbitda)],
+        ['8.0 (+/-) RESULTADO FINANCEIRO LÍQUIDO', dinheiro(dreResultadoFin)],
+        ['9.0 (=) RESULTADO ANTES TRIBUTOS (LAIR)', dinheiro(dreLair)],
+        ['10.0 (-) PROVISÃO DE TRIBUTOS E ENCARGOS', `- ${dinheiro(dreProvisaoTributos)}`],
+        ['11.0 (=) RESULTADO LÍQUIDO (SOBRAS/PERDAS)', dinheiro(dreResultadoLiquido)]
+      ]
       : tipo === 'FLUXO' ? [['Saldo inicial', dinheiro(extratoBancario?.saldoInicial || 0)], ['Entradas conciliadas', dinheiro(periodoEntradas)], ['Saídas conciliadas', dinheiro(periodoSaidas)], ['Saldo projetado', dinheiro((extratoBancario?.saldoInicial || 0) + periodoEntradas - periodoSaidas)]]
       : tipo === 'CUSTOS' ? [['Custos fixos', dinheiro(custosFixos)], ['Custos variáveis', dinheiro(custosVariaveis)], ['Custos totais', dinheiro(custosFixos + custosVariaveis)]]
       : tipo === 'ESTOQUE' ? [['Valor total em estoque', dinheiro(valorEstoque)], ['Itens cadastrados', String(estoque.length)], ['Itens abaixo do mínimo', String(itensEstoqueBaixo.length)]]
@@ -358,8 +388,21 @@ if (c) {
           </div>
 
           {activeTab === 'dashboard' && <>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-              {[['Resultado DRE', receitasDre - despesasDre, 'text-emerald-700', 'bg-emerald-50'], ['Saldo de caixa', (extratoBancario?.saldoInicial || 0) + periodoEntradas - periodoSaidas, 'text-blue-700', 'bg-blue-50'], ['A pagar / receber', contasFiltradas.reduce((s, c) => s + c.valor, 0), 'text-amber-700', 'bg-amber-50'], ['Valor do estoque', valorEstoque, 'text-indigo-700', 'bg-indigo-50']].map(([label, value, color, bg]) => <div key={String(label)} className={`p-5 rounded-2xl border border-slate-200 ${bg}`}><div className="text-xs font-bold text-slate-600">{label}</div><div className={`text-xl font-black mt-2 ${color}`}>R$ {Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div></div>)}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+              {[
+                ['Resultado DRE', receitasDre - despesasDre, (receitasDre - despesasDre >= 0 ? 'text-emerald-700' : 'text-rose-700'), (receitasDre - despesasDre >= 0 ? 'bg-emerald-50' : 'bg-rose-50')],
+                ['Saldo de caixa', (extratoBancario?.saldoInicial || 0) + periodoEntradas - periodoSaidas, 'text-blue-700', 'bg-blue-50'],
+                ['Contas a pagar', contasFiltradas.filter(c => c.tipo === 'PAGAR' && c.status !== 'CANCELADO').reduce((s, c) => s + c.valor, 0), 'text-rose-700', 'bg-rose-50/80'],
+                ['Contas a receber', contasFiltradas.filter(c => c.tipo === 'RECEBER' && c.status !== 'CANCELADO').reduce((s, c) => s + c.valor, 0), 'text-emerald-700', 'bg-emerald-50/80'],
+                ['Valor do estoque', valorEstoque, 'text-indigo-700', 'bg-indigo-50']
+              ].map(([label, value, color, bg]) => (
+                <div key={String(label)} className={`p-5 rounded-2xl border border-slate-200/80 shadow-xs ${bg}`}>
+                  <div className="text-xs font-bold text-slate-600">{label}</div>
+                  <div className={`text-xl font-black mt-2 ${color}`}>
+                    R$ {Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+              ))}
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5"><div className="bg-white rounded-2xl border border-slate-200 p-6"><h2 className="font-black text-slate-900">Desempenho do período</h2><div className="space-y-4 mt-5"><div><div className="flex justify-between text-xs"><span>Receitas</span><strong className="text-emerald-700">R$ {receitasDre.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div><div className="h-2 bg-slate-100 rounded-full mt-2"><div className="h-2 bg-emerald-500 rounded-full" style={{ width: `${Math.min(100, receitasDre ? (receitasDre / Math.max(receitasDre, despesasDre)) * 100 : 0)}%` }} /></div></div><div><div className="flex justify-between text-xs"><span>Despesas</span><strong className="text-rose-700">R$ {despesasDre.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div><div className="h-2 bg-slate-100 rounded-full mt-2"><div className="h-2 bg-rose-500 rounded-full" style={{ width: `${Math.min(100, despesasDre ? (despesasDre / Math.max(receitasDre, despesasDre)) * 100 : 0)}%` }} /></div></div></div></div><div className="bg-white rounded-2xl border border-slate-200 p-6"><h2 className="font-black text-slate-900">Acompanhamento gerencial</h2><div className="grid grid-cols-2 gap-3 mt-5"><div className="p-3 rounded-xl bg-indigo-50"><span className="text-[11px] text-indigo-700">Custos fixos</span><strong className="block text-lg text-indigo-900">R$ {custosFixos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div><div className="p-3 rounded-xl bg-amber-50"><span className="text-[11px] text-amber-700">Custos variáveis</span><strong className="block text-lg text-amber-900">R$ {custosVariaveis.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div><div className="p-3 rounded-xl bg-rose-50"><span className="text-[11px] text-rose-700">Estoque mínimo</span><strong className="block text-lg text-rose-900">{itensEstoqueBaixo.length} item(ns)</strong></div><div className="p-3 rounded-xl bg-slate-50"><span className="text-[11px] text-slate-500">Títulos filtrados</span><strong className="block text-lg text-slate-900">{contasFiltradas.length}</strong></div></div></div></div>
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
@@ -369,13 +412,380 @@ if (c) {
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-5"><div className="bg-white rounded-2xl border border-slate-200 p-5"><h2 className="font-black text-slate-900 mb-4 flex items-center gap-2"><PieChartIcon className="w-4 h-4 text-indigo-600" /> Composição dos custos</h2><ResponsiveContainer width="100%" height={250}><PieChart><Pie data={[{ name: 'Fixos', value: custosFixos }, { name: 'Variáveis', value: custosVariaveis }]} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={82} label>{["#6366f1", "#f59e0b"].map(color => <Cell key={color} fill={color} />)}</Pie><Tooltip formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} /><Legend /></PieChart></ResponsiveContainer></div><div className="bg-white rounded-2xl border border-slate-200 p-5"><h2 className="font-black text-slate-900 mb-4 flex items-center gap-2"><Scale className="w-4 h-4 text-cyan-600" /> Equilíbrio contábil</h2><ResponsiveContainer width="100%" height={250}><BarChart data={[{ nome: 'Débitos x créditos', debitos: totalBalanceteDebitos, creditos: totalBalanceteCreditos }]}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis dataKey="nome" fontSize={10} /><YAxis fontSize={10} /><Tooltip formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} /><Legend /><Bar dataKey="debitos" name="Débitos" fill="#0ea5e9" /><Bar dataKey="creditos" name="Créditos" fill="#8b5cf6" /></BarChart></ResponsiveContainer></div></div>
           </>}
 
-          {activeTab === 'dre' && <div className="bg-white rounded-2xl border border-slate-200 p-6"><h2 className="text-lg font-black text-slate-900">DRE — Demonstração do Resultado do Exercício</h2><p className="text-xs text-slate-500 mt-1">Regime gerencial com receitas e despesas classificadas por categoria.</p><div className="mt-6 space-y-3 text-sm"><div className="flex justify-between border-b pb-3"><span>Receitas operacionais</span><strong className="text-emerald-700">R$ {receitasDre.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div><div className="flex justify-between border-b pb-3"><span>(−) Custos fixos</span><strong>R$ {custosFixos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div><div className="flex justify-between border-b pb-3"><span>(−) Custos variáveis</span><strong>R$ {custosVariaveis.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div><div className="flex justify-between p-4 rounded-xl bg-emerald-50 font-black"><span>Resultado operacional</span><strong className={receitasDre - despesasDre >= 0 ? 'text-emerald-700' : 'text-rose-700'}>R$ {(receitasDre - despesasDre).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div></div><button onClick={() => gerarRelatorioGerencialPdf('DRE')} className="mt-5 px-4 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold">Exportar DRE em PDF</button></div>}
+          {activeTab === 'dre' && (
+            <div className="space-y-6">
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+                  <div>
+                    <h2 className="text-xl font-black text-slate-900">
+                      DRE — Demonstração do Resultado do Exercício (Empresarial & Contábil)
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Demonstração completa em conformidade com as normas contábeis brasileiras (CPC / Lei 6.404/76 e Lei das Cooperativas 5.764/71).
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => gerarRelatorioGerencialPdf('DRE')}
+                    className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-sm cursor-pointer shrink-0"
+                  >
+                    <Printer className="w-4 h-4 text-emerald-400" /> Exportar DRE em PDF
+                  </button>
+                </div>
+
+                {/* KPIs Sintéticos da DRE */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase block">1. Receita Operacional Bruta</span>
+                    <strong className="text-lg font-black text-slate-900 mt-1 block">
+                      R$ {dreReceitaBruta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </strong>
+                  </div>
+                  <div className="p-4 rounded-xl bg-blue-50 border border-blue-100">
+                    <span className="text-[11px] font-bold text-blue-700 uppercase block">3. Receita Operacional Líquida</span>
+                    <strong className="text-lg font-black text-blue-900 mt-1 block">
+                      R$ {dreReceitaLiquida.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </strong>
+                  </div>
+                  <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-100">
+                    <span className="text-[11px] font-bold text-indigo-700 uppercase block">5. Lucro Bruto</span>
+                    <strong className={`text-lg font-black mt-1 block ${dreLucroBruto >= 0 ? 'text-indigo-900' : 'text-rose-700'}`}>
+                      R$ {dreLucroBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </strong>
+                  </div>
+                  <div className={`p-4 rounded-xl border ${dreResultadoLiquido >= 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-rose-50 border-rose-200 text-rose-900'}`}>
+                    <span className="text-[11px] font-bold uppercase block">
+                      {dreResultadoLiquido >= 0 ? 'Sobras Líquidas do Exercício' : 'Perdas Líquidas do Exercício'}
+                    </span>
+                    <strong className="text-lg font-black mt-1 block">
+                      R$ {dreResultadoLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </strong>
+                  </div>
+                </div>
+
+                {/* Tabela Estruturada do DRE Empresarial */}
+                <div className="overflow-x-auto mt-6">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-700 uppercase font-black tracking-wider text-[10px] border-b border-slate-200">
+                        <th className="p-3 w-12">Item</th>
+                        <th className="p-3">Descrição da Linha Contábil</th>
+                        <th className="p-3 text-right w-24">% AV</th>
+                        <th className="p-3 text-right w-44">Valor (R$)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium">
+                      {/* 1. Receita Bruta */}
+                      <tr className="bg-slate-50/70 font-bold text-slate-900">
+                        <td className="p-3 font-mono">1.0</td>
+                        <td className="p-3">RECEITA OPERACIONAL BRUTA</td>
+                        <td className="p-3 text-right font-mono text-slate-500">100.0%</td>
+                        <td className="p-3 text-right font-mono text-slate-900 font-black">
+                          R$ {dreReceitaBruta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                      <tr className="text-slate-600">
+                        <td className="p-2.5 pl-6 font-mono text-[11px]">1.1</td>
+                        <td className="p-2.5 pl-6">Venda de Produtos e Produção Agropecuária (PAA / PNAE / Privado)</td>
+                        <td className="p-2.5 text-right font-mono text-slate-400 text-[11px]">
+                          {dreReceitaBruta > 0 ? '100.0%' : '0.0%'}
+                        </td>
+                        <td className="p-2.5 text-right font-mono text-slate-700">
+                          R$ {dreReceitaBruta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+
+                      {/* 2. Deduções */}
+                      <tr className="text-rose-700">
+                        <td className="p-2.5 font-mono font-bold">2.0</td>
+                        <td className="p-2.5 font-bold">(−) DEDUÇÕES DA RECEITA BRUTA E IMPOSTOS</td>
+                        <td className="p-2.5 text-right font-mono text-[11px]">
+                          {dreReceitaBruta > 0 ? ((dreDeducoes / dreReceitaBruta) * 100).toFixed(1) : '0.0'}%
+                        </td>
+                        <td className="p-2.5 text-right font-mono font-bold">
+                          - R$ {dreDeducoes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                      <tr className="text-slate-500">
+                        <td className="p-2 pl-6 font-mono text-[11px]">2.1</td>
+                        <td className="p-2 pl-6">Tributos sobre Faturamento (ICMS, PIS, COFINS, ISS e Devoluções)</td>
+                        <td className="p-2 text-right font-mono text-[11px]">
+                          {dreReceitaBruta > 0 ? ((dreDeducoes / dreReceitaBruta) * 100).toFixed(1) : '0.0'}%
+                        </td>
+                        <td className="p-2 text-right font-mono">
+                          - R$ {dreDeducoes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+
+                      {/* 3. Receita Líquida */}
+                      <tr className="bg-blue-50/60 font-black text-blue-950 border-y border-blue-100">
+                        <td className="p-3 font-mono">3.0</td>
+                        <td className="p-3">(=) RECEITA OPERACIONAL LÍQUIDA</td>
+                        <td className="p-3 text-right font-mono text-blue-700">
+                          {dreReceitaBruta > 0 ? ((dreReceitaLiquida / dreReceitaBruta) * 100).toFixed(1) : '0.0'}%
+                        </td>
+                        <td className="p-3 text-right font-mono text-blue-900">
+                          R$ {dreReceitaLiquida.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+
+                      {/* 4. Custos CPV */}
+                      <tr className="text-amber-800">
+                        <td className="p-2.5 font-mono font-bold">4.0</td>
+                        <td className="p-2.5 font-bold">(−) CUSTOS DOS PRODUTOS E MERCADORIAS VENDIDAS (CPV / CMV)</td>
+                        <td className="p-2.5 text-right font-mono text-[11px]">
+                          {dreReceitaBruta > 0 ? ((dreCpv / dreReceitaBruta) * 100).toFixed(1) : '0.0'}%
+                        </td>
+                        <td className="p-2.5 text-right font-mono font-bold">
+                          - R$ {dreCpv.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+
+                      {/* 5. Lucro Bruto */}
+                      <tr className="bg-indigo-50/60 font-black text-indigo-950 border-y border-indigo-100">
+                        <td className="p-3 font-mono">5.0</td>
+                        <td className="p-3">(=) LUCRO BRUTO / MARGEM BRUTA</td>
+                        <td className="p-3 text-right font-mono text-indigo-700">
+                          {dreReceitaBruta > 0 ? ((dreLucroBruto / dreReceitaBruta) * 100).toFixed(1) : '0.0'}%
+                        </td>
+                        <td className={`p-3 text-right font-mono ${dreLucroBruto >= 0 ? 'text-indigo-900' : 'text-rose-700'}`}>
+                          R$ {dreLucroBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+
+                      {/* 6. Despesas Operacionais */}
+                      <tr className="text-slate-700">
+                        <td className="p-2.5 font-mono font-bold">6.0</td>
+                        <td className="p-2.5 font-bold">(−) DESPESAS OPERACIONAIS FIXAS E ADMINISTRATIVAS</td>
+                        <td className="p-2.5 text-right font-mono text-[11px]">
+                          {dreReceitaBruta > 0 ? ((dreDespesasAdm / dreReceitaBruta) * 100).toFixed(1) : '0.0'}%
+                        </td>
+                        <td className="p-2.5 text-right font-mono font-bold text-rose-700">
+                          - R$ {dreDespesasAdm.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+
+                      {/* 7. EBITDA */}
+                      <tr className="bg-slate-100/80 font-black text-slate-900 border-y border-slate-200">
+                        <td className="p-3 font-mono">7.0</td>
+                        <td className="p-3">(=) RESULTADO OPERACIONAL ANTES DO RESULTADO FINANCEIRO (EBITDA / LAJIDA)</td>
+                        <td className="p-3 text-right font-mono text-slate-600">
+                          {dreReceitaBruta > 0 ? ((dreEbitda / dreReceitaBruta) * 100).toFixed(1) : '0.0'}%
+                        </td>
+                        <td className={`p-3 text-right font-mono ${dreEbitda >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                          R$ {dreEbitda.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+
+                      {/* 8. Resultado Financeiro */}
+                      <tr className="text-slate-600">
+                        <td className="p-2.5 font-mono font-bold">8.0</td>
+                        <td className="p-2.5 font-bold">(+/−) RESULTADO FINANCEIRO LÍQUIDO</td>
+                        <td className="p-2.5 text-right font-mono text-[11px]">
+                          {dreReceitaBruta > 0 ? ((dreResultadoFin / dreReceitaBruta) * 100).toFixed(1) : '0.0'}%
+                        </td>
+                        <td className={`p-2.5 text-right font-mono font-bold ${dreResultadoFin >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                          R$ {dreResultadoFin.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+
+                      {/* 9. LAIR */}
+                      <tr className="bg-slate-50 font-black text-slate-900 border-y border-slate-200">
+                        <td className="p-3 font-mono">9.0</td>
+                        <td className="p-3">(=) RESULTADO ANTES DOS TRIBUTOS (LAIR)</td>
+                        <td className="p-3 text-right font-mono text-slate-600">
+                          {dreReceitaBruta > 0 ? ((dreLair / dreReceitaBruta) * 100).toFixed(1) : '0.0'}%
+                        </td>
+                        <td className={`p-3 text-right font-mono ${dreLair >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                          R$ {dreLair.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+
+                      {/* 10. Provisão de Tributos */}
+                      <tr className="text-slate-500">
+                        <td className="p-2.5 font-mono font-bold">10.0</td>
+                        <td className="p-2.5 font-bold">(−) PROVISÃO PARA IRPJ / CSLL / ENCARGOS COOPERATIVOS</td>
+                        <td className="p-2.5 text-right font-mono text-[11px]">
+                          {dreReceitaBruta > 0 ? ((dreProvisaoTributos / dreReceitaBruta) * 100).toFixed(1) : '0.0'}%
+                        </td>
+                        <td className="p-2.5 text-right font-mono font-bold text-rose-700">
+                          - R$ {dreProvisaoTributos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+
+                      {/* 11. Resultado Líquido Final */}
+                      <tr className={`font-black text-sm border-t-2 border-slate-300 ${dreResultadoLiquido >= 0 ? 'bg-emerald-100/70 text-emerald-950' : 'bg-rose-100/70 text-rose-950'}`}>
+                        <td className="p-4 font-mono">11.0</td>
+                        <td className="p-4">(=) RESULTADO LÍQUIDO DO EXERCÍCIO (SOBRAS / PERDAS LÍQUIDAS)</td>
+                        <td className="p-4 text-right font-mono">
+                          {dreReceitaBruta > 0 ? ((dreResultadoLiquido / dreReceitaBruta) * 100).toFixed(1) : '0.0'}%
+                        </td>
+                        <td className="p-4 text-right font-mono text-base font-black">
+                          R$ {dreResultadoLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
 
           {activeTab === 'fluxo' && <div className="space-y-5"><div className="bg-white rounded-2xl border border-slate-200 p-6"><div className="flex flex-col md:flex-row md:items-center justify-between gap-3"><div><h2 className="text-lg font-black text-slate-900">Fluxo de Caixa Anual</h2><p className="text-xs text-slate-500 mt-1">Todos os meses de {filtroAno}, com contas operacionais da cooperativa.</p></div><div className="flex gap-2"><button onClick={() => setFluxoAnoCompleto(!fluxoAnoCompleto)} className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold">{fluxoAnoCompleto ? 'Exibir resumo' : 'Exibir ano completo'}</button><button onClick={() => gerarRelatorioGerencialPdf('FLUXO')} className="px-3 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold">Exportar PDF</button></div></div><div className="mt-5"><ResponsiveContainer width="100%" height={300}><LineChart data={fluxoAnual}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis dataKey="mes" fontSize={10} /><YAxis fontSize={10} /><Tooltip /><Legend /><Line type="monotone" dataKey="entradas" name="Entradas" stroke="#059669" strokeWidth={3} /><Line type="monotone" dataKey="saidas" name="Saídas" stroke="#e11d48" strokeWidth={3} /><Line type="monotone" dataKey="receber" name="A receber" stroke="#0284c7" strokeDasharray="5 5" /><Line type="monotone" dataKey="pagar" name="A pagar" stroke="#f59e0b" strokeDasharray="5 5" /></LineChart></ResponsiveContainer></div><div className="overflow-x-auto mt-5"><table className="w-full text-xs"><thead><tr className="border-b text-left"><th className="p-3">Mês</th><th className="p-3 text-right">Entradas</th><th className="p-3 text-right">Saídas</th><th className="p-3 text-right">A receber</th><th className="p-3 text-right">A pagar</th><th className="p-3 text-right">Saldo do mês</th></tr></thead><tbody className="divide-y">{((fluxoAnoCompleto || filtroMes === 'TODOS') ? fluxoAnual : fluxoAnual.filter(m => m.mes.startsWith(filtroMes))).map(m => <tr key={m.mes}><td className="p-3 font-bold">{m.mes}</td><td className="p-3 text-right text-emerald-700">R$ {m.entradas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td><td className="p-3 text-right text-rose-700">R$ {m.saidas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td><td className="p-3 text-right">R$ {m.receber.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td><td className="p-3 text-right">R$ {m.pagar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td><td className="p-3 text-right font-black">R$ {(m.entradas - m.saidas).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td></tr>)}</tbody></table></div></div><div className="bg-white rounded-2xl border border-slate-200 p-6"><h2 className="text-lg font-black text-slate-900">Contas do fluxo de caixa</h2><p className="text-xs text-slate-500 mt-1">Contas padrão para cooperativas, conforme o plano contábil e o balancete.</p><div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 mt-5">{contasFluxo.map(conta => <div key={conta} className="p-3 rounded-xl border border-slate-100 bg-slate-50 text-xs font-semibold text-slate-700">{conta}</div>)}</div></div></div>}
 
           {activeTab === 'estoque' && <div className="bg-white rounded-2xl border border-slate-200 p-6"><div className="flex justify-between"><div><h2 className="text-lg font-black text-slate-900">Estoque — visão financeira</h2><p className="text-xs text-slate-500 mt-1">Valor do inventário e itens abaixo do estoque mínimo.</p></div><button onClick={() => gerarRelatorioGerencialPdf('ESTOQUE')} className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold">Exportar PDF</button></div><div className="mt-5 overflow-x-auto"><table className="w-full text-xs"><thead><tr className="text-left border-b"><th className="p-3">Produto</th><th className="p-3">Quantidade</th><th className="p-3">Valor unitário</th><th className="p-3 text-right">Valor total</th></tr></thead><tbody className="divide-y">{estoque.map(item => <tr key={item.id}><td className="p-3 font-bold">{item.nomeItem}</td><td className="p-3">{item.quantidadeAtual} {item.unidadeMedida}</td><td className="p-3">R$ {(item.valorUnitarioMedio || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td><td className="p-3 text-right font-bold">R$ {((item.quantidadeAtual || 0) * (item.valorUnitarioMedio || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td></tr>)}</tbody></table></div></div>}
 
-          {activeTab === 'custos' && <div className="bg-white rounded-2xl border border-slate-200 p-6"><div className="flex justify-between"><div><h2 className="text-lg font-black text-slate-900">Custos fixos e variáveis</h2><p className="text-xs text-slate-500 mt-1">Análise por categoria e centro de custo.</p></div><button onClick={() => gerarRelatorioGerencialPdf('CUSTOS')} className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold">Exportar PDF</button></div><div className="grid md:grid-cols-2 gap-5 mt-6"><div className="p-6 rounded-2xl bg-indigo-50"><span className="text-xs font-bold text-indigo-700">Custos fixos</span><strong className="block text-3xl text-indigo-900 mt-2">R$ {custosFixos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div><div className="p-6 rounded-2xl bg-amber-50"><span className="text-xs font-bold text-amber-700">Custos variáveis</span><strong className="block text-3xl text-amber-900 mt-2">R$ {custosVariaveis.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div></div></div>}
+          {activeTab === 'custos' && (
+            <div className="space-y-6">
+              <div className="bg-white rounded-2xl border border-slate-200 p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+                  <div>
+                    <h2 className="text-xl font-black text-slate-900">Gestão de Custos da Cooperativa</h2>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Acompanhamento integrado de Custos Totais, Fixos e Variáveis com proporção percentual.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => gerarRelatorioGerencialPdf('CUSTOS')}
+                    className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-sm cursor-pointer shrink-0"
+                  >
+                    <Printer className="w-4 h-4 text-emerald-400" /> Exportar PDF de Custos
+                  </button>
+                </div>
+
+                {/* Cards de Custos com Custo Total */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-6">
+                  {/* Card Custo Total */}
+                  <div className="p-6 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 text-white shadow-md border border-slate-700/50 relative overflow-hidden">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-300">Custos Totais</span>
+                      <span className="px-2 py-0.5 rounded-md bg-white/20 text-white text-[10px] font-mono font-bold">100%</span>
+                    </div>
+                    <strong className="block text-3xl font-black text-white mt-3">
+                      R$ {(custosFixos + custosVariaveis).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </strong>
+                    <p className="text-[11px] text-slate-400 mt-2">
+                      Soma total dos custos fixos e variáveis do período selecionado.
+                    </p>
+                  </div>
+
+                  {/* Card Custos Fixos */}
+                  <div className="p-6 rounded-2xl bg-indigo-50 border border-indigo-100 shadow-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold uppercase tracking-wider text-indigo-700">Custos Fixos</span>
+                      <span className="px-2 py-0.5 rounded-md bg-indigo-200 text-indigo-900 text-[10px] font-mono font-bold">
+                        {(custosFixos + custosVariaveis) > 0 ? (((custosFixos) / (custosFixos + custosVariaveis)) * 100).toFixed(1) : '0.0'}%
+                      </span>
+                    </div>
+                    <strong className="block text-3xl font-black text-indigo-950 mt-3">
+                      R$ {custosFixos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </strong>
+                    <p className="text-[11px] text-indigo-600/80 mt-2">
+                      Salários, aluguéis, contabilidade, softwares e infraestrutura.
+                    </p>
+                  </div>
+
+                  {/* Card Custos Variáveis */}
+                  <div className="p-6 rounded-2xl bg-amber-50 border border-amber-100 shadow-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold uppercase tracking-wider text-amber-700">Custos Variáveis</span>
+                      <span className="px-2 py-0.5 rounded-md bg-amber-200 text-amber-900 text-[10px] font-mono font-bold">
+                        {(custosFixos + custosVariaveis) > 0 ? (((custosVariaveis) / (custosFixos + custosVariaveis)) * 100).toFixed(1) : '0.0'}%
+                      </span>
+                    </div>
+                    <strong className="block text-3xl font-black text-amber-950 mt-3">
+                      R$ {custosVariaveis.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </strong>
+                    <p className="text-[11px] text-amber-700/80 mt-2">
+                      Insumos, combustíveis, embalagens, fretes e pagamentos a produtores.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Gráfico de Rosca com Percentual */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8 items-center bg-slate-50/70 p-6 rounded-2xl border border-slate-200/80">
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                      <PieChartIcon className="w-4 h-4 text-emerald-600" />
+                      Composição Proporcional dos Custos (Gráfico de Rosca)
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Visualização percentual de impacto na estrutura de despesas da cooperativa.
+                    </p>
+
+                    <div className="mt-6 space-y-3">
+                      <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-200/80 shadow-xs">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-3.5 h-3.5 rounded-md bg-[#6366f1]" />
+                          <span className="text-xs font-bold text-slate-700">Custos Fixos</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-xs font-mono font-black text-slate-900">
+                            {(custosFixos + custosVariaveis) > 0 ? (((custosFixos) / (custosFixos + custosVariaveis)) * 100).toFixed(1) : '0.0'}%
+                          </span>
+                          <span className="text-[11px] text-slate-400 block">
+                            R$ {custosFixos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-200/80 shadow-xs">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-3.5 h-3.5 rounded-md bg-[#f59e0b]" />
+                          <span className="text-xs font-bold text-slate-700">Custos Variáveis</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-xs font-mono font-black text-slate-900">
+                            {(custosFixos + custosVariaveis) > 0 ? (((custosVariaveis) / (custosFixos + custosVariaveis)) * 100).toFixed(1) : '0.0'}%
+                          </span>
+                          <span className="text-[11px] text-slate-400 block">
+                            R$ {custosVariaveis.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="h-[280px] w-full flex items-center justify-center relative">
+                    <ResponsiveContainer width="100%" height={260}>
+                      <PieChart>
+                        <Pie
+                          data={[
+                            { name: 'Custos Fixos', value: custosFixos || 0.001 },
+                            { name: 'Custos Variáveis', value: custosVariaveis || 0.001 }
+                          ]}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={68}
+                          outerRadius={98}
+                          paddingAngle={3}
+                          stroke="#ffffff"
+                          strokeWidth={2}
+                        >
+                          <Cell fill="#6366f1" />
+                          <Cell fill="#f59e0b" />
+                        </Pie>
+                        <Tooltip
+                          formatter={(val: number) => [
+                            `R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${(custosFixos + custosVariaveis) > 0 ? ((val / (custosFixos + custosVariaveis)) * 100).toFixed(1) : 0}%)`,
+                            'Valor'
+                          ]}
+                        />
+                        <Legend verticalAlign="bottom" height={36} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-8">
+                      <span className="text-[10px] uppercase font-bold text-slate-400">Total</span>
+                      <span className="text-xs font-black text-slate-800">
+                        R$ {(custosFixos + custosVariaveis).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
