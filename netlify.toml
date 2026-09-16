@@ -27,7 +27,7 @@
   # O frontend precisa publicar a configuração pública do Firebase. Estes
   # dois valores são identificadores/client keys, não credenciais de servidor.
   # As credenciais privadas continuam sujeitas ao scanner normalmente.
-  SECRETS_SCAN_SMART_DETECTION_OMIT_VALUES = "AIzaSyCYEOixxM5X0MaRpPRgixRB-3OuQKkHRlY,255528919563-aitgm62t336jfd3abqek1sviu138et6b.apps.googleusercontent.com"
+  SECRETS_SCAN_SMART_DETECTION_OMIT_VALUES = "AIzaSyBF3UUcRsaynrDFlFMJldQg3NjIe1W274g"
 
 # O scanner de segredos do Netlify fica LIGADO de propósito.
 # Ele estava desativado em todos os contextos, o que silenciou justamente o

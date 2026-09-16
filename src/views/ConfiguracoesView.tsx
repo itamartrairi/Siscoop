@@ -20,6 +20,7 @@ import {
   MigrationResult,
   FirestoreStatusResult
 } from '../services/firebaseDbService';
+import firebaseConfig from '../../firebase-applet-config.json';
 import { GooglePickerButton } from '../components/GooglePickerButton';
 import { PickedGoogleFile } from '../services/googlePickerService';
 import {
@@ -1775,15 +1776,15 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
                 <div className="p-3 bg-slate-950/70 rounded-xl border border-amber-900/40">
                   <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block mb-0.5">Project ID (Google Cloud)</span>
-                  <div className="font-mono text-slate-200 text-xs truncate" title="gen-lang-client-0260568271">
-                    gen-lang-client-0260568271
+                  <div className="font-mono text-slate-200 text-xs truncate" title={firebaseConfig.projectId}>
+                    {firebaseConfig.projectId}
                   </div>
                 </div>
 
                 <div className="p-3 bg-slate-950/70 rounded-xl border border-amber-900/40">
                   <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block mb-0.5">Database ID</span>
-                  <div className="font-mono text-slate-200 text-xs truncate" title="ai-studio-sicoopplatformsi-fd2e62a0-6b42-478c-a7c9-08d3051c6676">
-                    ai-studio-sicoopplatformsi-...
+                  <div className="font-mono text-slate-200 text-xs truncate" title={firebaseConfig.firestoreDatabaseId || '(default)'}>
+                    {firebaseConfig.firestoreDatabaseId || '(default)'}
                   </div>
                 </div>
 
