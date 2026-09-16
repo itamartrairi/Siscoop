@@ -694,7 +694,7 @@ interface CoopContextType {
 }
 
 const CoopContext = createContext<CoopContextType | undefined>(undefined);
-const STORAGE_KEY = 'siscoope_system_db_v1';
+const STORAGE_KEY = 'siscoop_system_db_v2';
 
 const chaveUnica = (valor: unknown): string => String(valor ?? '')
   .normalize('NFD')
@@ -768,6 +768,7 @@ let snapshotCache: Record<string, any> | null | undefined;
 function lerBlobPersistido(): string | null {
   if (blobCache === undefined) {
     try {
+      localStorage.removeItem('siscoope_system_db_v1');
       blobCache = localStorage.getItem(STORAGE_KEY);
     } catch {
       blobCache = null;
@@ -2660,6 +2661,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAuditoriaLogs(INITIAL_AUDITORIA_LOGS);
     setConfig(INITIAL_CONFIG);
     try {
+      localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem('siscoope_system_db_v1');
     } catch (e) {}
     addAuditLog('CONFIGURACOES', 'ALTERACAO', 'Restaurou dados padrões do sistema com base de cooperados completa');
