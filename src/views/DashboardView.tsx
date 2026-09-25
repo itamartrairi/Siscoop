@@ -547,7 +547,7 @@ export const DashboardView: React.FC<Props> = ({ setActiveView, onNavigateModule
         <div className="p-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs hover:border-emerald-400 dark:hover:border-emerald-700 transition-all relative overflow-hidden group">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Capital Social Total
+              Capital Social Integralizado
             </span>
             <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400">
               <Wallet className="w-5 h-5" />
@@ -575,11 +575,11 @@ export const DashboardView: React.FC<Props> = ({ setActiveView, onNavigateModule
           </div>
         </div>
 
-        {/* KPI 2: Contribuições Mensais (Monthly Contributions) */}
+        {/* KPI 2: Integralizações do Mês */}
         <div className="p-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs hover:border-teal-400 dark:hover:border-teal-700 transition-all relative overflow-hidden group">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Contribuições Mensais
+              Integralizações do Mês (Cotas)
             </span>
             <div className="p-2.5 rounded-xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-teal-600 dark:text-teal-400">
               <DollarSign className="w-5 h-5" />
@@ -595,7 +595,7 @@ export const DashboardView: React.FC<Props> = ({ setActiveView, onNavigateModule
                 <span>+{Math.abs(growthRate).toFixed(1)}% vs mês ant.</span>
               </div>
               <span className="text-slate-500 dark:text-slate-400 text-[11px]">
-                {currentMonthCount} aportes
+                {currentMonthCount} integralizações
               </span>
             </div>
           </div>
@@ -658,10 +658,10 @@ export const DashboardView: React.FC<Props> = ({ setActiveView, onNavigateModule
             <div>
               <h3 className="font-bold text-slate-900 dark:text-white text-sm sm:text-base flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-emerald-600" />
-                Contribuições Mensais & Evolução do Capital Social (R$)
+                Integralizações Mensais & Evolução do Capital Social (R$)
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Histórico mensal de aportes (barras) e saldo acumulado de capital integralizado (linhas)
+                Histórico mensal de integralizações de cotas-partes (barras) e saldo acumulado de capital (linhas)
               </p>
             </div>
 

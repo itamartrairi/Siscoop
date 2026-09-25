@@ -155,7 +155,7 @@ Equipe SisCoope / Kiwify Suporte
   const [isSimulatingWebhook, setIsSimulatingWebhook] = useState(false);
   const [webhookSimResult, setWebhookSimResult] = useState<{ success: boolean; message: string; licenseKey?: string } | null>(null);
 
-  const handleTriggerKiwifyWebhookToSupabase = async () => {
+  const handleTriggerKiwifyWebhookToFirebase = async () => {
     setIsSimulatingWebhook(true);
     setWebhookSimResult(null);
     try {
@@ -175,12 +175,12 @@ Equipe SisCoope / Kiwify Suporte
         activateLicense(data.subscription.licenseKey, data.subscription.plan);
         setWebhookSimResult({
           success: true,
-          message: `Webhook da Kiwify recebido! Status da assinatura atualizado e ativado no Supabase (Chave: ${data.subscription.licenseKey}).`,
+          message: `Webhook da Kiwify recebido! Status da assinatura atualizado e ativado no Firebase (Chave: ${data.subscription.licenseKey}).`,
           licenseKey: data.subscription.licenseKey
         });
         setActivationMessage({
           type: 'success',
-          text: `Webhook Kiwify confirmado com sucesso! Licença ${data.subscription.plan} ativa e sincronizada no Supabase.`
+          text: `Webhook Kiwify confirmado com sucesso! Licença ${data.subscription.plan} ativa e sincronizada no Firebase.`
         });
       } else {
         setWebhookSimResult({
@@ -530,12 +530,12 @@ Equipe SisCoope / Kiwify Suporte
 
               <button
                 type="button"
-                onClick={handleTriggerKiwifyWebhookToSupabase}
+                onClick={handleTriggerKiwifyWebhookToFirebase}
                 disabled={isSimulatingWebhook}
                 className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs shadow-md flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
               >
                 <Zap className={`w-4 h-4 text-amber-300 ${isSimulatingWebhook ? 'animate-spin' : ''}`} />
-                <span>{isSimulatingWebhook ? 'Processando Webhook...' : 'Simular Webhook Kiwify -> Supabase (Ativação Direta)'}</span>
+                <span>{isSimulatingWebhook ? 'Processando Webhook...' : 'Simular Webhook Kiwify -> Firebase (Ativação Direta)'}</span>
               </button>
             </div>
 

@@ -919,6 +919,11 @@ export interface SefazCeConfig {
   proximoNumeroNFCe: number;
   regimeTributario: 'SIMPLES_NACIONAL' | 'SIMPLES_EXCESSO' | 'REGIME_NORMAL';
   isencaoIcmsPnaeCeara: boolean;
+  // Integração Nuvem Fiscal
+  nuvemFiscalAtiva?: boolean;
+  nuvemFiscalClientId?: string;
+  nuvemFiscalClientSecret?: string;
+  nuvemFiscalEmpresaId?: string;
 }
 
 // ==========================================

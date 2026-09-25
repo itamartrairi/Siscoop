@@ -54,6 +54,7 @@ import {
   SefazCeConfig
 } from '../types';
 import { calcularImpostosItem, ALERTA_CRONOGRAMA_TEXTO } from '../utils/tributacaoReforma';
+import { transmitirParaNuvemFiscal } from '../services/nuvemFiscalService';
 import {
   INITIAL_TENANTS,
   INITIAL_USERS,
@@ -1118,7 +1119,11 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     serieNFCe: '1',
     proximoNumeroNFCe: 52,
     regimeTributario: 'SIMPLES_NACIONAL',
-    isencaoIcmsPnaeCeara: true
+    isencaoIcmsPnaeCeara: true,
+    nuvemFiscalAtiva: false,
+    nuvemFiscalClientId: '',
+    nuvemFiscalClientSecret: '',
+    nuvemFiscalEmpresaId: ''
   };
 
   const INITIAL_NOTAS_FISCAIS_LIST: NotaFiscal[] = [
@@ -1487,7 +1492,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [isAuthenticated, currentUser?.id, currentTenant?.id, currentUser?.email]);
 
-  // Automatic Weekly Supabase CSV Backup Check
+  // Automatic Weekly Firebase CSV Backup Check
   useEffect(() => {
     if (cooperados.length > 0) {
       checkAndRunWeeklyBackupIfNeeded({
@@ -4335,12 +4340,58 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const transmitirSefazCe = async (id: string): Promise<{ success: boolean; motivo: string; chaveAcesso?: string; protocolo?: string }> => {
     setNotasFiscais(prev => prev.map(n => n.id === id ? { ...n, statusSefaz: 'TRANSMITINDO' as const } : n));
 
-    await new Promise(resolve => setTimeout(resolve, 1400));
-
     const targetNf = notasFiscais.find(n => n.id === id);
     if (!targetNf) {
       return { success: false, motivo: 'Nota Fiscal não encontrada.' };
     }
+
+    // Se a Nuvem Fiscal estiver ativa e configurada, transmite diretamente para a API oficial
+    if (sefazCeConfig.nuvemFiscalAtiva && sefazCeConfig.nuvemFiscalClientId && sefazCeConfig.nuvemFiscalClientSecret) {
+      try {
+        const resultadoNuvem = await transmitirParaNuvemFiscal(targetNf, sefazCeConfig);
+        if (resultadoNuvem.success) {
+          const dataHoraAut = new Date().toISOString();
+          setNotasFiscais(prev => prev.map(n => {
+            if (n.id === id) {
+              return {
+                ...n,
+                statusSefaz: 'AUTORIZADA' as const,
+                chaveAcesso44: resultadoNuvem.chaveAcesso,
+                protocoloAutorizacao: resultadoNuvem.protocolo,
+                dataHoraAutorizacao: dataHoraAut,
+                motivoStatusSefaz: resultadoNuvem.motivo,
+                danfePdfUrl: resultadoNuvem.danfePdfUrl,
+                xmlUrl: resultadoNuvem.xmlUrl,
+                qrCodeSefazUrl: `https://kalypso.sefaz.ce.gov.br/nfe/qrcode?p=${resultadoNuvem.chaveAcesso}`,
+              };
+            }
+            return n;
+          }));
+
+          setSefazCeConfig(prev => ({
+            ...prev,
+            proximoNumeroNFe: prev.proximoNumeroNFe + 1
+          }));
+
+          addAuditLog('RELATORIOS', 'INCLUSAO', `NF-e nº ${targetNf.numeroNota} autorizada via Nuvem Fiscal. Chave: ${resultadoNuvem.chaveAcesso}`);
+          return {
+            success: true,
+            motivo: resultadoNuvem.motivo,
+            chaveAcesso: resultadoNuvem.chaveAcesso,
+            protocolo: resultadoNuvem.protocolo
+          };
+        } else {
+          setNotasFiscais(prev => prev.map(n => n.id === id ? { ...n, statusSefaz: 'REJEITADA' as const, motivoStatusSefaz: resultadoNuvem.motivo } : n));
+          return { success: false, motivo: resultadoNuvem.motivo };
+        }
+      } catch (err: any) {
+        setNotasFiscais(prev => prev.map(n => n.id === id ? { ...n, statusSefaz: 'REJEITADA' as const, motivoStatusSefaz: err.message } : n));
+        return { success: false, motivo: err.message || 'Erro na comunicação com a Nuvem Fiscal' };
+      }
+    }
+
+    // Modo Padrão / Simulação SEFAZ-CE caso as credenciais não estejam ativas
+    await new Promise(resolve => setTimeout(resolve, 1400));
 
     const yearMonth = new Date().toISOString().substring(2, 7).replace('-', '');
     const cnpjClean = (targetNf.emitenteCnpjCpf || sefazCeConfig.cnpjEmitente).replace(/\D/g, '').padStart(14, '0');

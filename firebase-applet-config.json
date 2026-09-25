@@ -4,9 +4,9 @@
   "apiKey": "AIzaSyBF3UUcRsaynrDFlFMJldQg3NjIe1W274g",
   "authDomain": "sicoopplatform.firebaseapp.com",
   "databaseURL": "https://sicoopplatform-default-rtdb.firebaseio.com",
-  "firestoreDatabaseId": "",
   "storageBucket": "sicoopplatform.firebasestorage.app",
   "messagingSenderId": "919634096112",
+  "firestoreDatabaseId": "",
   "measurementId": "",
   "oAuthClientId": "",
   "recaptchaSiteKey": ""

@@ -81,7 +81,7 @@ export const LoginView: React.FC<Props> = ({ onLoginSuccess, onOpenCooperativeSe
       }
     } catch (err: any) {
       setIsLoading(false);
-      setErrorMessage(err?.message || 'Erro ao criar conta no Supabase.');
+      setErrorMessage(err?.message || 'Erro ao criar conta no Firebase.');
     }
   };
 

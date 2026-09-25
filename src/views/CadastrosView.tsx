@@ -840,11 +840,11 @@ export const CadastrosView: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
         <div>
           <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full w-fit border border-emerald-200 mb-2">
-            <FolderTree className="w-3.5 h-3.5" /> Módulo de Cadastros Base
+            <FolderTree className="w-3.5 h-3.5" /> Módulo de Cadastros Agropecuários
           </div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Cadastros Unificados</h1>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Cadastros Rurais & Agropecuários</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Gerencie produtores rurais, produtos agrícolas, registros de produção, programas institucionais e escolas atendidas pelo PNAE.
+            Gerencie cooperados rurais, propriedades e talhões (DAP/CAF), produtos da safra, programas institucionais (PAA/PNAE) e rotas de entrega.
           </p>
         </div>
 

@@ -304,14 +304,15 @@ export const RelatoriosView: React.FC = () => {
       </div>
 
       {/* Report Types Selector Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-2.5">
         {[
-          { id: 'COOPERADOS', label: 'Cooperados', icon: Users, color: 'text-emerald-500' },
+          { id: 'COOPERADOS', label: 'Quadro Social', icon: Users, color: 'text-emerald-500' },
           { id: 'CAPITAL', label: 'Capital Social', icon: Wallet, color: 'text-blue-500' },
-          { id: 'INTEGRALIZACOES', label: 'Integralizações', icon: CheckCircle, color: 'text-indigo-500' },
+          { id: 'INTEGRALIZACOES', label: 'Cotas-Partes', icon: CheckCircle, color: 'text-indigo-500' },
           { id: 'INADIMPLENCIA', label: 'Inadimplência', icon: Wallet, color: 'text-amber-500' },
+          { id: 'PEDIDOS_ENTREGAS', label: 'Entregas PAA/PNAE', icon: Truck, color: 'text-teal-500' },
           { id: 'ASSEMBLEIAS', label: 'Assembleias', icon: Calendar, color: 'text-purple-500' },
-          { id: 'MANDATOS', label: 'Diretoria', icon: Award, color: 'text-amber-600' },
+          { id: 'MANDATOS', label: 'Governança', icon: Award, color: 'text-amber-600' },
           { id: 'ANIVERSARIANTES', label: 'Aniversariantes', icon: Gift, color: 'text-pink-500' },
           { id: 'AUDITORIA', label: 'Auditoria', icon: Activity, color: 'text-rose-500' },
         ].map(item => {

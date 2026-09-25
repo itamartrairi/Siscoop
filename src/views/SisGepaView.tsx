@@ -3615,11 +3615,11 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-emerald-900 to-teal-900 p-6 rounded-2xl text-white shadow-md">
         <div>
           <div className="flex items-center gap-2 text-xs font-bold text-emerald-200 bg-emerald-800/60 px-3 py-1 rounded-full w-fit border border-emerald-700/50 mb-2">
-            <Landmark className="w-3.5 h-3.5" /> Módulo SisGepa & Vincular Entidades
+            <Landmark className="w-3.5 h-3.5" /> Comercialização Agrícola & Mercados Institucionais
           </div>
-          <h1 className="text-2xl font-black tracking-tight">SisGepa - PAA & PNAE</h1>
+          <h1 className="text-2xl font-black tracking-tight">Comercialização da Produção (PAA / PNAE)</h1>
           <p className="text-xs text-emerald-100/80 mt-1 max-w-2xl">
-            Gestão vinculada de Programas Governamentais, Produtores Rurais, Escolas Consumidoras e Produtos Agrícolas com Chamadas Públicas, Propostas, Pedidos e Entregas.
+            Gestão integrada da produção dos cooperados, editais de chamadas públicas, rateio de cotas de fornecimento, pedidos e logística de entregas na merenda escolar e programas institucionais.
           </p>
         </div>
 

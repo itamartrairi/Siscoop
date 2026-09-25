@@ -88,31 +88,31 @@ interface Props {
 }
 
 const SYSTEM_MODULES_LIST: { id: SystemToolModule; label: string; category: string; description: string }[] = [
-  { id: 'dashboard', label: 'Dashboard Central', category: 'Núcleo & Governança', description: 'Visão geral com KPIs, gráficos e atalhos estratégicos' },
-  { id: 'cadastro-cooperativa', label: 'Cadastro da Cooperativa', category: 'Núcleo & Governança', description: 'Dados cadastrais, CNPJ, cota-parte e logo da sede' },
-  { id: 'cadastros', label: 'Cadastros Unificados', category: 'Núcleo & Governança', description: 'Atribuição unificada e tabelas gerais do sistema' },
-  { id: 'cooperados', label: 'Quadro Social (Cooperados)', category: 'Núcleo & Governança', description: 'Gestão do livro de sócios, documentos, DAP/CAF e endereço' },
-  { id: 'capital', label: 'Capital Social', category: 'Núcleo & Governança', description: 'Subscrição, integralização, carnês e saldo de cotas-partes' },
-  { id: 'assembleias', label: 'Assembleias & Votações', category: 'Núcleo & Governança', description: 'Convocatórias, ata eletrônica, presenças e votação com pautas' },
-  { id: 'diretoria', label: 'Diretoria & Conselhos', category: 'Núcleo & Governança', description: 'Mandatos vigentes, conselhos de administração e fiscal' },
+  { id: 'dashboard', label: 'Painel da Cooperativa', category: 'Quadro Social & Governança', description: 'Visão geral com KPIs de capital social, quadro de sócios e atalhos estratégicos' },
+  { id: 'cadastro-cooperativa', label: 'Dados da Cooperativa', category: 'Quadro Social & Governança', description: 'Dados cadastrais, CNPJ, cota-parte mínima, estatuto e logotipo oficial' },
+  { id: 'cadastros', label: 'Cadastros Agropecuários', category: 'Quadro Social & Governança', description: 'Produtores rurais, produtos agrícolas, programas e escolas consumidoras' },
+  { id: 'cooperados', label: 'Cooperados & Produtores', category: 'Quadro Social & Governança', description: 'Livro de matrícula de sócios, documentos, CAF/DAP e fichas cadastrais' },
+  { id: 'capital', label: 'Capital Social & Cotas', category: 'Quadro Social & Governança', description: 'Subscrição, integralização de cotas-partes, carnês e comprovantes' },
+  { id: 'assembleias', label: 'Assembleias Gerais (AGO/AGE)', category: 'Quadro Social & Governança', description: 'Convocatórias, atas eletrônicas, listas de presença e votações estatutárias' },
+  { id: 'diretoria', label: 'Diretoria & Conselho Fiscal', category: 'Quadro Social & Governança', description: 'Mandatos vigentes, conselho de administração e conselho fiscal' },
 
-  { id: 'sisgepa', label: 'SisGepa (PAA / PNAE)', category: 'Sistemas Especializados', description: 'Mapeamento de chamadas públicas, propostas, cotas e entregas' },
-  { id: 'fiscal', label: 'Notas Fiscais (SEFAZ)', category: 'Sistemas Especializados', description: 'Emissão, transmissão e consulta de NF-e/NFC-e Ceará' },
-  { id: 'siscont', label: 'SisCont (Contabilidade)', category: 'Sistemas Especializados', description: 'Plano de contas, livro diário, razão e DRE cooperativo' },
-  { id: 'sisfin', label: 'SisFin (Financeiro)', category: 'Sistemas Especializados', description: 'Contas a pagar/receber, conciliação bancária e fluxo de caixa' },
-  { id: 'compras', label: 'SisCompras', category: 'Sistemas Especializados', description: 'Cotações de fornecedores, ordens de compra e aprovações' },
-  { id: 'estoque', label: 'SisEstoque', category: 'Sistemas Especializados', description: 'Controle de almoxarifado, entradas, saídas e inventário' },
-  { id: 'rh', label: 'SisRH (Recursos Humanos)', category: 'Sistemas Especializados', description: 'Ficha de colaboradores, folha de pagamento e holerites' },
-  { id: 'bi', label: 'SisBI (Analytics)', category: 'Sistemas Especializados', description: 'Indicadores gerenciais, gráficos interativos e projeções' },
+  { id: 'sisgepa', label: 'Comercialização Agrícola (PAA/PNAE)', category: 'Gestão da Produção & Agro', description: 'Editais de chamadas públicas, propostas, rateio de cotas e programação de entregas' },
+  { id: 'fiscal', label: 'Notas Fiscais (NF-e / SEFAZ)', category: 'Gestão da Produção & Agro', description: 'Emissão e transmissão de NF-e (55), NFA-e avulsa e NFC-e com desoneração' },
+  { id: 'estoque', label: 'Galpão & Estoque Agrícola', category: 'Gestão da Produção & Agro', description: 'Armazenamento de safras, hortifruti, grãos, embalagens e insumos' },
+  { id: 'compras', label: 'Compras & Insumos Agrícolas', category: 'Gestão da Produção & Agro', description: 'Compras coletivas, cotações de insumos, adubos e homologação de fornecedores' },
+  { id: 'sisfin', label: 'Financeiro & Repasses aos Cooperados', category: 'Gestão da Produção & Agro', description: 'Contas a pagar/receber, liquidação de safras, conciliação e sobras/perdas' },
+  { id: 'siscont', label: 'Contabilidade & Livro Diário', category: 'Gestão da Produção & Agro', description: 'Plano de contas cooperativo, atos cooperativos vs não cooperativos e balancetes' },
+  { id: 'rh', label: 'Colaboradores & Folha', category: 'Gestão da Produção & Agro', description: 'Quadro funcional da cooperativa, folha de pagamento e holerites' },
+  { id: 'bi', label: 'Indicadores de Desempenho (BI)', category: 'Gestão da Produção & Agro', description: 'Painéis analíticos, indicadores de volume de safra e projeções' },
 
-  { id: 'portal-cooperado', label: 'Portal do Cooperado', category: 'Portais & Aplicativos', description: 'Área do sócio para extrato de cotas e notas de entrega' },
-  { id: 'portal-escola', label: 'Portal da Escola (PNAE)', category: 'Portais & Aplicativos', description: 'Recebimento de merenda, prestação de contas e cardápios' },
-  { id: 'app-produtor', label: 'App do Produtor Rural', category: 'Portais & Aplicativos', description: 'Registro de colheita, estimativa de safra e chamados' },
-  { id: 'app-motorista', label: 'App do Motorista', category: 'Portais & Aplicativos', description: 'Rotas de transporte, romaneio e comprovante de entrega' },
+  { id: 'portal-cooperado', label: 'Portal do Cooperado', category: 'Canais de Campo & Portais', description: 'Espaço do sócio para extrato de cotas-partes, entregas e recibos' },
+  { id: 'portal-escola', label: 'Portal da Merenda / Escolas', category: 'Canais de Campo & Portais', description: 'Recebimento de gêneros alimentícios, atesto de notas e merenda escolar' },
+  { id: 'app-produtor', label: 'App do Produtor (Colheita)', category: 'Canais de Campo & Portais', description: 'Registro de colheita no campo, oferta de produção e acompanhamento de pedidos' },
+  { id: 'app-motorista', label: 'App do Motorista (Rotas)', category: 'Canais de Campo & Portais', description: 'Rotas de transporte da safra, romaneios e comprovantes de entrega' },
 
-  { id: 'relatorios', label: 'Relatórios Gerenciais', category: 'Gerencial & Sistema', description: 'Exportação de relatórios em PDF, Excel e relatórios da junta' },
-  { id: 'backup-sistema', label: 'Backup & Banco de Dados', category: 'Gerencial & Sistema', description: 'Cópia no Supabase, backups automáticos e restauração' },
-  { id: 'configuracoes', label: 'Configurações Globais', category: 'Gerencial & Sistema', description: 'Integrações, webhooks, LGPD e gestão de usuários/permissões' }
+  { id: 'relatorios', label: 'Relatórios Operacionais', category: 'Administração & Sistema', description: 'Relatórios em PDF e Excel para prestação de contas e órgãos fiscalizadores' },
+  { id: 'backup-sistema', label: 'Backup de Dados', category: 'Administração & Sistema', description: 'Cópias de segurança, nuvem e exportação de dados' },
+  { id: 'configuracoes', label: 'Configurações Gerais', category: 'Administração & Sistema', description: 'Parâmetros da cooperativa, matriz de permissões e controle de acesso' }
 ];
 
 const PRESET_AVATARS = [
@@ -402,7 +402,7 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
   const backupFileInputRef = useRef<HTMLInputElement>(null);
   const [backupStatusMessage, setBackupStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Supabase Backup State
+  // Firebase Backup State
   const [isBackupRunning, setIsBackupRunning] = useState(false);
   const [autoBackupEnabled, setAutoBackupEnabled] = useState(isWeeklyBackupEnabled());
   const [backupHistory, setBackupHistory] = useState<BackupHistoryItem[]>(getBackupHistory());
@@ -517,7 +517,6 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
   const [testResult, setTestResult] = useState<Record<string, { success: boolean; message: string; statusCode: number }>>({});
   const [showSecret, setShowSecret] = useState<Record<string, boolean>>({});
   const [copiedToken, setCopiedToken] = useState<Record<string, boolean>>({});
-  const [showDocPayload, setShowDocPayload] = useState(false);
 
 
   const [coopForm, setCoopForm] = useState({
@@ -795,7 +794,7 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
           <p className="text-xs text-slate-500 dark:text-slate-400">
             {isSystemCreator
               ? 'Integrações & APIs, Webhooks, trilha de auditoria LGPD e backup do sistema'
-              : 'Cópias de segurança em nuvem (Supabase), exportação/importação JSON e downloads CSV'}
+              : 'Cópias de segurança em nuvem (Firebase), exportação/importação JSON e downloads CSV'}
           </p>
         </div>
       </div>
@@ -1983,9 +1982,9 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
                   </span>
                   <span className="text-xs text-indigo-300 font-mono">POST /api/webhooks/kiwify</span>
                 </div>
-                <h3 className="font-extrabold text-white text-base">Escuta Automática de Webhooks Kiwify (Supabase Sync)</h3>
+                <h3 className="font-extrabold text-white text-base">Escuta Automática de Webhooks Kiwify (Firebase Sync)</h3>
                 <p className="text-slate-300 text-[11px] max-w-3xl leading-relaxed">
-                  Quando um pagamento é confirmado no Kiwify (R$ 197,90 Mensal ou R$ 1.997,90 Anual), este webhook recebe o evento instantaneamente, atualiza o status no Supabase PostgreSQL e libera o acesso total ao sistema sem intervenção manual.
+                  Quando um pagamento é confirmado no Kiwify (R$ 197,90 Mensal ou R$ 1.997,90 Anual), este webhook recebe o evento instantaneamente, atualiza o status no Firebase Firestore e libera o acesso total ao sistema sem intervenção manual.
                 </p>
               </div>
 
@@ -2045,7 +2044,7 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
                   <Activity className="w-3.5 h-3.5 text-indigo-400" />
                   Histórico de Webhooks Recebidos da Kiwify ({kiwifyLogs.length})
                 </span>
-                <span className="text-[10px] text-slate-400">Sincronização com Supabase: Ativa</span>
+                <span className="text-[10px] text-slate-400">Sincronização com Firebase: Ativa</span>
               </div>
 
               {kiwifyLogs.length === 0 ? (
@@ -2387,62 +2386,7 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
             </div>
           )}
 
-          {/* Developer Documentation Collapsible Box */}
-          <div className="p-5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-xs space-y-3">
-            <div
-              onClick={() => setShowDocPayload(!showDocPayload)}
-              className="flex items-center justify-between cursor-pointer select-none"
-            >
-              <div className="flex items-center gap-2">
-                <Code className="w-4 h-4 text-purple-600" />
-                <span className="font-bold text-slate-900 dark:text-white text-xs">
-                  Documentação Técnica & Exemplo de Payload JSON para Desenvolvedores
-                </span>
-              </div>
-              <button className="text-slate-400 p-1">
-                {showDocPayload ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              </button>
-            </div>
 
-            {showDocPayload && (
-              <div className="pt-3 border-t border-slate-100 dark:border-slate-700 space-y-3 text-[11px] text-slate-600 dark:text-slate-300">
-                <p>
-                  As requisições Webhook do SisCoope são enviadas via método <strong>HTTP POST</strong> no formato <code className="bg-slate-100 dark:bg-slate-700 px-1 rounded font-mono">application/json</code>.
-                </p>
-                <div className="space-y-1">
-                  <span className="font-bold text-slate-800 dark:text-slate-200">Cabeçalhos HTTP Enviados:</span>
-                  <ul className="list-disc list-inside font-mono text-[10px] space-y-0.5 text-slate-500 dark:text-slate-400 pl-2">
-                    <li>Content-Type: application/json</li>
-                    <li>X-SisCoope-Event: cooperado.created | capital.transaction</li>
-                    <li>X-SisCoope-Signature: sha256=HEX_HMAC_SHA256_SIGNATURE</li>
-                  </ul>
-                </div>
-
-                <div className="space-y-1">
-                  <span className="font-bold text-slate-800 dark:text-slate-200">Exemplo do Estrutura de Payload JSON:</span>
-                  <pre className="p-3 bg-slate-900 text-emerald-400 rounded-xl font-mono text-[10px] overflow-x-auto leading-relaxed">
-{`{
-  "event": "cooperado.created",
-  "timestamp": "${new Date().toISOString()}",
-  "tenant": {
-    "id": "${currentTenant?.id || 'tenant-1'}",
-    "cnpj": "${currentTenant?.cnpj || '12.345.678/0001-90'}",
-    "name": "${currentTenant?.name || 'Cooperativa Agrotech'}"
-  },
-  "data": {
-    "matricula": "COP-1042",
-    "nome": "Mariana Souza Alcantara",
-    "cpfCnpj": "123.456.789-00",
-    "situacao": "ATIVO",
-    "capitalSubscrito": 1500.00,
-    "capitalIntegralizado": 500.00
-  }
-}`}
-                  </pre>
-                </div>
-              </div>
-            )}
-          </div>
         </div>
       )}
 
@@ -2913,7 +2857,7 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="px-2 py-1 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:underline font-mono text-[10px] font-bold rounded flex items-center gap-1"
-                                  title={`Baixar ${file.name} do Supabase Storage`}
+                                  title={`Baixar ${file.name} do Armazenamento em Nuvem`}
                                 >
                                   <FileText className="w-3 h-3" /> {file.name.split('_')[1] || 'CSV'}
                                 </a>

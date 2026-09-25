@@ -82,51 +82,51 @@ export const Sidebar: React.FC<Props> = ({
 
   const rawNavSections = [
     {
-      title: 'Principal',
+      title: 'Visão Geral',
       items: [
-        { id: 'dashboard', label: 'Dashboard Central', icon: LayoutDashboard }
+        { id: 'dashboard', label: 'Painel da Cooperativa', icon: LayoutDashboard }
       ]
     },
     {
-      title: 'Núcleo & Cadastros',
+      title: 'Quadro Social & Governança',
       items: [
-        { id: 'cadastro-cooperativa', label: 'Cadastro da Cooperativa', icon: Building2 },
-        { id: 'cadastros', label: 'Cadastros Unificados', icon: FolderTree },
-        { id: 'cooperados', label: 'Cooperados', icon: Users },
-        { id: 'capital', label: 'Capital Social', icon: Wallet },
-        { id: 'assembleias', label: 'Assembleias', icon: CalendarDays },
-        { id: 'diretoria', label: 'Diretoria & Conselhos', icon: Award }
+        { id: 'cadastro-cooperativa', label: 'Dados da Cooperativa', icon: Building2 },
+        { id: 'cadastros', label: 'Cadastros Agropecuários', icon: FolderTree },
+        { id: 'cooperados', label: 'Cooperados & Produtores', icon: Users },
+        { id: 'capital', label: 'Capital Social & Cotas', icon: Wallet },
+        { id: 'assembleias', label: 'Assembleias Gerais (AGO/AGE)', icon: CalendarDays },
+        { id: 'diretoria', label: 'Diretoria & Conselho Fiscal', icon: Award }
       ]
     },
     {
-      title: 'Sistemas Especializados',
+      title: 'Gestão da Produção & Agro',
       items: [
-        { id: 'sisgepa', label: 'SisGepa (PAA / PNAE)', icon: Landmark },
-        { id: 'fiscal', label: 'Notas Fiscais (SEFAZ)', icon: FileText },
-        { id: 'siscont', label: 'SisCont (Contabilidade)', icon: Calculator },
-        { id: 'sisfin', label: 'SisFin (Financeiro)', icon: CircleDollarSign },
-        { id: 'compras', label: 'SisCompras', icon: ShoppingCart },
-        { id: 'estoque', label: 'SisEstoque', icon: Boxes },
-        { id: 'rh', label: 'SisRH (Recursos Humanos)', icon: UserCheck },
-        { id: 'bi', label: 'SisBI (Analytics)', icon: PieChart }
+        { id: 'sisgepa', label: 'Comercialização Agrícola (PAA/PNAE)', icon: Landmark },
+        { id: 'fiscal', label: 'Notas Fiscais (NF-e / SEFAZ)', icon: FileText },
+        { id: 'estoque', label: 'Galpão & Estoque Agrícola', icon: Boxes },
+        { id: 'compras', label: 'Compras & Insumos Agrícolas', icon: ShoppingCart },
+        { id: 'sisfin', label: 'Financeiro & Contas da Cooperativa', icon: CircleDollarSign },
+        { id: 'siscont', label: 'Contabilidade & Livro Diário', icon: Calculator },
+        { id: 'rh', label: 'Colaboradores & Folha', icon: UserCheck },
+        { id: 'bi', label: 'Indicadores de Desempenho (BI)', icon: PieChart }
       ]
     },
     {
-      title: 'Portais & Aplicativos',
+      title: 'Canais de Campo & Portais',
       items: [
         { id: 'portal-cooperado', label: 'Portal do Cooperado', icon: UserCircle },
-        { id: 'portal-escola', label: 'Portal da Escola', icon: GraduationCap },
-        { id: 'app-produtor', label: 'App do Produtor', icon: Smartphone },
-        { id: 'app-motorista', label: 'App do Motorista', icon: Truck }
+        { id: 'app-produtor', label: 'App do Produtor (Colheita)', icon: Smartphone },
+        { id: 'app-motorista', label: 'App do Motorista (Rotas)', icon: Truck },
+        { id: 'portal-escola', label: 'Portal da Merenda / Escolas', icon: GraduationCap }
       ]
     },
     {
-      title: 'Gerencial & Configurações',
+      title: 'Administração & Sistema',
       items: [
-        { id: 'relatorios', label: 'Relatórios Gerenciais', icon: FileSpreadsheet },
-        { id: 'backup-sistema', label: 'Backup & Sistema', icon: Database },
-        { id: 'licenca', label: 'Licença & Planos', icon: Key, badge: licenseInfo.status === 'ACTIVE' ? 'Ativa' : `${trialDaysRemaining}d Teste` },
-        { id: 'configuracoes', label: 'Configurações', icon: Settings }
+        { id: 'relatorios', label: 'Relatórios Operacionais', icon: FileSpreadsheet },
+        { id: 'backup-sistema', label: 'Backup de Dados', icon: Database },
+        { id: 'licenca', label: 'Licença da Plataforma', icon: Key, badge: licenseInfo.status === 'ACTIVE' ? 'Ativa' : `${trialDaysRemaining}d Teste` },
+        { id: 'configuracoes', label: 'Configurações Gerais', icon: Settings }
       ]
     }
   ];
