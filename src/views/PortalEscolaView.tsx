@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useCoop } from '../context/CoopContext';
+import { PropostaCompraEscola } from '../components/PropostaCompraEscola';
 import {
   GraduationCap,
   CheckCircle2,
@@ -38,7 +39,7 @@ const SeletorEstrelas: React.FC<{ valor: number; onChange: (v: number) => void; 
 export const PortalEscolaView: React.FC = () => {
   const { escolasPnae, entregasEscola, pedidosProdutorPAA, programacoesEntrega, chamadasPublicas, confirmarEntregaEscola } = useCoop();
   const [showComprovanteModal, setShowComprovanteModal] = useState(false);
-  const [abaAtiva, setAbaAtiva] = useState<'pedidos' | 'comprovante'>('pedidos');
+  const [abaAtiva, setAbaAtiva] = useState<'pedidos' | 'comprovante' | 'proposta'>('pedidos');
 
   // Acesso simplificado — somente por e-mail, sem senha. O cadastro da
   // escola é feito só pela administração (Cadastros → Escolas); este portal
@@ -353,6 +354,7 @@ export const PortalEscolaView: React.FC = () => {
       <nav className="flex gap-2 overflow-x-auto rounded-2xl bg-slate-100 dark:bg-slate-900 p-2" aria-label="Seções do portal da escola">
         <button type="button" onClick={() => setAbaAtiva('pedidos')} className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-black ${abaAtiva === 'pedidos' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800'}`}>Pedidos registrados</button>
         <button type="button" onClick={() => { setAbaAtiva('comprovante'); handleOpenComprovante(); }} className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-black ${abaAtiva === 'comprovante' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800'}`}>Registrar comprovante</button>
+        <button type="button" onClick={() => setAbaAtiva('proposta')} className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-black ${abaAtiva === 'proposta' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800'}`}>Proposta de compra</button>
       </nav>
 
       {/* Top Banner with Active Session */}
@@ -383,6 +385,10 @@ export const PortalEscolaView: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {abaAtiva === 'proposta' && (
+        <PropostaCompraEscola escola={{ id: escolaAtual.id, nomeEscola: escolaAtual.nomeEscola, email: escolaAtual.email }} />
+      )}
 
       {abaAtiva === 'pedidos' && <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-xs space-y-4">
         <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
