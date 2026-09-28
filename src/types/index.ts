@@ -76,6 +76,8 @@ export interface CooperativeTenant {
   email: string;
   cotaParteValor: number;
   cotaParteMinima: number;
+  inscricaoEstadual?: string;
+  inscricaoMunicipal?: string;
 }
 
 export type Tenant = CooperativeTenant;
@@ -315,6 +317,8 @@ export interface SistemaConfig {
   cooperativaCnpj?: string;
   emailOficial?: string;
   telefoneOficial?: string;
+  inscricaoEstadual?: string;
+  inscricaoMunicipal?: string;
   enderecoSede?: {
     cep?: string;
     logradouro?: string;

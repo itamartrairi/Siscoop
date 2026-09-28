@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useCoop } from '../context/CoopContext';
-import { Building2, MapPin, DollarSign, Mail, Phone, CheckCircle2, Sparkles, ArrowRight, ShieldCheck, HelpCircle, Upload, Image as ImageIcon, X } from 'lucide-react';
+import { Building2, MapPin, DollarSign, Mail, Phone, CheckCircle2, Sparkles, ArrowRight, ShieldCheck, HelpCircle, Upload, Image as ImageIcon, X, Search, Loader2, AlertTriangle } from 'lucide-react';
+import { consultarCnpjReceita } from '../services/cnpjService';
 
 interface Props {
   onComplete?: () => void;
@@ -23,6 +24,12 @@ export const CadastroCooperativaView: React.FC<Props> = ({ onComplete }) => {
   const [cnpj, setCnpj] = useState(currentTenant?.cnpj || '06.591.085/0001-06');
   const [email, setEmail] = useState(currentTenant?.email || 'contato@cooperai.coop.br');
   const [telefone, setTelefone] = useState(currentTenant?.telefone || '(11) 3456-7890');
+  const [inscricaoEstadual, setInscricaoEstadual] = useState(currentTenant?.inscricaoEstadual || '');
+  const [inscricaoMunicipal, setInscricaoMunicipal] = useState(currentTenant?.inscricaoMunicipal || '');
+
+  // Consulta do CNPJ na base pública da Receita Federal
+  const [isConsultandoCnpj, setIsConsultandoCnpj] = useState(false);
+  const [cnpjConsulta, setCnpjConsulta] = useState<{ tipo: 'ok' | 'aviso' | 'erro'; mensagem: string } | null>(null);
 
   // Endereço
   const [cep, setCep] = useState(currentTenant?.cep || '01310-100');
@@ -49,6 +56,8 @@ export const CadastroCooperativaView: React.FC<Props> = ({ onComplete }) => {
       setCnpj(currentTenant.cnpj || '06.591.085/0001-06');
       setEmail(currentTenant.email || 'contato@cooperai.coop.br');
       setTelefone(currentTenant.telefone || '(11) 3456-7890');
+      setInscricaoEstadual(currentTenant.inscricaoEstadual || '');
+      setInscricaoMunicipal(currentTenant.inscricaoMunicipal || '');
       setCep(currentTenant.cep || '01310-100');
       setLogradouro(currentTenant.logradouro || 'Avenida Paulista');
       setNumero(currentTenant.numero || '1000');
@@ -60,6 +69,47 @@ export const CadastroCooperativaView: React.FC<Props> = ({ onComplete }) => {
       setLogoUrl(currentTenant.logoUrl || 'https://images.unsplash.com/photo-1595273670150-bd0c3c392e46?w=120&auto=format&fit=crop&q=80');
     }
   }, [currentTenant]);
+
+  // Busca o CNPJ na base pública da Receita e atualiza os campos do formulário
+  const handleConsultarCnpj = async () => {
+    setIsConsultandoCnpj(true);
+    setCnpjConsulta(null);
+    try {
+      const dados = await consultarCnpjReceita(cnpj);
+      const atualizados: string[] = [];
+      const aplicar = (valor: string, setter: (v: string) => void, rotulo: string) => {
+        if (valor) {
+          setter(valor);
+          atualizados.push(rotulo);
+        }
+      };
+      aplicar(dados.razaoSocial, setRazaoSocial, 'razão social');
+      aplicar(dados.nomeFantasia, setName, 'nome fantasia');
+      aplicar(dados.email, setEmail, 'e-mail');
+      aplicar(dados.telefone, setTelefone, 'telefone');
+      aplicar(dados.inscricaoEstadual, setInscricaoEstadual, 'inscrição estadual');
+      aplicar(dados.cep, setCep, 'CEP');
+      aplicar(dados.logradouro, setLogradouro, 'logradouro');
+      aplicar(dados.numero, setNumero, 'número');
+      aplicar(dados.bairro, setBairro, 'bairro');
+      aplicar(dados.cidade, setCidade, 'cidade');
+      aplicar(dados.estado, setEstado, 'UF');
+
+      const situacao = (dados.situacaoCadastral || '').toUpperCase();
+      const ativa = !situacao || situacao === 'ATIVA';
+      const cabecalho = ativa
+        ? 'CNPJ ativo na Receita Federal.'
+        : `Atenção: situação cadastral na Receita é ${situacao}.`;
+      setCnpjConsulta({
+        tipo: ativa ? 'ok' : 'aviso',
+        mensagem: `${cabecalho} Atualizado: ${atualizados.join(', ') || 'nenhum campo'}. Confira e clique em salvar. (Fonte: ${dados.fonte})`,
+      });
+    } catch (err: any) {
+      setCnpjConsulta({ tipo: 'erro', mensagem: err?.message || 'Falha ao consultar o CNPJ.' });
+    } finally {
+      setIsConsultandoCnpj(false);
+    }
+  };
 
   const presetLogos = [
     { label: 'Agronegócio (Cooperai)', url: 'https://images.unsplash.com/photo-1595273670150-bd0c3c392e46?w=120&auto=format&fit=crop&q=80' },
@@ -161,6 +211,8 @@ export const CadastroCooperativaView: React.FC<Props> = ({ onComplete }) => {
         cnpj,
         email: email || 'contato@cooperai.coop.br',
         telefone: telefone || '(11) 3456-7890',
+        inscricaoEstadual: inscricaoEstadual.trim(),
+        inscricaoMunicipal: inscricaoMunicipal.trim(),
         cep,
         logradouro,
         numero,
@@ -186,6 +238,8 @@ export const CadastroCooperativaView: React.FC<Props> = ({ onComplete }) => {
         cooperativaCnpj: cnpj,
         emailOficial: email,
         telefoneOficial: telefone,
+        inscricaoEstadual: inscricaoEstadual.trim(),
+        inscricaoMunicipal: inscricaoMunicipal.trim(),
         logoUrl,
         cotaParteValor: Number(cotaParteValor) || 100,
         cotaParteMinima: Number(cotaParteMinima) || 10,
@@ -283,14 +337,43 @@ export const CadastroCooperativaView: React.FC<Props> = ({ onComplete }) => {
               <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
                 CNPJ da Cooperativa <span className="text-rose-400">*</span>
               </label>
-              <input
-                type="text"
-                required
-                value={cnpj}
-                onChange={e => handleCnpjChange(e.target.value)}
-                placeholder="00.000.000/0001-00"
-                className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-emerald-500 transition-colors"
-              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  required
+                  value={cnpj}
+                  onChange={e => {
+                    handleCnpjChange(e.target.value);
+                    setCnpjConsulta(null);
+                  }}
+                  placeholder="00.000.000/0001-00"
+                  className="flex-1 min-w-0 w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-emerald-500 transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={handleConsultarCnpj}
+                  disabled={isConsultandoCnpj || cnpj.replace(/\D/g, '').length !== 14}
+                  title="Buscar e atualizar os dados na base pública da Receita Federal"
+                  className="px-3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[11px] font-bold flex items-center gap-1.5 whitespace-nowrap transition-colors"
+                >
+                  {isConsultandoCnpj ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+                  {isConsultandoCnpj ? 'Consultando...' : 'Consultar Receita'}
+                </button>
+              </div>
+              {cnpjConsulta && (
+                <p
+                  className={`mt-1.5 text-[11px] flex items-start gap-1 ${
+                    cnpjConsulta.tipo === 'ok' ? 'text-emerald-400' : cnpjConsulta.tipo === 'aviso' ? 'text-amber-300' : 'text-rose-400'
+                  }`}
+                >
+                  {cnpjConsulta.tipo === 'ok' ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 mt-px shrink-0" />
+                  ) : (
+                    <AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" />
+                  )}
+                  <span>{cnpjConsulta.mensagem}</span>
+                </p>
+              )}
             </div>
 
             <div>
@@ -323,6 +406,34 @@ export const CadastroCooperativaView: React.FC<Props> = ({ onComplete }) => {
                   className="w-full pl-9 pr-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
+                Inscrição Estadual
+              </label>
+              <input
+                type="text"
+                value={inscricaoEstadual}
+                onChange={e => setInscricaoEstadual(e.target.value.toUpperCase().replace(/[^0-9A-Z./-]/g, ''))}
+                placeholder="Ex: 06.123456-7 ou ISENTO"
+                className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-emerald-500 transition-colors"
+              />
+              <p className="mt-1 text-[10px] text-slate-500">Preenchida pela consulta ao CNPJ quando constar no cadastro público. Use ISENTO se a cooperativa não tiver.</p>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
+                Inscrição Municipal
+              </label>
+              <input
+                type="text"
+                value={inscricaoMunicipal}
+                onChange={e => setInscricaoMunicipal(e.target.value.toUpperCase().replace(/[^0-9A-Z./-]/g, ''))}
+                placeholder="Ex: 123456"
+                className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-emerald-500 transition-colors"
+              />
+              <p className="mt-1 text-[10px] text-slate-500">Não consta na base da Receita: consulte o cadastro da prefeitura. Necessária para emitir NFS-e.</p>
             </div>
           </div>
 
