@@ -380,8 +380,16 @@ export const FiscalView: React.FC = () => {
               <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-200 text-xs font-semibold border border-emerald-400/30 flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" /> WebServices SEFAZ Ceará v4.00 Integrados
               </span>
-              <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-200 text-xs font-semibold border border-amber-400/30">
-                {sefazCeConfig.ambiente === 'HOMOLOGACAO' ? 'Ambiente de Homologação (Testes)' : 'Ambiente de Produção (Oficial)'}
+              {/* Mostra o ambiente escolhido na hora; avisa enquanto a troca não for salva */}
+              <span
+                className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+                  configForm.ambiente === 'PRODUCAO'
+                    ? 'bg-red-500/20 text-red-200 border-red-400/30'
+                    : 'bg-amber-500/20 text-amber-200 border-amber-400/30'
+                }`}
+              >
+                {configForm.ambiente === 'PRODUCAO' ? 'Ambiente de Produção (Oficial)' : 'Ambiente de Homologação (Testes)'}
+                {configForm.ambiente !== sefazCeConfig.ambiente && ' · não salvo'}
               </span>
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
