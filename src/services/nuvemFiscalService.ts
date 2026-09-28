@@ -1,6 +1,10 @@
 /**
- * Serviço de Integração com a API da Nuvem Fiscal (NF-e / SEFAZ)
- * Documentação: https://dev.nuvemfiscal.com.br
+ * Serviço de integração fiscal (NF-e / SEFAZ) via ACBr API.
+ * A Nuvem Fiscal foi desativada em 31/07/2026; a ACBr API é compatível com ela.
+ * Documentação: https://dev.acbr.api.br
+ *
+ * Os campos de configuração continuam com o prefixo `nuvemFiscal*` para não
+ * quebrar os dados já salvos no Firestore.
  */
 
 import { NotaFiscal, SefazCeConfig } from '../types';
@@ -32,22 +36,83 @@ export interface NuvemFiscalNfeResponse {
   mensagens?: Array<{ codigo: string; mensagem: string }>;
 }
 
-let cachedToken: { token: string; expiresAt: number } | null = null;
+// ACBr API: sucessora compatível da Nuvem Fiscal (desativada em 31/07/2026).
+// Mesmos endpoints, escopos, payloads e retornos; mudam o endpoint de token e a URL base.
+// Guia: https://dev.acbr.api.br/docs/migrando-da-nuvem-fiscal-para-a-acbr-api
+const ACBR_AUTH_URL = 'https://auth.acbr.api.br/realms/ACBrAPI/protocol/openid-connect/token';
+const ACBR_API_URL = {
+  producao: 'https://prod.acbr.api.br',
+  homologacao: 'https://hom.acbr.api.br',
+} as const;
 
 /**
- * Obtém o Bearer Token via OAuth 2.0 (Client Credentials) na Nuvem Fiscal
+ * URL base da ACBr API conforme o ambiente configurado.
+ * Atenção: as credenciais da ACBr API valem para um único ambiente.
+ */
+export function obterUrlBaseApiFiscal(config: SefazCeConfig): string {
+  return config.ambiente === 'PRODUCAO' ? ACBR_API_URL.producao : ACBR_API_URL.homologacao;
+}
+
+// O endpoint de token da ACBr API aceita poucas requisições por hora e o token
+// vale cerca de 30 dias. Por isso o token também é guardado no localStorage,
+// para sobreviver a recargas da página sem pedir um token novo a cada vez.
+const TOKEN_STORAGE_PREFIX = 'siscoop:acbrapi:token:';
+const MARGEM_EXPIRACAO_MS = 5 * 60 * 1000;
+let cachedToken: { key: string; token: string; expiresAt: number } | null = null;
+
+function chaveToken(config: SefazCeConfig): string {
+  return `${config.ambiente}:${config.nuvemFiscalClientId?.trim() || ''}`;
+}
+
+function lerTokenSalvo(key: string): { token: string; expiresAt: number } | null {
+  try {
+    const raw = localStorage.getItem(TOKEN_STORAGE_PREFIX + key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function salvarToken(key: string, token: string, expiresAt: number): void {
+  try {
+    localStorage.setItem(TOKEN_STORAGE_PREFIX + key, JSON.stringify({ token, expiresAt }));
+  } catch {
+    // Sem localStorage disponível: fica só o cache em memória.
+  }
+}
+
+/** Descarta o token salvo (ex.: após resposta 401 ou troca de credenciais). */
+export function limparTokenApiFiscal(config: SefazCeConfig): void {
+  const key = chaveToken(config);
+  if (cachedToken?.key === key) cachedToken = null;
+  try {
+    localStorage.removeItem(TOKEN_STORAGE_PREFIX + key);
+  } catch {
+    // ignora
+  }
+}
+
+/**
+ * Obtém o Bearer token da ACBr API (OAuth 2.0 client_credentials).
+ * Mantém o nome antigo para não quebrar quem já importa esta função.
  */
 export async function obterTokenNuvemFiscal(config: SefazCeConfig): Promise<string> {
   const clientId = config.nuvemFiscalClientId?.trim();
   const clientSecret = config.nuvemFiscalClientSecret?.trim();
 
   if (!clientId || !clientSecret) {
-    throw new Error('Client ID ou Client Secret da Nuvem Fiscal não configurados.');
+    throw new Error('Client ID ou Client Secret da ACBr API não configurados.');
   }
 
-  // Se o token ainda for válido (com 60s de folga), reutiliza
-  if (cachedToken && Date.now() < cachedToken.expiresAt - 60000) {
+  const key = chaveToken(config);
+  if (cachedToken && cachedToken.key === key && Date.now() < cachedToken.expiresAt - MARGEM_EXPIRACAO_MS) {
     return cachedToken.token;
+  }
+
+  const salvo = lerTokenSalvo(key);
+  if (salvo && Date.now() < salvo.expiresAt - MARGEM_EXPIRACAO_MS) {
+    cachedToken = { key, token: salvo.token, expiresAt: salvo.expiresAt };
+    return salvo.token;
   }
 
   const params = new URLSearchParams();
@@ -56,7 +121,7 @@ export async function obterTokenNuvemFiscal(config: SefazCeConfig): Promise<stri
   params.append('client_secret', clientSecret);
   params.append('scope', 'nfe cnpj');
 
-  const response = await fetch('https://auth.nuvemfiscal.com.br/oauth/token', {
+  const response = await fetch(ACBR_AUTH_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -66,14 +131,13 @@ export async function obterTokenNuvemFiscal(config: SefazCeConfig): Promise<stri
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Falha na autenticação com a Nuvem Fiscal (${response.status}): ${errorText}`);
+    throw new Error(`Falha na autenticação com a ACBr API (${response.status}): ${errorText}`);
   }
 
   const data: NuvemFiscalTokenResponse = await response.json();
-  cachedToken = {
-    token: data.access_token,
-    expiresAt: Date.now() + (data.expires_in * 1000),
-  };
+  const expiresAt = Date.now() + (data.expires_in * 1000);
+  cachedToken = { key, token: data.access_token, expiresAt };
+  salvarToken(key, data.access_token, expiresAt);
 
   return data.access_token;
 }
@@ -245,7 +309,7 @@ export async function transmitirParaNuvemFiscal(
     const token = await obterTokenNuvemFiscal(config);
     const payload = converterParaPayloadNuvemFiscal(nf, config);
 
-    const response = await fetch('https://api.nuvemfiscal.com.br/nfe', {
+    const response = await fetch(`${obterUrlBaseApiFiscal(config)}/nfe`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -254,10 +318,15 @@ export async function transmitirParaNuvemFiscal(
       body: JSON.stringify(payload),
     });
 
+    if (response.status === 401) {
+      // Token expirado ou revogado: descarta para gerar um novo na próxima tentativa.
+      limparTokenApiFiscal(config);
+    }
+
     const resJson: NuvemFiscalNfeResponse = await response.json();
 
     if (!response.ok) {
-      const msgErro = resJson.mensagens?.map(m => m.mensagem).join(' | ') || resJson.motivo_status || 'Erro na requisição para Nuvem Fiscal';
+      const msgErro = resJson.mensagens?.map(m => m.mensagem).join(' | ') || resJson.motivo_status || 'Erro na requisição para a ACBr API';
       return {
         success: false,
         motivo: msgErro,
@@ -270,21 +339,21 @@ export async function transmitirParaNuvemFiscal(
         motivo: resJson.motivo_status || 'Autorizado o uso da NF-e',
         chaveAcesso: resJson.chave,
         protocolo: resJson.autorizacao?.numero_protocolo || resJson.autorizacao?.protocolo,
-        danfePdfUrl: resJson.danfe_url || `https://api.nuvemfiscal.com.br/nfe/${resJson.id}/pdf`,
-        xmlUrl: resJson.xml_url || `https://api.nuvemfiscal.com.br/nfe/${resJson.id}/xml`,
+        danfePdfUrl: resJson.danfe_url || `${obterUrlBaseApiFiscal(config)}/nfe/${resJson.id}/pdf`,
+        xmlUrl: resJson.xml_url || `${obterUrlBaseApiFiscal(config)}/nfe/${resJson.id}/xml`,
         nuvemFiscalId: resJson.id,
       };
     }
 
     return {
       success: false,
-      motivo: `Status Nuvem Fiscal: ${resJson.status} - ${resJson.motivo_status || 'Aguardando processamento'}`,
+      motivo: `Status ACBr API: ${resJson.status} - ${resJson.motivo_status || 'Aguardando processamento'}`,
       nuvemFiscalId: resJson.id,
     };
   } catch (error: any) {
     return {
       success: false,
-      motivo: error.message || 'Falha de conexão com a Nuvem Fiscal',
+      motivo: error.message || 'Falha de conexão com a ACBr API',
     };
   }
 }

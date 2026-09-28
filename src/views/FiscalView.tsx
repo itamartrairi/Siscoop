@@ -1409,15 +1409,15 @@ export const FiscalView: React.FC = () => {
               </div>
             </div>
 
-            {/* Integração Nuvem Fiscal (REST API) */}
+            {/* Integração ACBr API (sucessora compatível da Nuvem Fiscal, desativada em 31/07/2026) */}
             <div className="md:col-span-2 p-4 bg-emerald-50/50 rounded-xl border border-emerald-200 space-y-4">
               <div className="flex items-center justify-between border-b border-emerald-200 pb-2">
                 <div>
                   <h3 className="font-bold text-emerald-950 text-sm flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-emerald-600" /> Integração Oficial Nuvem Fiscal (API REST)
+                    <Sparkles className="w-4 h-4 text-emerald-600" /> Integração Fiscal ACBr API (API REST)
                   </h3>
                   <p className="text-xs text-slate-600">
-                    Transmita e autorize Notas Fiscais diretamente na SEFAZ via Nuvem Fiscal (OAuth 2.0).
+                    Transmita e autorize Notas Fiscais diretamente na SEFAZ via ACBr API (OAuth 2.0), sucessora compatível da Nuvem Fiscal.
                   </p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
@@ -1438,19 +1438,19 @@ export const FiscalView: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Client ID (Nuvem Fiscal)
+                      Client ID (ACBr API)
                     </label>
                     <input
                       type="text"
                       value={configForm.nuvemFiscalClientId || ''}
                       onChange={e => setConfigForm(prev => ({ ...prev, nuvemFiscalClientId: e.target.value }))}
                       className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono bg-white"
-                      placeholder="Ex: client_live_..."
+                      placeholder="Client ID gerado no console da ACBr API"
                     />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Client Secret (Nuvem Fiscal)
+                      Client Secret (ACBr API)
                     </label>
                     <input
                       type="password"
@@ -1462,10 +1462,10 @@ export const FiscalView: React.FC = () => {
                   </div>
                   <div className="md:col-span-2 text-xs text-slate-500 bg-white p-3 rounded-lg border border-emerald-100 flex items-center justify-between">
                     <span>
-                      Obtenha suas credenciais no painel do desenvolvedor em <strong>https://app.nuvemfiscal.com.br</strong>.
+                      Gere suas credenciais em <strong>https://console.acbr.api.br</strong>. Elas valem só para o ambiente em que foram criadas: use credenciais de Produção ou de Homologação conforme o ambiente configurado.
                     </span>
                     <a
-                      href="https://dev.nuvemfiscal.com.br"
+                      href="https://dev.acbr.api.br/docs/migrando-da-nuvem-fiscal-para-a-acbr-api"
                       target="_blank"
                       rel="noreferrer"
                       className="text-emerald-700 hover:underline font-bold flex items-center gap-1"
