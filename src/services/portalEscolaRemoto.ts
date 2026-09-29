@@ -44,16 +44,16 @@ export const COL_COMPROVANTES = 'portalEscolasComprovantes';
 const NOME_APP_PORTAL = 'portal-escola';
 const cfg: any = firebaseConfig;
 const appPortal = getApps().find(a => a.name === NOME_APP_PORTAL) || initializeApp(cfg, NOME_APP_PORTAL);
-const authPortal = getAuth(appPortal);
-const dbPortal: Firestore = cfg.firestoreDatabaseId
+export const authPortal = getAuth(appPortal);
+export const dbPortal: Firestore = cfg.firestoreDatabaseId
   ? getFirestore(appPortal, cfg.firestoreDatabaseId)
   : getFirestore(appPortal);
 
 const CHAVE_EMAIL_LINK = 'siscoop:portal-escola:email-link';
-const LIMITE_DOC = 900_000; // o Firestore aceita até ~1 MB por documento
+export const LIMITE_DOC = 900_000; // o Firestore aceita até ~1 MB por documento
 
-const norm = (s?: string) => (s || '').toLowerCase().trim();
-const semUndefined = <T,>(obj: T): T => JSON.parse(JSON.stringify(obj));
+export const norm = (s?: string) => (s || '').toLowerCase().trim();
+export const semUndefined = <T,>(obj: T): T => JSON.parse(JSON.stringify(obj));
 
 export interface DadosPortalEscola {
   tenantId: string;
@@ -171,7 +171,7 @@ export function ouvirComprovantesPortal(tenantId: string, aoReceber: (docId: str
 /* Lado da escola                                                       */
 /* ------------------------------------------------------------------ */
 
-function traduzirErro(e: any): string {
+export function traduzirErro(e: any): string {
   const code = e?.code || '';
   if (code === 'auth/operation-not-allowed')
     return 'O acesso por link de e-mail ainda não foi ativado pela cooperativa (Firebase > Authentication > E-mail/link).';
@@ -185,8 +185,8 @@ function traduzirErro(e: any): string {
   return e?.message || 'Não foi possível concluir a operação.';
 }
 
-async function enviarLinkAcesso(email: string) {
-  const url = `${window.location.origin}${window.location.pathname}?portal=portal-escola`;
+export async function enviarLinkAcesso(email: string, portal = 'portal-escola') {
+  const url = `${window.location.origin}${window.location.pathname}?portal=${portal}`;
   await sendSignInLinkToEmail(authPortal, email.trim(), { url, handleCodeInApp: true });
   try {
     localStorage.setItem(CHAVE_EMAIL_LINK, email.trim());
@@ -195,7 +195,7 @@ async function enviarLinkAcesso(email: string) {
   }
 }
 
-async function concluirLinkAcesso(emailInformado?: string): Promise<void> {
+export async function concluirLinkAcesso(emailInformado?: string, portal = 'portal-escola'): Promise<void> {
   let email = (emailInformado || '').trim();
   if (!email) {
     try {
@@ -211,7 +211,7 @@ async function concluirLinkAcesso(emailInformado?: string): Promise<void> {
   } catch {
     // ignora
   }
-  window.history.replaceState(null, '', `${window.location.pathname}?portal=portal-escola`);
+  window.history.replaceState(null, '', `${window.location.pathname}?portal=${portal}`);
 }
 
 async function carregarDadosEscola(): Promise<DadosPortalEscola | null> {
@@ -234,7 +234,7 @@ export type StatusPortalRemoto =
  * Reduz uma imagem em data URL (foto ou assinatura) para caber no Firestore.
  * Redimensiona e converte para JPEG, baixando a qualidade até ficar abaixo do alvo.
  */
-async function reduzirImagem(dataUrl: string | undefined, maxLado: number, alvo: number): Promise<string | undefined> {
+export async function reduzirImagem(dataUrl: string | undefined, maxLado: number, alvo: number): Promise<string | undefined> {
   if (!dataUrl || !dataUrl.startsWith('data:image') || dataUrl.length <= alvo) return dataUrl;
   try {
     const img = await new Promise<HTMLImageElement>((ok, falha) => {
