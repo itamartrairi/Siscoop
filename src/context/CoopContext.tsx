@@ -111,6 +111,7 @@ import {
   saveUserTenantMappingToFirestore
 } from '../services/firebaseDbService';
 import { publicarPortalEscolas, ouvirComprovantesPortal } from '../services/portalEscolaRemoto';
+import { publicarPortalMotoristas, ouvirAtualizacoesMotoristas, mesclarParadas } from '../services/portalMotoristaRemoto';
 
 
 export const DEFAULT_ROLE_PERMISSIONS: RolePermissionsMap = {
@@ -1697,6 +1698,37 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return ouvirComprovantesPortal(tenantId, (docId, entrega) => {
       const id = `portal-${docId}`;
       setEntregasEscola(prev => (prev.some(x => x.id === id) ? prev : [{ ...entrega, id, tenantId }, ...prev]));
+    });
+  }, [isAuthenticated, currentTenant?.id]);
+
+  // Portal do Motorista: publica as rotas de cada motorista no Firestore e
+  // aplica as entregas que eles confirmarem pelo celular.
+  useEffect(() => {
+    const tenantId = currentTenant?.id;
+    if (!isAuthenticated || !tenantId || !auth.currentUser) return;
+    const timer = setTimeout(() => {
+      publicarPortalMotoristas(tenantId, motoristas, programacoesEntrega).catch(err =>
+        console.warn('Portal do Motorista: falha ao publicar as rotas', err)
+      );
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [isAuthenticated, currentTenant?.id, motoristas, programacoesEntrega]);
+
+  useEffect(() => {
+    const tenantId = currentTenant?.id;
+    if (!isAuthenticated || !tenantId || !auth.currentUser) return;
+    return ouvirAtualizacoesMotoristas(tenantId, (programacaoId, alteracoes) => {
+      setProgramacoesEntrega(prev =>
+        prev.map(p =>
+          p.id === programacaoId
+            ? {
+                ...p,
+                paradasEntrega: mesclarParadas(p.paradasEntrega, alteracoes.paradasEntrega) as typeof p.paradasEntrega,
+                status: (alteracoes.status as typeof p.status) || p.status,
+              }
+            : p
+        )
+      );
     });
   }, [isAuthenticated, currentTenant?.id]);
 
