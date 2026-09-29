@@ -53,6 +53,27 @@ service cloud.firestore {
     // Antes, qualquer conta autenticada podia LISTAR a coleção inteira e
     // descobrir exatamente quais UIDs atacar.
     // A escrita fica fora do app: promover admin é operação de console.
+    // Portal da Escola: resumo por escola publicado pela cooperativa.
+    // A escola entra por link de e-mail (sem senha) e lê só o documento com o seu e-mail.
+    match /portalEscolas/{docId} {
+      allow read: if (isSignedIn() && request.auth.token.email_verified == true &&
+                      resource.data.escolaEmail == request.auth.token.email.lower()) ||
+                     isAdmin() || belongsToTenant(resource.data.tenantId);
+      allow create, update: if (isAdmin() || belongsToTenant(request.resource.data.tenantId)) &&
+                               docId == request.resource.data.tenantId + '__' + request.resource.data.escolaId;
+      allow delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
+    }
+
+    // Comprovantes de entrega registrados pela escola. A cooperativa importa e apaga.
+    match /portalEscolasComprovantes/{docId} {
+      allow create: if isSignedIn() && request.auth.token.email_verified == true &&
+                       request.resource.data.keys().hasOnly(['tenantId', 'escolaId', 'escolaEmail', 'entrega', 'criadoEm']) &&
+                       request.resource.data.escolaEmail == request.auth.token.email.lower() &&
+                       get(/databases/$(database)/documents/portalEscolas/$(request.resource.data.tenantId + '__' + request.resource.data.escolaId)).data.escolaEmail == request.auth.token.email.lower();
+      allow read, delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
+      allow update: if false;
+    }
+
     match /admins/{userId} {
       allow read: if isCurrentUser(userId);
       allow write: if false;
