@@ -89,6 +89,14 @@ export async function saveUserTenantMappingToFirestore(uid: string, tenantId: st
   // Só sincronize quando a sessão autenticada corresponder ao usuário.
   if (!uid || !tenantId || auth.currentUser?.uid !== uid) return;
   try {
+    // Registra o dono da cooperativa uma única vez. As regras do Firestore só
+    // deixam alguém se vincular a uma cooperativa se for o dono registrado.
+    const donoRef = doc(db, 'tenantOwners', tenantId);
+    const dono = await getDoc(donoRef);
+    if (!dono.exists()) {
+      await setDoc(donoRef, { ownerUid: uid, email: email || null, criadoEm: new Date().toISOString() });
+    }
+
     const docRef = doc(db, 'users', uid);
     await setDoc(docRef, {
       tenantId,
