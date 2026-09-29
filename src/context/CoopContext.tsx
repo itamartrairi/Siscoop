@@ -110,6 +110,7 @@ import {
   syncAssembleiasToFirestore,
   saveUserTenantMappingToFirestore
 } from '../services/firebaseDbService';
+import { publicarPortalEscolas, ouvirComprovantesPortal } from '../services/portalEscolaRemoto';
 
 
 export const DEFAULT_ROLE_PERMISSIONS: RolePermissionsMap = {
@@ -1661,6 +1662,32 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unsubscribe();
     };
   }, [currentTenant]);
+
+  // Portal da Escola: publica no Firestore o resumo de cada escola (para ela
+  // acessar o portal do próprio computador) e importa os comprovantes que as
+  // escolas enviarem. Só roda com a cooperativa logada no Firebase.
+  useEffect(() => {
+    const tenantId = currentTenant?.id;
+    if (!isAuthenticated || !tenantId || !auth.currentUser) return;
+    const timer = setTimeout(() => {
+      publicarPortalEscolas(tenantId, escolasPnae, {
+        pedidos: pedidosProdutorPAA,
+        programacoes: programacoesEntrega,
+        chamadas: chamadasPublicas,
+        entregas: entregasEscola,
+      }).catch(err => console.warn('Portal da Escola: falha ao publicar os dados das escolas', err));
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [isAuthenticated, currentTenant?.id, escolasPnae, pedidosProdutorPAA, programacoesEntrega, chamadasPublicas, entregasEscola]);
+
+  useEffect(() => {
+    const tenantId = currentTenant?.id;
+    if (!isAuthenticated || !tenantId || !auth.currentUser) return;
+    return ouvirComprovantesPortal(tenantId, (docId, entrega) => {
+      const id = `portal-${docId}`;
+      setEntregasEscola(prev => (prev.some(x => x.id === id) ? prev : [{ ...entrega, id, tenantId }, ...prev]));
+    });
+  }, [isAuthenticated, currentTenant?.id]);
 
   const loginWithEmail = async (email: string, pass: string) => {
     try {
