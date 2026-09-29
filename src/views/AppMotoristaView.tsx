@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useCoop } from '../context/CoopContext';
 import {
   Truck,
@@ -13,6 +13,7 @@ import {
   ClipboardList,
   Image as ImageIcon
 } from 'lucide-react';
+import { usePortalMotoristaRemoto } from '../services/portalMotoristaRemoto';
 
 // Assinatura digital simples, desenhada com o dedo/mouse num canvas.
 // Exporta a assinatura como PNG (data URL) sempre que o traço termina.
@@ -85,7 +86,20 @@ const SignaturePad: React.FC<{ value: string; onChange: (dataUrl: string) => voi
 };
 
 export const AppMotoristaView: React.FC = () => {
-  const { motoristas, programacoesEntrega, updateProgramacaoEntrega } = useCoop();
+  const coop = useCoop();
+  // Quando o motorista entra pelo link de e-mail (do celular dele), as rotas
+  // vêm do Firestore; no computador da cooperativa continuam vindo do sistema.
+  const remoto = usePortalMotoristaRemoto();
+  const usarRemoto = remoto.status === 'pronto' && !!remoto.dados;
+  const motoristas = usarRemoto ? [remoto.dados!.motorista as typeof coop.motoristas[number]] : coop.motoristas;
+  const programacoesEntrega = usarRemoto ? (remoto.dados!.rotas as typeof coop.programacoesEntrega) : coop.programacoesEntrega;
+  const updateProgramacaoEntrega: typeof coop.updateProgramacaoEntrega = usarRemoto
+    ? ((id: string, alteracoes: any) => {
+        remoto
+          .enviarAtualizacao(id, alteracoes)
+          .catch(err => alert('Não foi possível enviar a entrega para a cooperativa: ' + (err?.message || err)));
+      }) as typeof coop.updateProgramacaoEntrega
+    : coop.updateProgramacaoEntrega;
 
   // Acesso simplificado — somente por e-mail, sem senha. O cadastro do
   // motorista é feito só pela administração (Cadastros → Motoristas); este
@@ -93,6 +107,14 @@ export const AppMotoristaView: React.FC = () => {
   const [authEmail, setAuthEmail] = useState<string>('');
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+
+  // Sessão aberta pelo link de e-mail: entra direto nas rotas.
+  useEffect(() => {
+    if (usarRemoto && remoto.emailSessao) {
+      setAuthEmail(remoto.emailSessao);
+      setIsLoggedIn(true);
+    }
+  }, [usarRemoto, remoto.emailSessao]);
 
   // Driver matching strictly the logged-in email — motoristas agora vem do
   // Context (persistido e isolado por cooperativa), não mais de um estado
@@ -112,7 +134,7 @@ export const AppMotoristaView: React.FC = () => {
   // entregas daquele pedido para registrar e assinar.
   const [pedidoSelecionadoKey, setPedidoSelecionadoKey] = useState<string | null>(null);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(null);
 
@@ -126,7 +148,10 @@ export const AppMotoristaView: React.FC = () => {
     );
 
     if (!found) {
-      setLoginError(`Nenhum motorista encontrado com o e-mail "${authEmail}". Peça para a cooperativa cadastrar seu acesso em Cadastros → Motoristas.`);
+      // Celular do motorista: o cadastro não está neste aparelho. Envia o link
+      // de acesso para o e-mail (ou conclui o link já aberto).
+      if (remoto.status === 'pedir-email') await remoto.confirmarEmailDoLink(authEmail.trim());
+      else await remoto.enviarLink(authEmail.trim());
       return;
     }
 
@@ -134,6 +159,7 @@ export const AppMotoristaView: React.FC = () => {
   };
 
   const handleLogout = () => {
+    remoto.sair();
     setIsLoggedIn(false);
     setAuthEmail('');
     setLoginError(null);
@@ -237,6 +263,31 @@ export const AppMotoristaView: React.FC = () => {
                 Seu e-mail de motorista já deve estar cadastrado pela cooperativa (Cadastros → Motoristas). Se ainda não tiver acesso, fale com a administração.
               </p>
             </div>
+
+            {/* Acesso pelo celular do motorista: login por link enviado ao e-mail */}
+            {remoto.status === 'link-enviado' && (
+              <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-200">
+                Enviamos um link de acesso para <strong>{authEmail}</strong>. Abra o e-mail neste celular e toque no link para entrar. Confira também a caixa de spam.
+              </div>
+            )}
+            {remoto.status === 'pedir-email' && (
+              <div className="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 text-xs text-indigo-800 dark:text-indigo-200">
+                Confirme seu e-mail acima e toque em entrar para concluir o acesso.
+              </div>
+            )}
+            {(remoto.status === 'carregando' || remoto.status === 'verificando') && (
+              <p className="text-xs text-slate-500">Verificando acesso...</p>
+            )}
+            {remoto.status === 'sem-cadastro' && (
+              <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-200">
+                O e-mail <strong>{remoto.emailSessao}</strong> não está ligado a nenhum motorista da cooperativa. Peça à cooperativa para conferir o e-mail em Cadastros → Motoristas.
+              </div>
+            )}
+            {remoto.erro && (
+              <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 text-xs text-rose-800 dark:text-rose-200">
+                {remoto.erro}
+              </div>
+            )}
 
             <button
               type="submit"
