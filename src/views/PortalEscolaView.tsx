@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useCoop } from '../context/CoopContext';
 import { PropostaCompraEscola } from '../components/PropostaCompraEscola';
 import {
@@ -14,6 +14,7 @@ import {
   X,
   ClipboardList
 } from 'lucide-react';
+import { usePortalEscolaRemoto } from '../services/portalEscolaRemoto';
 
 // Pequeno seletor de nota por estrelas (1 a 5), usado na avaliação de
 // qualidade dos produtos recebidos.
@@ -37,7 +38,26 @@ const SeletorEstrelas: React.FC<{ valor: number; onChange: (v: number) => void; 
 );
 
 export const PortalEscolaView: React.FC = () => {
-  const { escolasPnae, entregasEscola, pedidosProdutorPAA, programacoesEntrega, chamadasPublicas, confirmarEntregaEscola } = useCoop();
+  const coop = useCoop();
+  // Quando a escola entra pelo link de e-mail (de outro computador), os dados
+  // vêm do Firestore; no computador da cooperativa continuam vindo do sistema.
+  const remoto = usePortalEscolaRemoto();
+  const usarRemoto = remoto.status === 'pronto' && !!remoto.dados;
+  const escolasPnae = usarRemoto ? [remoto.dados!.escola as typeof coop.escolasPnae[number]] : coop.escolasPnae;
+  const entregasEscola = usarRemoto ? (remoto.dados!.entregas as typeof coop.entregasEscola) : coop.entregasEscola;
+  const pedidosProdutorPAA = usarRemoto ? (remoto.dados!.pedidos as typeof coop.pedidosProdutorPAA) : coop.pedidosProdutorPAA;
+  const programacoesEntrega = usarRemoto ? (remoto.dados!.programacoes as typeof coop.programacoesEntrega) : coop.programacoesEntrega;
+  const chamadasPublicas = usarRemoto ? (remoto.dados!.chamadas as typeof coop.chamadasPublicas) : coop.chamadasPublicas;
+  const confirmarEntregaEscola: typeof coop.confirmarEntregaEscola = usarRemoto
+    ? (entrega) => {
+        remoto
+          .enviarComprovante(entrega)
+          .then(fotoIncluida => {
+            if (!fotoIncluida) alert('A foto era grande demais e não foi enviada. O restante do comprovante chegou à cooperativa.');
+          })
+          .catch(err => alert('Não foi possível enviar o comprovante: ' + (err?.message || err)));
+      }
+    : coop.confirmarEntregaEscola;
   const [showComprovanteModal, setShowComprovanteModal] = useState(false);
   const [abaAtiva, setAbaAtiva] = useState<'pedidos' | 'comprovante' | 'proposta'>('pedidos');
 
@@ -47,6 +67,14 @@ export const PortalEscolaView: React.FC = () => {
   const [authEmail, setAuthEmail] = useState<string>('');
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+
+  // Sessão aberta pelo link de e-mail: entra direto no portal.
+  useEffect(() => {
+    if (usarRemoto && remoto.emailSessao) {
+      setAuthEmail(remoto.emailSessao);
+      setIsLoggedIn(true);
+    }
+  }, [usarRemoto, remoto.emailSessao]);
 
   // Escola matching strictly the logged-in email
   const escolaAtual = escolasPnae.find(
@@ -256,7 +284,7 @@ export const PortalEscolaView: React.FC = () => {
     alert('Comprovante de entrega registrado com sucesso!');
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(null);
 
@@ -270,7 +298,10 @@ export const PortalEscolaView: React.FC = () => {
     );
 
     if (!found) {
-      setLoginError(`Nenhuma escola encontrada com o e-mail "${authEmail}". Utilize a aba "Cadastrar Escola" para cadastrar sua unidade.`);
+      // Computador da escola: o cadastro não está neste navegador. Envia o
+      // link de acesso para o e-mail (ou conclui o link já aberto).
+      if (remoto.status === 'pedir-email') await remoto.confirmarEmailDoLink(authEmail.trim());
+      else await remoto.enviarLink(authEmail.trim());
       return;
     }
 
@@ -278,6 +309,7 @@ export const PortalEscolaView: React.FC = () => {
   };
 
   const handleLogout = () => {
+    remoto.sair();
     setIsLoggedIn(false);
     setAuthEmail('');
     setLoginError(null);
@@ -329,6 +361,31 @@ export const PortalEscolaView: React.FC = () => {
                 Sua escola já deve estar cadastrada pela cooperativa (Cadastros → Escolas). Se ainda não tiver acesso, fale com a administração.
               </p>
             </div>
+
+            {/* Acesso de outro computador: login por link enviado ao e-mail */}
+            {remoto.status === 'link-enviado' && (
+              <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-200">
+                Enviamos um link de acesso para <strong>{authEmail}</strong>. Abra o e-mail neste aparelho e clique no link para entrar. Se não chegar em alguns minutos, confira a caixa de spam.
+              </div>
+            )}
+            {remoto.status === 'pedir-email' && (
+              <div className="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 text-xs text-indigo-800 dark:text-indigo-200">
+                Confirme o e-mail da escola acima e clique em entrar para concluir o acesso.
+              </div>
+            )}
+            {(remoto.status === 'carregando' || remoto.status === 'verificando') && (
+              <p className="text-xs text-slate-500">Verificando acesso...</p>
+            )}
+            {remoto.status === 'sem-cadastro' && (
+              <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-200">
+                O e-mail <strong>{remoto.emailSessao}</strong> não está ligado a nenhuma escola da cooperativa. Peça à cooperativa para conferir o e-mail em Cadastros → Escolas.
+              </div>
+            )}
+            {remoto.erro && (
+              <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 text-xs text-rose-800 dark:text-rose-200">
+                {remoto.erro}
+              </div>
+            )}
 
             <button
               type="submit"
