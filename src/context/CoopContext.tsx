@@ -1647,7 +1647,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: fbUser.uid,
           name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Administrador Firebase',
           email: fbUser.email || '',
-          role: fbUser.email === 'itamartrairi@gmail.com' || fbUser.email === 'admin@siscoope.com.br' ? 'ADMIN' : 'ADMIN',
+          role: papelDoUsuario(fbUser.email),
           avatar: fbUser.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100',
           tenantId: currentTenant?.id || '',
           active: true,
@@ -1662,6 +1662,17 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unsubscribe();
     };
   }, [currentTenant]);
+
+  // Papel de quem entra pelo Firebase: o definido em Configurações → Usuários
+  // para aquele e-mail. Sem cadastro, é o dono da conta (quem criou a
+  // cooperativa) e fica como ADMIN da própria cooperativa. As escolas e os
+  // motoristas usam sessões separadas e não passam por aqui.
+  const papelDoUsuario = (email?: string | null): User['role'] => {
+    const alvo = (email || '').toLowerCase().trim();
+    const cadastrado = alvo ? users.find(u => (u.email || '').toLowerCase().trim() === alvo) : undefined;
+    if (cadastrado && cadastrado.active === false) return 'CONSULTA';
+    return cadastrado?.role || 'ADMIN';
+  };
 
   // Portal da Escola: publica no Firestore o resumo de cada escola (para ela
   // acessar o portal do próprio computador) e importa os comprovantes que as
@@ -1698,7 +1709,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: fbUser.uid,
           name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Usuário Firebase',
           email: fbUser.email || email,
-          role: 'ADMIN',
+          role: papelDoUsuario(fbUser.email || email),
           avatar: fbUser.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100',
           tenantId: currentTenant?.id || '',
           active: true,
@@ -1714,6 +1725,13 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error: any) {
       console.warn('Tentativa de login Firebase Auth:', error?.message);
+    }
+
+    // Os logins de demonstração (usuários de exemplo e "qualquer e-mail com
+    // senha de 4 caracteres") só existem em desenvolvimento. Em produção,
+    // sem uma conta válida no Firebase, o acesso é negado.
+    if (!(import.meta as any).env?.DEV) {
+      return { success: false, requiresCooperativeSetup: false, error: 'E-mail ou senha incorretos.' };
     }
 
     // Check existing demo users fallback
