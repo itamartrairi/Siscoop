@@ -42,6 +42,14 @@ service cloud.firestore {
     function belongsToTenant(dataTenantId) {
       return isSignedIn() && dataTenantId == myTenantId();
     }
+    function semTenant(data) {
+      return !('tenantId' in data) || data.tenantId == null || data.tenantId == '';
+    }
+    function tenantLiberado(data) {
+      return semTenant(data) ||
+             get(/databases/$(database)/documents/tenantOwners/$(data.tenantId)).data.ownerUid == request.auth.uid;
+    }
+
 
     // Default: negado. Nada é liberado por padrão — cada coleção usada pelo
     // app precisa de uma regra explícita abaixo.
@@ -86,11 +94,22 @@ service cloud.firestore {
     // o isolamento entre cooperativas, permitir a edição livre significava que
     // qualquer usuário podia reescrever o próprio tenantId e passar a ler os
     // dados de outra cooperativa.
+    // Dono de cada cooperativa, registrado uma única vez pelo próprio dono.
+    match /tenantOwners/{tenantId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
     match /users/{userId} {
       allow read: if isCurrentUser(userId) || isAdmin();
-      allow create: if isCurrentUser(userId) || isAdmin();
+      // Só é possível se vincular (tenantId) a uma cooperativa da qual você é o
+      // dono registrado em /tenantOwners — antes qualquer conta podia gravar o
+      // tenantId de outra cooperativa e ler os dados dela.
+      allow create: if isAdmin() || (isCurrentUser(userId) && tenantLiberado(request.resource.data));
       allow update: if isAdmin() ||
-        (isCurrentUser(userId) && request.resource.data.tenantId == resource.data.tenantId);
+                    (isCurrentUser(userId) && request.resource.data.tenantId == resource.data.tenantId) ||
+                    (isCurrentUser(userId) && semTenant(resource.data) && tenantLiberado(request.resource.data));
       allow delete: if isAdmin();
     }
 
