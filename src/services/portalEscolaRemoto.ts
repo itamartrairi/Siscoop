@@ -230,6 +230,43 @@ export type StatusPortalRemoto =
   | 'pronto'
   | 'sem-cadastro';
 
+/**
+ * Reduz uma imagem em data URL (foto ou assinatura) para caber no Firestore.
+ * Redimensiona e converte para JPEG, baixando a qualidade até ficar abaixo do alvo.
+ */
+async function reduzirImagem(dataUrl: string | undefined, maxLado: number, alvo: number): Promise<string | undefined> {
+  if (!dataUrl || !dataUrl.startsWith('data:image') || dataUrl.length <= alvo) return dataUrl;
+  try {
+    const img = await new Promise<HTMLImageElement>((ok, falha) => {
+      const i = new Image();
+      i.onload = () => ok(i);
+      i.onerror = falha;
+      i.src = dataUrl;
+    });
+    let lado = maxLado;
+    let qualidade = 0.8;
+    let saida = dataUrl;
+    for (let tentativa = 0; tentativa < 6; tentativa++) {
+      const escala = Math.min(1, lado / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.width * escala));
+      canvas.height = Math.max(1, Math.round(img.height * escala));
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return dataUrl;
+      ctx.fillStyle = '#ffffff'; // fundo branco para assinaturas com transparência
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      saida = canvas.toDataURL('image/jpeg', qualidade);
+      if (saida.length <= alvo) break;
+      lado = Math.round(lado * 0.8);
+      qualidade = Math.max(0.4, qualidade - 0.1);
+    }
+    return saida;
+  } catch {
+    return dataUrl;
+  }
+}
+
 /** Estado da sessão da escola no portal (login por link + dados do Firestore). */
 export function usePortalEscolaRemoto() {
   const [status, setStatus] = useState<StatusPortalRemoto>('verificando');
@@ -310,6 +347,13 @@ export function usePortalEscolaRemoto() {
   const enviarComprovante = useCallback(
     async (entrega: any): Promise<boolean> => {
       if (!dados) throw new Error('Sessão da escola não encontrada. Entre novamente.');
+      // Foto e assinatura são reduzidas para o comprovante caber no Firestore
+      // e chegar completo à cooperativa.
+      entrega = {
+        ...entrega,
+        fotoComprovanteUrl: await reduzirImagem(entrega?.fotoComprovanteUrl, 1280, 450_000),
+        assinaturaUrl: await reduzirImagem(entrega?.assinaturaUrl, 900, 150_000),
+      };
       const email = norm(authPortal.currentUser?.email || '');
       const montar = (e: any) =>
         semUndefined({
