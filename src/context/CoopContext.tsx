@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
   User,
   CooperativeTenant,
@@ -112,6 +112,7 @@ import {
 } from '../services/firebaseDbService';
 import { publicarPortalEscolas, ouvirComprovantesPortal } from '../services/portalEscolaRemoto';
 import { publicarPortalMotoristas, ouvirAtualizacoesMotoristas, mesclarParadas } from '../services/portalMotoristaRemoto';
+import { publicarPortalCooperados, publicarPortalProdutores, ouvirOfertasProdutores } from '../services/portalCooperadoProdutorRemoto';
 
 
 export const DEFAULT_ROLE_PERMISSIONS: RolePermissionsMap = {
@@ -1732,6 +1733,48 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   }, [isAuthenticated, currentTenant?.id]);
 
+  // Portal do Cooperado e App do Produtor: publica o resumo de cada pessoa no
+  // Firestore e aplica as ofertas que os produtores fizerem pelo celular.
+  const handlersOfertaRef = useRef<{ add: (d: any) => void; update: (id: string, d: any) => void } | null>(null);
+
+  useEffect(() => {
+    const tenantId = currentTenant?.id;
+    if (!isAuthenticated || !tenantId || !auth.currentUser) return;
+    const timer = setTimeout(() => {
+      publicarPortalCooperados(tenantId, cooperados, registrosProducao, transacoesCapital).catch(err =>
+        console.warn('Portal do Cooperado: falha ao publicar os dados', err)
+      );
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [isAuthenticated, currentTenant?.id, cooperados, registrosProducao, transacoesCapital]);
+
+  useEffect(() => {
+    const tenantId = currentTenant?.id;
+    if (!isAuthenticated || !tenantId || !auth.currentUser) return;
+    const timer = setTimeout(() => {
+      publicarPortalProdutores(tenantId, produtores, {
+        cooperados,
+        produtos,
+        chamadas: chamadasPublicas,
+        ofertas: ofertasPAA,
+        pedidos: pedidosProdutorPAA,
+        programacoes: programacoesEntrega,
+      }).catch(err => console.warn('App do Produtor: falha ao publicar os dados', err));
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [isAuthenticated, currentTenant?.id, produtores, cooperados, produtos, chamadasPublicas, ofertasPAA, pedidosProdutorPAA, programacoesEntrega]);
+
+  useEffect(() => {
+    const tenantId = currentTenant?.id;
+    if (!isAuthenticated || !tenantId || !auth.currentUser) return;
+    return ouvirOfertasProdutores(tenantId, ({ tipo, produtorId, ofertaId, dados }) => {
+      const h = handlersOfertaRef.current;
+      if (!h) return;
+      if (tipo === 'nova') h.add({ ...dados, produtorId });
+      else if (ofertaId) h.update(ofertaId, dados);
+    });
+  }, [isAuthenticated, currentTenant?.id]);
+
   const loginWithEmail = async (email: string, pass: string) => {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, pass);
@@ -3224,6 +3267,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setOfertasPAA(prev => prev.map(o => o.id === id ? { ...o, ...oData } : o));
     addAuditLog('SISGEPA', 'ALTERACAO', `Atualizou proposta de oferta PAA/PNAE ${(alvo?.produtoNome || alvo?.produtorNome) || id}`);
   };
+  handlersOfertaRef.current = { add: addOfertaPAA, update: updateOfertaPAA };
 
   const deleteOfertaPAA = (id: string) => {
     const alvo = ofertasPAA.find(x => x.id === id);
