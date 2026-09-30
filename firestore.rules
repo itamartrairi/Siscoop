@@ -61,6 +61,38 @@ service cloud.firestore {
     // Antes, qualquer conta autenticada podia LISTAR a coleção inteira e
     // descobrir exatamente quais UIDs atacar.
     // A escrita fica fora do app: promover admin é operação de console.
+    // Portal do Cooperado: resumo de cada cooperado publicado pela cooperativa.
+    match /portalCooperados/{docId} {
+      allow read: if (isSignedIn() && request.auth.token.email_verified == true &&
+                      resource.data.cooperadoEmail == request.auth.token.email.lower()) ||
+                     isAdmin() || belongsToTenant(resource.data.tenantId);
+      allow create, update: if (isAdmin() || belongsToTenant(request.resource.data.tenantId)) &&
+                               docId == request.resource.data.tenantId + '__' + request.resource.data.cooperadoId;
+      allow delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
+    }
+
+    // App do Produtor: resumo de cada produtor publicado pela cooperativa.
+    match /portalProdutores/{docId} {
+      allow read: if (isSignedIn() && request.auth.token.email_verified == true &&
+                      resource.data.produtorEmail == request.auth.token.email.lower()) ||
+                     isAdmin() || belongsToTenant(resource.data.tenantId);
+      allow create, update: if (isAdmin() || belongsToTenant(request.resource.data.tenantId)) &&
+                               docId == request.resource.data.tenantId + '__' + request.resource.data.produtorId;
+      allow delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
+    }
+
+    // Ofertas feitas pelo produtor. Alteração só em ofertas que já são dele.
+    match /portalProdutoresOfertas/{docId} {
+      allow create: if isSignedIn() && request.auth.token.email_verified == true &&
+                       request.resource.data.keys().hasOnly(['tenantId', 'produtorId', 'produtorEmail', 'tipo', 'ofertaId', 'dados', 'criadoEm']) &&
+                       request.resource.data.produtorEmail == request.auth.token.email.lower() &&
+                       get(/databases/$(database)/documents/portalProdutores/$(request.resource.data.tenantId + '__' + request.resource.data.produtorId)).data.produtorEmail == request.auth.token.email.lower() &&
+                       (request.resource.data.tipo == 'nova' ||
+                        (request.resource.data.tipo == 'alterar' && request.resource.data.ofertaId in get(/databases/$(database)/documents/portalProdutores/$(request.resource.data.tenantId + '__' + request.resource.data.produtorId)).data.ofertaIds));
+      allow read, delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
+      allow update: if false;
+    }
+
     // Portal do Motorista: rotas de cada motorista publicadas pela cooperativa.
     match /portalMotoristas/{docId} {
       allow read: if (isSignedIn() && request.auth.token.email_verified == true &&
