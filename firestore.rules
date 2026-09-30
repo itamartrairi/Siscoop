@@ -42,6 +42,14 @@ service cloud.firestore {
     function belongsToTenant(dataTenantId) {
       return isSignedIn() && dataTenantId == myTenantId();
     }
+    function semTenant(data) {
+      return !('tenantId' in data) || data.tenantId == null || data.tenantId == '';
+    }
+    function tenantLiberado(data) {
+      return semTenant(data) ||
+             get(/databases/$(database)/documents/tenantOwners/$(data.tenantId)).data.ownerUid == request.auth.uid;
+    }
+
 
     // Default: negado. Nada é liberado por padrão — cada coleção usada pelo
     // app precisa de uma regra explícita abaixo.
@@ -53,6 +61,80 @@ service cloud.firestore {
     // Antes, qualquer conta autenticada podia LISTAR a coleção inteira e
     // descobrir exatamente quais UIDs atacar.
     // A escrita fica fora do app: promover admin é operação de console.
+    // Portal do Cooperado: resumo de cada cooperado publicado pela cooperativa.
+    match /portalCooperados/{docId} {
+      allow read: if (isSignedIn() && request.auth.token.email_verified == true &&
+                      resource.data.cooperadoEmail == request.auth.token.email.lower()) ||
+                     isAdmin() || belongsToTenant(resource.data.tenantId);
+      allow create, update: if (isAdmin() || belongsToTenant(request.resource.data.tenantId)) &&
+                               docId == request.resource.data.tenantId + '__' + request.resource.data.cooperadoId;
+      allow delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
+    }
+
+    // App do Produtor: resumo de cada produtor publicado pela cooperativa.
+    match /portalProdutores/{docId} {
+      allow read: if (isSignedIn() && request.auth.token.email_verified == true &&
+                      resource.data.produtorEmail == request.auth.token.email.lower()) ||
+                     isAdmin() || belongsToTenant(resource.data.tenantId);
+      allow create, update: if (isAdmin() || belongsToTenant(request.resource.data.tenantId)) &&
+                               docId == request.resource.data.tenantId + '__' + request.resource.data.produtorId;
+      allow delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
+    }
+
+    // Ofertas feitas pelo produtor. Alteração só em ofertas que já são dele.
+    match /portalProdutoresOfertas/{docId} {
+      allow create: if isSignedIn() && request.auth.token.email_verified == true &&
+                       request.resource.data.keys().hasOnly(['tenantId', 'produtorId', 'produtorEmail', 'tipo', 'ofertaId', 'dados', 'criadoEm']) &&
+                       request.resource.data.produtorEmail == request.auth.token.email.lower() &&
+                       get(/databases/$(database)/documents/portalProdutores/$(request.resource.data.tenantId + '__' + request.resource.data.produtorId)).data.produtorEmail == request.auth.token.email.lower() &&
+                       (request.resource.data.tipo == 'nova' ||
+                        (request.resource.data.tipo == 'alterar' && request.resource.data.ofertaId in get(/databases/$(database)/documents/portalProdutores/$(request.resource.data.tenantId + '__' + request.resource.data.produtorId)).data.ofertaIds));
+      allow read, delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
+      allow update: if false;
+    }
+
+    // Portal do Motorista: rotas de cada motorista publicadas pela cooperativa.
+    match /portalMotoristas/{docId} {
+      allow read: if (isSignedIn() && request.auth.token.email_verified == true &&
+                      resource.data.motoristaEmail == request.auth.token.email.lower()) ||
+                     isAdmin() || belongsToTenant(resource.data.tenantId);
+      allow create, update: if (isAdmin() || belongsToTenant(request.resource.data.tenantId)) &&
+                               docId == request.resource.data.tenantId + '__' + request.resource.data.motoristaId;
+      allow delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
+    }
+
+    // Entregas confirmadas pelo motorista, só em rotas atribuídas a ele.
+    match /portalMotoristasAtualizacoes/{docId} {
+      allow create: if isSignedIn() && request.auth.token.email_verified == true &&
+                       request.resource.data.keys().hasOnly(['tenantId', 'motoristaId', 'motoristaEmail', 'programacaoId', 'alteracoes', 'criadoEm']) &&
+                       request.resource.data.motoristaEmail == request.auth.token.email.lower() &&
+                       get(/databases/$(database)/documents/portalMotoristas/$(request.resource.data.tenantId + '__' + request.resource.data.motoristaId)).data.motoristaEmail == request.auth.token.email.lower() &&
+                       request.resource.data.programacaoId in get(/databases/$(database)/documents/portalMotoristas/$(request.resource.data.tenantId + '__' + request.resource.data.motoristaId)).data.rotaIds;
+      allow read, delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
+      allow update: if false;
+    }
+
+    // Portal da Escola: resumo por escola publicado pela cooperativa.
+    // A escola entra por link de e-mail (sem senha) e lê só o documento com o seu e-mail.
+    match /portalEscolas/{docId} {
+      allow read: if (isSignedIn() && request.auth.token.email_verified == true &&
+                      resource.data.escolaEmail == request.auth.token.email.lower()) ||
+                     isAdmin() || belongsToTenant(resource.data.tenantId);
+      allow create, update: if (isAdmin() || belongsToTenant(request.resource.data.tenantId)) &&
+                               docId == request.resource.data.tenantId + '__' + request.resource.data.escolaId;
+      allow delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
+    }
+
+    // Comprovantes de entrega registrados pela escola. A cooperativa importa e apaga.
+    match /portalEscolasComprovantes/{docId} {
+      allow create: if isSignedIn() && request.auth.token.email_verified == true &&
+                       request.resource.data.keys().hasOnly(['tenantId', 'escolaId', 'escolaEmail', 'entrega', 'criadoEm']) &&
+                       request.resource.data.escolaEmail == request.auth.token.email.lower() &&
+                       get(/databases/$(database)/documents/portalEscolas/$(request.resource.data.tenantId + '__' + request.resource.data.escolaId)).data.escolaEmail == request.auth.token.email.lower();
+      allow read, delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
+      allow update: if false;
+    }
+
     match /admins/{userId} {
       allow read: if isCurrentUser(userId);
       allow write: if false;
@@ -65,11 +147,22 @@ service cloud.firestore {
     // o isolamento entre cooperativas, permitir a edição livre significava que
     // qualquer usuário podia reescrever o próprio tenantId e passar a ler os
     // dados de outra cooperativa.
+    // Dono de cada cooperativa, registrado uma única vez pelo próprio dono.
+    match /tenantOwners/{tenantId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
     match /users/{userId} {
       allow read: if isCurrentUser(userId) || isAdmin();
-      allow create: if isCurrentUser(userId) || isAdmin();
+      // Só é possível se vincular (tenantId) a uma cooperativa da qual você é o
+      // dono registrado em /tenantOwners — antes qualquer conta podia gravar o
+      // tenantId de outra cooperativa e ler os dados dela.
+      allow create: if isAdmin() || (isCurrentUser(userId) && tenantLiberado(request.resource.data));
       allow update: if isAdmin() ||
-        (isCurrentUser(userId) && request.resource.data.tenantId == resource.data.tenantId);
+                    (isCurrentUser(userId) && request.resource.data.tenantId == resource.data.tenantId) ||
+                    (isCurrentUser(userId) && semTenant(resource.data) && tenantLiberado(request.resource.data));
       allow delete: if isAdmin();
     }
 

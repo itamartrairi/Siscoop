@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
   User,
   CooperativeTenant,
@@ -110,6 +110,9 @@ import {
   syncAssembleiasToFirestore,
   saveUserTenantMappingToFirestore
 } from '../services/firebaseDbService';
+import { publicarPortalEscolas, ouvirComprovantesPortal } from '../services/portalEscolaRemoto';
+import { publicarPortalMotoristas, ouvirAtualizacoesMotoristas, mesclarParadas } from '../services/portalMotoristaRemoto';
+import { publicarPortalCooperados, publicarPortalProdutores, ouvirOfertasProdutores } from '../services/portalCooperadoProdutorRemoto';
 
 
 export const DEFAULT_ROLE_PERMISSIONS: RolePermissionsMap = {
@@ -1646,7 +1649,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: fbUser.uid,
           name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Administrador Firebase',
           email: fbUser.email || '',
-          role: fbUser.email === 'itamartrairi@gmail.com' || fbUser.email === 'admin@siscoope.com.br' ? 'ADMIN' : 'ADMIN',
+          role: papelDoUsuario(fbUser.email),
           avatar: fbUser.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100',
           tenantId: currentTenant?.id || '',
           active: true,
@@ -1662,6 +1665,116 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [currentTenant]);
 
+  // Papel de quem entra pelo Firebase: o definido em Configurações → Usuários
+  // para aquele e-mail. Sem cadastro, é o dono da conta (quem criou a
+  // cooperativa) e fica como ADMIN da própria cooperativa. As escolas e os
+  // motoristas usam sessões separadas e não passam por aqui.
+  const papelDoUsuario = (email?: string | null): User['role'] => {
+    const alvo = (email || '').toLowerCase().trim();
+    const cadastrado = alvo ? users.find(u => (u.email || '').toLowerCase().trim() === alvo) : undefined;
+    if (cadastrado && cadastrado.active === false) return 'CONSULTA';
+    return cadastrado?.role || 'ADMIN';
+  };
+
+  // Portal da Escola: publica no Firestore o resumo de cada escola (para ela
+  // acessar o portal do próprio computador) e importa os comprovantes que as
+  // escolas enviarem. Só roda com a cooperativa logada no Firebase.
+  useEffect(() => {
+    const tenantId = currentTenant?.id;
+    if (!isAuthenticated || !tenantId || !auth.currentUser) return;
+    const timer = setTimeout(() => {
+      publicarPortalEscolas(tenantId, escolasPnae, {
+        pedidos: pedidosProdutorPAA,
+        programacoes: programacoesEntrega,
+        chamadas: chamadasPublicas,
+        entregas: entregasEscola,
+      }).catch(err => console.warn('Portal da Escola: falha ao publicar os dados das escolas', err));
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [isAuthenticated, currentTenant?.id, escolasPnae, pedidosProdutorPAA, programacoesEntrega, chamadasPublicas, entregasEscola]);
+
+  useEffect(() => {
+    const tenantId = currentTenant?.id;
+    if (!isAuthenticated || !tenantId || !auth.currentUser) return;
+    return ouvirComprovantesPortal(tenantId, (docId, entrega) => {
+      const id = `portal-${docId}`;
+      setEntregasEscola(prev => (prev.some(x => x.id === id) ? prev : [{ ...entrega, id, tenantId }, ...prev]));
+    });
+  }, [isAuthenticated, currentTenant?.id]);
+
+  // Portal do Motorista: publica as rotas de cada motorista no Firestore e
+  // aplica as entregas que eles confirmarem pelo celular.
+  useEffect(() => {
+    const tenantId = currentTenant?.id;
+    if (!isAuthenticated || !tenantId || !auth.currentUser) return;
+    const timer = setTimeout(() => {
+      publicarPortalMotoristas(tenantId, motoristas, programacoesEntrega).catch(err =>
+        console.warn('Portal do Motorista: falha ao publicar as rotas', err)
+      );
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [isAuthenticated, currentTenant?.id, motoristas, programacoesEntrega]);
+
+  useEffect(() => {
+    const tenantId = currentTenant?.id;
+    if (!isAuthenticated || !tenantId || !auth.currentUser) return;
+    return ouvirAtualizacoesMotoristas(tenantId, (programacaoId, alteracoes) => {
+      setProgramacoesEntrega(prev =>
+        prev.map(p =>
+          p.id === programacaoId
+            ? {
+                ...p,
+                paradasEntrega: mesclarParadas(p.paradasEntrega, alteracoes.paradasEntrega) as typeof p.paradasEntrega,
+                status: (alteracoes.status as typeof p.status) || p.status,
+              }
+            : p
+        )
+      );
+    });
+  }, [isAuthenticated, currentTenant?.id]);
+
+  // Portal do Cooperado e App do Produtor: publica o resumo de cada pessoa no
+  // Firestore e aplica as ofertas que os produtores fizerem pelo celular.
+  const handlersOfertaRef = useRef<{ add: (d: any) => void; update: (id: string, d: any) => void } | null>(null);
+
+  useEffect(() => {
+    const tenantId = currentTenant?.id;
+    if (!isAuthenticated || !tenantId || !auth.currentUser) return;
+    const timer = setTimeout(() => {
+      publicarPortalCooperados(tenantId, cooperados, registrosProducao, transacoesCapital).catch(err =>
+        console.warn('Portal do Cooperado: falha ao publicar os dados', err)
+      );
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [isAuthenticated, currentTenant?.id, cooperados, registrosProducao, transacoesCapital]);
+
+  useEffect(() => {
+    const tenantId = currentTenant?.id;
+    if (!isAuthenticated || !tenantId || !auth.currentUser) return;
+    const timer = setTimeout(() => {
+      publicarPortalProdutores(tenantId, produtores, {
+        cooperados,
+        produtos,
+        chamadas: chamadasPublicas,
+        ofertas: ofertasPAA,
+        pedidos: pedidosProdutorPAA,
+        programacoes: programacoesEntrega,
+      }).catch(err => console.warn('App do Produtor: falha ao publicar os dados', err));
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [isAuthenticated, currentTenant?.id, produtores, cooperados, produtos, chamadasPublicas, ofertasPAA, pedidosProdutorPAA, programacoesEntrega]);
+
+  useEffect(() => {
+    const tenantId = currentTenant?.id;
+    if (!isAuthenticated || !tenantId || !auth.currentUser) return;
+    return ouvirOfertasProdutores(tenantId, ({ tipo, produtorId, ofertaId, dados }) => {
+      const h = handlersOfertaRef.current;
+      if (!h) return;
+      if (tipo === 'nova') h.add({ ...dados, produtorId });
+      else if (ofertaId) h.update(ofertaId, dados);
+    });
+  }, [isAuthenticated, currentTenant?.id]);
+
   const loginWithEmail = async (email: string, pass: string) => {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, pass);
@@ -1671,7 +1784,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: fbUser.uid,
           name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Usuário Firebase',
           email: fbUser.email || email,
-          role: 'ADMIN',
+          role: papelDoUsuario(fbUser.email || email),
           avatar: fbUser.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100',
           tenantId: currentTenant?.id || '',
           active: true,
@@ -1687,6 +1800,13 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error: any) {
       console.warn('Tentativa de login Firebase Auth:', error?.message);
+    }
+
+    // Os logins de demonstração (usuários de exemplo e "qualquer e-mail com
+    // senha de 4 caracteres") só existem em desenvolvimento. Em produção,
+    // sem uma conta válida no Firebase, o acesso é negado.
+    if (!(import.meta as any).env?.DEV) {
+      return { success: false, requiresCooperativeSetup: false, error: 'E-mail ou senha incorretos.' };
     }
 
     // Check existing demo users fallback
@@ -3147,6 +3267,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setOfertasPAA(prev => prev.map(o => o.id === id ? { ...o, ...oData } : o));
     addAuditLog('SISGEPA', 'ALTERACAO', `Atualizou proposta de oferta PAA/PNAE ${(alvo?.produtoNome || alvo?.produtorNome) || id}`);
   };
+  handlersOfertaRef.current = { add: addOfertaPAA, update: updateOfertaPAA };
 
   const deleteOfertaPAA = (id: string) => {
     const alvo = ofertasPAA.find(x => x.id === id);

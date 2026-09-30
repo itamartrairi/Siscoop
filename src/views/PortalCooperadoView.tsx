@@ -1,5 +1,5 @@
 import { formatarData } from '../utils/dateHelpers';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCoop } from '../context/CoopContext';
 import {
   UserCircle,
@@ -14,10 +14,19 @@ import {
   ShieldCheck,
   AlertCircle
 } from 'lucide-react';
+import { usePortalCooperadoRemoto } from '../services/portalCooperadoProdutorRemoto';
 import { ReceiptModal } from '../components/ReceiptModal';
 
 export const PortalCooperadoView: React.FC = () => {
-  const { currentUser, cooperados, registrosProducao, transacoesCapital } = useCoop();
+  const coop = useCoop();
+  const { currentUser } = coop;
+  // Quando o cooperado entra pelo link de e-mail (do aparelho dele), os dados
+  // vêm do Firestore; no computador da cooperativa continuam vindo do sistema.
+  const remoto = usePortalCooperadoRemoto();
+  const usarRemoto = remoto.status === 'pronto' && !!remoto.dados;
+  const cooperados = usarRemoto ? [remoto.dados.cooperado as typeof coop.cooperados[number]] : coop.cooperados;
+  const registrosProducao = usarRemoto ? (remoto.dados.producao as typeof coop.registrosProducao) : coop.registrosProducao;
+  const transacoesCapital = usarRemoto ? (remoto.dados.capital as typeof coop.transacoesCapital) : coop.transacoesCapital;
   const [selectedReceiptTxId, setSelectedReceiptTxId] = useState<string | null>(null);
 
   // Acesso simplificado — somente por e-mail, sem senha. O cadastro do
@@ -27,12 +36,20 @@ export const PortalCooperadoView: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
+  // Sessão aberta pelo link de e-mail: entra direto.
+  useEffect(() => {
+    if (usarRemoto && remoto.emailSessao) {
+      setAuthEmail(remoto.emailSessao);
+      setIsLoggedIn(true);
+    }
+  }, [usarRemoto, remoto.emailSessao]);
+
   // Registered Cooperado matching strictly the logged-in email
   const cooperadoAtual = cooperados.find(
     c => c.email && authEmail.trim() && c.email.toLowerCase().trim() === authEmail.toLowerCase().trim()
   );
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(null);
 
@@ -46,7 +63,10 @@ export const PortalCooperadoView: React.FC = () => {
     );
 
     if (!found) {
-      setLoginError(`Nenhum cooperado cadastrado encontrado com o e-mail "${authEmail}". Peça para a cooperativa cadastrar seu e-mail em Cooperados.`);
+      // Aparelho da própria pessoa: o cadastro não está neste navegador. Envia o
+      // link de acesso para o e-mail (ou conclui o link já aberto).
+      if (remoto.status === 'pedir-email') await remoto.confirmarEmailDoLink(authEmail.trim());
+      else await remoto.enviarLink(authEmail.trim());
       return;
     }
 
@@ -54,6 +74,7 @@ export const PortalCooperadoView: React.FC = () => {
   };
 
   const handleLogout = () => {
+    remoto.sair();
     setIsLoggedIn(false);
     setAuthEmail('');
     setLoginError(null);
@@ -101,6 +122,31 @@ export const PortalCooperadoView: React.FC = () => {
                 Seu e-mail já deve estar no seu cadastro de cooperado. Se ainda não tiver acesso, fale com a administração da cooperativa.
               </p>
             </div>
+
+            {/* Acesso de outro aparelho: login por link enviado ao e-mail */}
+            {remoto.status === 'link-enviado' && (
+              <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-200">
+                Enviamos um link de acesso para <strong>{authEmail}</strong>. Abra o e-mail neste aparelho e toque no link para entrar. Confira também a caixa de spam.
+              </div>
+            )}
+            {remoto.status === 'pedir-email' && (
+              <div className="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 text-xs text-indigo-800 dark:text-indigo-200">
+                Confirme seu e-mail acima e toque em entrar para concluir o acesso.
+              </div>
+            )}
+            {(remoto.status === 'carregando' || remoto.status === 'verificando') && (
+              <p className="text-xs text-slate-500">Verificando acesso...</p>
+            )}
+            {remoto.status === 'sem-cadastro' && (
+              <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-200">
+                O e-mail <strong>{remoto.emailSessao}</strong> não está ligado a nenhum cooperado da cooperativa. Peça à cooperativa para conferir o e-mail no cadastro.
+              </div>
+            )}
+            {remoto.erro && (
+              <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 text-xs text-rose-800 dark:text-rose-200">
+                {remoto.erro}
+              </div>
+            )}
 
             <button
               type="submit"
