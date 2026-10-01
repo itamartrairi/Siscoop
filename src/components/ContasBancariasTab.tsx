@@ -64,15 +64,15 @@ const formVazio = {
 };
 
 export const ContasBancariasTab: React.FC<{ canWrite?: boolean; onBlocked?: () => void }> = ({ canWrite = true, onBlocked }) => {
-  const { contasBancarias, addContaBancaria, updateContaBancaria, deleteContaBancaria, contasPagarReceber, extratoBancario } = useCoop();
+  const { contasBancarias, addContaBancaria, updateContaBancaria, deleteContaBancaria, contasPagarReceber, extratoBancario, transacoesCapital } = useCoop();
   const [editando, setEditando] = useState<ContaBancaria | null>(null);
   const [aberto, setAberto] = useState(false);
   const [form, setForm] = useState({ ...formVazio });
   const [mostrarInativas, setMostrarInativas] = useState(false);
 
   const resumo = useMemo(() => {
-    const mapa: Record<string, { recebido: number; pago: number; aReceber: number; aPagar: number; creditos: number; debitos: number; titulos: number }> = {};
-    const item = (id: string) => (mapa[id] ||= { recebido: 0, pago: 0, aReceber: 0, aPagar: 0, creditos: 0, debitos: 0, titulos: 0 });
+    const mapa: Record<string, { recebido: number; pago: number; aReceber: number; aPagar: number; creditos: number; debitos: number; titulos: number; capitalEntrada: number; capitalSaida: number }> = {};
+    const item = (id: string) => (mapa[id] ||= { recebido: 0, pago: 0, aReceber: 0, aPagar: 0, creditos: 0, debitos: 0, titulos: 0, capitalEntrada: 0, capitalSaida: 0 });
     for (const c of contasPagarReceber) {
       if (!c.contaBancariaId || c.status === 'CANCELADO') continue;
       const r = item(c.contaBancariaId);
@@ -90,12 +90,21 @@ export const ContasBancariasTab: React.FC<{ canWrite?: boolean; onBlocked?: () =
       if (l.tipo === 'CREDITO') r.creditos += Number(l.valor) || 0;
       else r.debitos += Number(l.valor) || 0;
     }
+    // Capital social: integralização e aumento entram na conta; devolução sai.
+    // Subscrição (compromisso) e transferência entre cooperados não movimentam dinheiro.
+    for (const tx of (transacoesCapital || []) as any[]) {
+      if (!tx.contaBancariaId || tx.status === 'CANCELADO' || tx.status === 'PENDENTE') continue;
+      const r = item(tx.contaBancariaId);
+      const valor = Number(tx.valor) || 0;
+      if (tx.tipo === 'INTEGRALIZACAO' || tx.tipo === 'AUMENTO') r.capitalEntrada += valor;
+      else if (tx.tipo === 'DEVOLUCAO') r.capitalSaida += valor;
+    }
     return mapa;
-  }, [contasPagarReceber, extratoBancario]);
+  }, [contasPagarReceber, extratoBancario, transacoesCapital]);
 
   const saldoDe = (b: ContaBancaria) => {
     const r = resumo[b.id];
-    return (Number(b.saldoInicial) || 0) + (r ? r.recebido - r.pago + r.creditos - r.debitos : 0);
+    return (Number(b.saldoInicial) || 0) + (r ? r.recebido - r.pago + r.creditos - r.debitos + r.capitalEntrada - r.capitalSaida : 0);
   };
 
   const lista = contasBancarias.filter(b => mostrarInativas || b.ativa !== false);
@@ -223,8 +232,8 @@ export const ContasBancariasTab: React.FC<{ canWrite?: boolean; onBlocked?: () =
                     </td>
                     <td className="p-3">{TIPOS.find(t => t.valor === b.tipo)?.rotulo || b.tipo}</td>
                     <td className="p-3 text-right">{moeda(b.saldoInicial)}</td>
-                    <td className="p-3 text-right text-emerald-700">{moeda((r?.recebido || 0) + (r?.creditos || 0))}</td>
-                    <td className="p-3 text-right text-rose-700">{moeda((r?.pago || 0) + (r?.debitos || 0))}</td>
+                    <td className="p-3 text-right text-emerald-700">{moeda((r?.recebido || 0) + (r?.creditos || 0) + (r?.capitalEntrada || 0))}</td>
+                    <td className="p-3 text-right text-rose-700">{moeda((r?.pago || 0) + (r?.debitos || 0) + (r?.capitalSaida || 0))}</td>
                     <td className="p-3 text-right text-slate-500">{moeda(r?.aReceber || 0)}</td>
                     <td className="p-3 text-right text-slate-500">{moeda(r?.aPagar || 0)}</td>
                     <td className="p-3 text-right font-black">{moeda(saldoDe(b))}</td>
@@ -247,7 +256,7 @@ export const ContasBancariasTab: React.FC<{ canWrite?: boolean; onBlocked?: () =
       )}
 
       <p className="text-[11px] text-slate-500">
-        Saldo calculado = saldo inicial + títulos recebidos − títulos pagos + créditos − débitos do extrato vinculados à conta.
+        Saldo calculado = saldo inicial + títulos recebidos − títulos pagos + créditos − débitos do extrato + integralizações − devoluções de capital vinculadas à conta.
         Confira com o extrato do banco.
       </p>
 
