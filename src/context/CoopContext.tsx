@@ -4249,7 +4249,8 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const alvo = contasBancarias.find(b => b.id === id);
     const emUso =
       contasPagarReceber.some(c => c.contaBancariaId === id) ||
-      (extratoBancario?.lancamentos || []).some((l: any) => l.contaBancariaId === id);
+      (extratoBancario?.lancamentos || []).some((l: any) => l.contaBancariaId === id) ||
+      (transacoesCapital || []).some(tx => tx.contaBancariaId === id);
     if (emUso) {
       // Conta com lançamentos não é apagada, para não perder o histórico: só é desativada.
       setContasBancarias(prev => prev.map(b => (b.id === id ? { ...b, ativa: false, padrao: false } : b)));
