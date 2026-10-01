@@ -211,6 +211,8 @@ export interface TransacaoCapital {
   numeroDocumento: string;
   status: 'CONCLUIDO' | 'PENDENTE' | 'CANCELADO';
   observacao?: string;
+  /** Conta bancária onde o valor entrou ou saiu (Financeiro → Contas Bancárias). */
+  contaBancariaId?: string;
   anexoUrl?: string;
   usuario: string;
   cooperadoDestinoId?: string; // para transferência
