@@ -94,6 +94,8 @@ export const SisFinView: React.FC = () => {
   const [filtroCategoria, setFiltroCategoria] = useState('TODAS');
   const [filtroConta, setFiltroConta] = useState('TODAS');
   const [filtroBanco, setFiltroBanco] = useState('TODAS');
+  // Filtro de conta bancária: vale para Dashboard, DRE, Fluxo de Caixa, Contas e Extrato.
+  const noBanco = (id?: string) => filtroBanco === 'TODAS' || (id || '') === filtroBanco;
   const [fluxoAnoCompleto, setFluxoAnoCompleto] = useState(true);
 
   // Modals & Editing
@@ -194,8 +196,8 @@ if (c) {
     return anoOk && mesOk;
   };
   const chaveMesAno = `${filtroAno}-${filtroMes}`;
-  const contasDoPeriodo = contasPagarReceber.filter(c => dataNoPeriodo(c.dataEmissao || c.dataVencimento));
-  const extratoDoPeriodo = (extratoBancario?.lancamentos || []).filter(l => dataNoPeriodo(l.data));
+  const contasDoPeriodo = contasPagarReceber.filter(c => dataNoPeriodo(c.dataEmissao || c.dataVencimento) && noBanco(c.contaBancariaId));
+  const extratoDoPeriodo = (extratoBancario?.lancamentos || []).filter(l => dataNoPeriodo(l.data) && noBanco((l as any).contaBancariaId));
   const periodoPagar = contasDoPeriodo.filter(c => c.tipo === 'PAGAR').reduce((sum, c) => sum + (c.valor || 0), 0);
   const periodoReceber = contasDoPeriodo.filter(c => c.tipo === 'RECEBER').reduce((sum, c) => sum + (c.valor || 0), 0);
   const periodoPago = contasDoPeriodo.filter(c => c.tipo === 'PAGAR' && c.status === 'PAGO').reduce((sum, c) => sum + (c.valor || 0), 0);
@@ -236,9 +238,9 @@ if (c) {
   const fluxoAnual = mesesAno.map(mes => {
     const contasMes = contasPagarReceber.filter(c => {
       const data = c.dataEmissao || c.dataVencimento || '';
-      return (filtroAno === 'TODAS' || data.startsWith(filtroAno)) && data.slice(5, 7) === mes;
+      return (filtroAno === 'TODAS' || data.startsWith(filtroAno)) && data.slice(5, 7) === mes && noBanco(c.contaBancariaId);
     });
-    const extratoMes = (extratoBancario?.lancamentos || []).filter(l => (filtroAno === 'TODAS' || l.data.startsWith(filtroAno)) && l.data.slice(5, 7) === mes);
+    const extratoMes = (extratoBancario?.lancamentos || []).filter(l => (filtroAno === 'TODAS' || l.data.startsWith(filtroAno)) && l.data.slice(5, 7) === mes && noBanco((l as any).contaBancariaId));
     return {
       mes: `${mes}/${filtroAno === 'TODAS' ? 'Todos' : filtroAno.slice(-2)}`,
       entradas: extratoMes.filter(l => l.tipo === 'CREDITO').reduce((s, l) => s + l.valor, 0),
@@ -405,6 +407,7 @@ if (c) {
             <div><label className="block text-[11px] font-bold text-slate-500 mb-1">Ano</label><select value={filtroAno} onChange={e => setFiltroAno(e.target.value)} className="p-2.5 rounded-xl border border-slate-200 text-sm w-28"><option value="TODAS">Todos</option>{anosDisponiveis.map(ano => <option key={ano} value={ano}>{ano}</option>)}</select></div>
             <div><label className="block text-[11px] font-bold text-slate-500 mb-1">Categoria</label><select value={filtroCategoria} onChange={e => setFiltroCategoria(e.target.value)} className="p-2.5 rounded-xl border border-slate-200 text-sm"><option value="TODAS">Todas as categorias</option>{categoriasFinanceiras.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
             <div><label className="block text-[11px] font-bold text-slate-500 mb-1">Conta / centro de custo</label><select value={filtroConta} onChange={e => setFiltroConta(e.target.value)} className="p-2.5 rounded-xl border border-slate-200 text-sm"><option value="TODAS">Todas as contas</option>{contasFluxo.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+            <div><label className="block text-[11px] font-bold text-slate-500 mb-1">Conta bancária</label><SelectContaBancaria value={filtroBanco} onChange={setFiltroBanco} contas={contasBancarias} todasLabel="Todas as contas bancárias" className="p-2.5 rounded-xl border border-slate-200 text-sm" /></div>
             <button onClick={aplicarFiltros} className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50">Limpar filtros</button>
           </div>
 
