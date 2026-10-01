@@ -44,6 +44,7 @@ import {
   FolhaPagamento,
   EscolaPnae,
   Motorista,
+  ContaBancaria,
   EntregaEscolaPnae,
   RomaneioMotorista,
   PedidoProdutorPAA,
@@ -607,7 +608,7 @@ interface CoopContextType {
   pagarReceberConta: (id: string) => void;
 
   extratoBancario: ExtratoBancario;
-  addLancamentoExtrato: (item: { data: string; historico: string; documento: string; tipo: 'CREDITO' | 'DEBITO'; valor: number; categoria: string }) => void;
+  addLancamentoExtrato: (item: { data: string; historico: string; documento: string; tipo: 'CREDITO' | 'DEBITO'; valor: number; categoria: string; contaBancariaId?: string }) => void;
 
   solicitacoesCompra: SolicitacaoCompra[];
   addSolicitacaoCompra: (s: Omit<SolicitacaoCompra, 'id' | 'tenantId'>) => void;
@@ -646,6 +647,10 @@ interface CoopContextType {
   addMotorista: (m: Omit<Motorista, 'id' | 'tenantId'>) => void;
   updateMotorista: (id: string, m: Partial<Motorista>) => void;
   deleteMotorista: (id: string) => void;
+  contasBancarias: ContaBancaria[];
+  addContaBancaria: (c: Omit<ContaBancaria, 'id' | 'tenantId'>) => void;
+  updateContaBancaria: (id: string, c: Partial<ContaBancaria>) => void;
+  deleteContaBancaria: (id: string) => void;
 
   entregasEscola: EntregaEscolaPnae[];
   addEntregaEscola: (e: Omit<EntregaEscolaPnae, 'id' | 'tenantId'>) => void;
@@ -1102,6 +1107,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [folhaPagamento, setFolhaPagamento] = useState<FolhaPagamento[]>(() => loadPersistedList('folhaPagamento', INITIAL_FOLHA_PAGAMENTO));
   const [escolasPnae, setEscolasPnae] = useState<EscolaPnae[]>(() => loadPersistedList('escolasPnae', INITIAL_ESCOLAS_PNAE));
   const [motoristas, setMotoristas] = useState<Motorista[]>(() => loadPersistedList('motoristas', []));
+  const [contasBancarias, setContasBancarias] = useState<ContaBancaria[]>(() => loadPersistedList('contasBancarias', []));
   const [entregasEscola, setEntregasEscola] = useState<EntregaEscolaPnae[]>(() => loadPersistedList('entregasEscola', INITIAL_ENTREGAS_ESCOLA));
   const [romaneiosMotorista, setRomaneiosMotorista] = useState<RomaneioMotorista[]>(() => loadPersistedList('romaneiosMotorista', INITIAL_ROMANEIOS_MOTORISTA));
 
@@ -1465,6 +1471,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         folhaPagamento,
         escolasPnae,
         motoristas,
+        contasBancarias,
         entregasEscola,
         romaneiosMotorista,
         lastSavedAt: new Date().toISOString()
@@ -1480,7 +1487,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     programacoesEntrega, prestacoesContas, pedidosProdutorPAA, ordensCompra, planoContas,
     lancamentosContabeis, patrimonio, contasPagarReceber, extratoBancario, solicitacoesCompra,
     fornecedores, estoque, movimentacoesEstoque, funcionariosRH, folhaPagamento, escolasPnae,
-    entregasEscola, romaneiosMotorista, motoristas
+    entregasEscola, romaneiosMotorista, motoristas, contasBancarias
   ]);
 
   // Mantém users/{uid} no Firestore sincronizado com o tenant do usuário
@@ -3027,6 +3034,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         lancamentos: []
       };
   const tenantMotoristas = motoristas.filter(m => pertenceAoTenant(m, activeTenantId));
+  const tenantContasBancarias = contasBancarias.filter(b => pertenceAoTenant(b, activeTenantId));
   const tenantEntregasEscola = entregasEscola.filter(e => pertenceAoTenant(e, activeTenantId));
   const tenantRomaneiosMotorista = romaneiosMotorista.filter(r => pertenceAoTenant(r, activeTenantId));
   const tenantNotasFiscais = notasFiscais.filter(n => pertenceAoTenant(n, activeTenantId));
@@ -3668,7 +3676,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addAuditLog('SISCONT', 'EXCLUSAO', `Excluiu conta do plano de contas ${(alvo?.codigo + " - " + alvo?.nome) || id}`);
   };
 
-  const addLancamentoExtrato = (item: { data: string; historico: string; documento: string; tipo: 'CREDITO' | 'DEBITO'; valor: number; categoria: string }) => {
+  const addLancamentoExtrato = (item: { data: string; historico: string; documento: string; tipo: 'CREDITO' | 'DEBITO'; valor: number; categoria: string; contaBancariaId?: string }) => {
     setExtratoBancario(prev => {
       // Se o extrato salvo no navegador pertence a outra cooperativa (ex.:
       // sessão anterior de outro tenant), começa do zero em vez de somar em
@@ -4210,6 +4218,47 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const alvo = motoristas.find(x => x.id === id);
     setMotoristas(prev => prev.filter(m => m.id !== id));
     addAuditLog('CADASTROS', 'EXCLUSAO', `Excluiu motorista ${alvo?.nome || id}`);
+
+  // Contas bancárias da cooperativa (Financeiro → Contas Bancárias).
+  const addContaBancaria = (cData: Omit<ContaBancaria, 'id' | 'tenantId'>) => {
+    const nova: ContaBancaria = {
+      ...cData,
+      id: `cb-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      tenantId: currentTenant.id,
+    };
+    setContasBancarias(prev => [
+      nova,
+      ...(nova.padrao ? prev.map(b => (pertenceAoTenant(b, currentTenant.id) ? { ...b, padrao: false } : b)) : prev),
+    ]);
+    addAuditLog('SISFIN', 'INCLUSAO', `Cadastrou conta bancária: ${nova.banco} ${nova.agencia}/${nova.conta}`);
+  };
+
+  const updateContaBancaria = (id: string, cData: Partial<ContaBancaria>) => {
+    const alvo = contasBancarias.find(b => b.id === id);
+    setContasBancarias(prev =>
+      prev.map(b => {
+        if (b.id === id) return { ...b, ...cData };
+        if (cData.padrao && pertenceAoTenant(b, currentTenant.id)) return { ...b, padrao: false };
+        return b;
+      })
+    );
+    addAuditLog('SISFIN', 'ALTERACAO', `Atualizou conta bancária ${alvo ? `${alvo.banco} ${alvo.agencia}/${alvo.conta}` : id}`);
+  };
+
+  const deleteContaBancaria = (id: string) => {
+    const alvo = contasBancarias.find(b => b.id === id);
+    const emUso =
+      contasPagarReceber.some(c => c.contaBancariaId === id) ||
+      (extratoBancario?.lancamentos || []).some((l: any) => l.contaBancariaId === id);
+    if (emUso) {
+      // Conta com lançamentos não é apagada, para não perder o histórico: só é desativada.
+      setContasBancarias(prev => prev.map(b => (b.id === id ? { ...b, ativa: false, padrao: false } : b)));
+      addAuditLog('SISFIN', 'ALTERACAO', `Desativou conta bancária em uso ${alvo ? `${alvo.banco} ${alvo.agencia}/${alvo.conta}` : id}`);
+      return;
+    }
+    setContasBancarias(prev => prev.filter(b => b.id !== id));
+    addAuditLog('SISFIN', 'EXCLUSAO', `Excluiu conta bancária ${alvo ? `${alvo.banco} ${alvo.agencia}/${alvo.conta}` : id}`);
+  };
   };
 
   const addEntregaEscola = (eData: Omit<EntregaEscolaPnae, 'id' | 'tenantId'>) => {
@@ -5040,6 +5089,10 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateEscolaPnae,
         deleteEscolaPnae,
         motoristas: tenantMotoristas,
+        contasBancarias: tenantContasBancarias,
+        addContaBancaria,
+        updateContaBancaria,
+        deleteContaBancaria,
         addMotorista,
         updateMotorista,
         deleteMotorista,
