@@ -1054,6 +1054,8 @@ export interface ContaBancaria {
   titular?: string;
   documentoTitular?: string;
   chavePix?: string;
+  /** Conta analítica do plano de contas (ex.: 11102.0001) usada nos lançamentos contábeis desta conta. */
+  contaContabilCodigo?: string;
   saldoInicial: number;
   dataSaldoInicial?: string;
   ativa: boolean;
