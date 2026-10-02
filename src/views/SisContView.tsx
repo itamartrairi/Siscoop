@@ -1,6 +1,7 @@
 import { formatarData } from '../utils/dateHelpers';
 import React, { useState } from 'react';
 import { useCoop } from '../context/CoopContext';
+import { DemonstracoesContabeis } from '../components/DemonstracoesContabeis';
 import {
   Calculator,
   Plus,
@@ -39,7 +40,7 @@ export const SisContView: React.FC = () => {
   };
 
 
-  const [activeTab, setActiveTab] = useState<'plano' | 'lancamentos' | 'balancete' | 'patrimonio'>('lancamentos');
+  const [activeTab, setActiveTab] = useState<'plano' | 'lancamentos' | 'balancete' | 'balanco' | 'dsp' | 'patrimonio'>('lancamentos');
 
   // Modals & Editing
   const [showLancModal, setShowLancModal] = useState(false);
@@ -67,8 +68,8 @@ export const SisContView: React.FC = () => {
   const [novoLancamento, setNovoLancamento] = useState({
     numeroLancamento: `L-${Date.now().toString().slice(-4)}`,
     data: new Date().toISOString().split('T')[0],
-    contaDebitoCodigo: '1.1.01.001',
-    contaCreditoCodigo: '1.1.02.001',
+    contaDebitoCodigo: '11101.0001',
+    contaCreditoCodigo: '11201.9999',
     valor: 5000.00,
     historico: 'Integralização de Cota-Parte / Recebimento de Contrato PAA',
     documentoRef: 'NF-1029',
@@ -336,6 +337,26 @@ if (p) {
           <TrendingUp className="w-4 h-4" /> Balancete de Verificação
         </button>
         <button
+          onClick={() => setActiveTab('balanco')}
+          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
+            activeTab === 'balanco'
+              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <TrendingUp className="w-4 h-4" /> Balanço Patrimonial
+        </button>
+        <button
+          onClick={() => setActiveTab('dsp')}
+          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
+            activeTab === 'dsp'
+              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <TrendingUp className="w-4 h-4" /> Sobras ou Perdas
+        </button>
+        <button
           onClick={() => setActiveTab('patrimonio')}
           className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
             activeTab === 'patrimonio'
@@ -510,33 +531,9 @@ if (p) {
       })()}
 
       {/* Tab Balancete */}
-      {activeTab === 'balancete' && (() => {
-        const dados = planoContas.filter(pc => pc.ativo !== false).map(pc => {
-          const movimentos = lancamentosContabeis.filter(l => l.contaDebitoCodigo === pc.codigo || l.contaCreditoCodigo === pc.codigo);
-          const debitos = movimentos.filter(l => l.contaDebitoCodigo === pc.codigo).reduce((s, l) => s + (Number(l.valor) || 0), 0);
-          const creditos = movimentos.filter(l => l.contaCreditoCodigo === pc.codigo).reduce((s, l) => s + (Number(l.valor) || 0), 0);
-          const saldo = pc.natureza === 'DEVEDORA' ? debitos - creditos : creditos - debitos;
-          return { ...pc, debitos, creditos, saldoDevedor: saldo > 0 && pc.natureza === 'DEVEDORA' ? saldo : 0, saldoCredor: saldo > 0 && pc.natureza === 'CREDORA' ? saldo : 0 };
-        }).filter(pc => pc.debitos || pc.creditos || pc.tipoConta === 'SINTETICA');
-        const totalDebitos = dados.reduce((s, pc) => s + pc.debitos, 0);
-        const totalCreditos = dados.reduce((s, pc) => s + pc.creditos, 0);
-        const gerarPdf = () => {
-          const doc = new jsPDF();
-          doc.setFontSize(16); doc.text('SICOOP — Balancete de Verificação', 14, 18);
-          doc.setFontSize(9); doc.text(`Período: todos os lançamentos registrados | Emitido em: ${new Date().toLocaleDateString('pt-BR')}`, 14, 26);
-          let y = 40; doc.setFont('helvetica', 'bold'); doc.text('Código / Conta', 14, y); doc.text('Débitos', 110, y); doc.text('Créditos', 140, y); doc.text('Saldo', 170, y); y += 8; doc.setFont('helvetica', 'normal');
-          dados.slice(0, 35).forEach(pc => { const saldo = pc.saldoDevedor || pc.saldoCredor; doc.text(`${pc.codigo} - ${pc.nome}`.substring(0, 52), 14, y); doc.text(pc.debitos.toLocaleString('pt-BR', { minimumFractionDigits: 2 }), 110, y); doc.text(pc.creditos.toLocaleString('pt-BR', { minimumFractionDigits: 2 }), 140, y); doc.text(saldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 }), 170, y); y += 6; if (y > 280) { doc.addPage(); y = 20; } });
-          doc.save('balancete-verificacao.pdf');
-        };
-
-        return (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-4">
-          <div className="flex items-center justify-between gap-3"><div><h2 className="text-sm font-bold text-slate-900">Balancete de Verificação</h2><p className="text-[11px] text-slate-500">Calculado pelos {lancamentosContabeis.length} lançamentos do Diário e pelo Plano de Contas.</p></div><button onClick={gerarPdf} className="px-3 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold">Exportar PDF</button></div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3"><div className="p-3 rounded-xl bg-blue-50"><span className="text-[11px] text-blue-700">Total de débitos</span><strong className="block text-lg text-blue-900">R$ {totalDebitos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div><div className="p-3 rounded-xl bg-violet-50"><span className="text-[11px] text-violet-700">Total de créditos</span><strong className="block text-lg text-violet-900">R$ {totalCreditos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div><div className={`p-3 rounded-xl ${Math.abs(totalDebitos - totalCreditos) < 0.01 ? 'bg-emerald-50' : 'bg-rose-50'}`}><span className="text-[11px]">Situação</span><strong className="block text-lg">{Math.abs(totalDebitos - totalCreditos) < 0.01 ? 'BALANCEADO' : 'DIVERGENTE'}</strong></div></div>
-          <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="bg-slate-50 text-slate-500 font-bold uppercase border-b"><th className="p-3 text-left">Código</th><th className="p-3 text-left">Conta Contábil</th><th className="p-3 text-right">Débitos</th><th className="p-3 text-right">Créditos</th><th className="p-3 text-right">Saldo Devedor</th><th className="p-3 text-right">Saldo Credor</th></tr></thead><tbody className="divide-y">{dados.map(pc => <tr key={pc.id} className={pc.tipoConta === 'SINTETICA' ? 'bg-slate-50 font-bold' : ''}><td className="p-3 font-mono">{pc.codigo}</td><td className="p-3">{pc.nome}</td><td className="p-3 text-right">R$ {pc.debitos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td><td className="p-3 text-right">R$ {pc.creditos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td><td className="p-3 text-right text-blue-700">R$ {pc.saldoDevedor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td><td className="p-3 text-right text-violet-700">R$ {pc.saldoCredor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td></tr>)}<tr className="bg-slate-900 text-white font-black"><td className="p-3" colSpan={2}>TOTAL</td><td className="p-3 text-right">R$ {totalDebitos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td><td className="p-3 text-right">R$ {totalCreditos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td><td className="p-3 text-right">R$ {dados.reduce((s, pc) => s + pc.saldoDevedor, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td><td className="p-3 text-right">R$ {dados.reduce((s, pc) => s + pc.saldoCredor, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td></tr></tbody></table></div>
-        </div>
-        );
-      })()}
+      {activeTab === 'balancete' && <DemonstracoesContabeis modo="balancete" />}
+      {activeTab === 'balanco' && <DemonstracoesContabeis modo="balanco" />}
+      {activeTab === 'dsp' && <DemonstracoesContabeis modo="dsp" />}
 
       {/* Tab Patrimônio */}
       {activeTab === 'patrimonio' && (
