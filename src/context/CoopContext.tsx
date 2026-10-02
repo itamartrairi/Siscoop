@@ -44,6 +44,7 @@ import {
   FolhaPagamento,
   EscolaPnae,
   Motorista,
+  ContaBancaria,
   EntregaEscolaPnae,
   RomaneioMotorista,
   PedidoProdutorPAA,
@@ -110,6 +111,7 @@ import {
   syncAssembleiasToFirestore,
   saveUserTenantMappingToFirestore
 } from '../services/firebaseDbService';
+import { PLANO_CONTAS_COOPERATIVA, migrarLancamentosContabeis, CODIGO_BANCO_PADRAO } from '../data/planoContasCooperativa';
 import { publicarPortalEscolas, ouvirComprovantesPortal } from '../services/portalEscolaRemoto';
 import { publicarPortalMotoristas, ouvirAtualizacoesMotoristas, mesclarParadas } from '../services/portalMotoristaRemoto';
 import { publicarPortalCooperados, publicarPortalProdutores, ouvirOfertasProdutores } from '../services/portalCooperadoProdutorRemoto';
@@ -607,7 +609,7 @@ interface CoopContextType {
   pagarReceberConta: (id: string) => void;
 
   extratoBancario: ExtratoBancario;
-  addLancamentoExtrato: (item: { data: string; historico: string; documento: string; tipo: 'CREDITO' | 'DEBITO'; valor: number; categoria: string }) => void;
+  addLancamentoExtrato: (item: { data: string; historico: string; documento: string; tipo: 'CREDITO' | 'DEBITO'; valor: number; categoria: string; contaBancariaId?: string }) => void;
 
   solicitacoesCompra: SolicitacaoCompra[];
   addSolicitacaoCompra: (s: Omit<SolicitacaoCompra, 'id' | 'tenantId'>) => void;
@@ -646,6 +648,10 @@ interface CoopContextType {
   addMotorista: (m: Omit<Motorista, 'id' | 'tenantId'>) => void;
   updateMotorista: (id: string, m: Partial<Motorista>) => void;
   deleteMotorista: (id: string) => void;
+  contasBancarias: ContaBancaria[];
+  addContaBancaria: (c: Omit<ContaBancaria, 'id' | 'tenantId'>) => void;
+  updateContaBancaria: (id: string, c: Partial<ContaBancaria>) => void;
+  deleteContaBancaria: (id: string) => void;
 
   entregasEscola: EntregaEscolaPnae[];
   addEntregaEscola: (e: Omit<EntregaEscolaPnae, 'id' | 'tenantId'>) => void;
@@ -892,8 +898,8 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   function loadPlanoContasPersistido(): PlanoContaContabil[] {
-    const saved = loadPersistedList<PlanoContaContabil>('planoContas', INITIAL_PLANO_CONTAS);
-    const contasAnexo = new Map(INITIAL_PLANO_CONTAS.map(conta => [conta.codigo, conta]));
+    const saved = loadPersistedList<PlanoContaContabil>('planoContas', PLANO_CONTAS_COOPERATIVA);
+    const contasAnexo = new Map(PLANO_CONTAS_COOPERATIVA.map(conta => [conta.codigo, conta]));
     const existentes = new Set<string>();
     const mantidas = saved.filter(conta => {
       // Códigos numéricos devem obedecer ao anexo; códigos não numéricos
@@ -903,7 +909,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       existentes.add(conta.codigo);
       return true;
     });
-    const faltantes = INITIAL_PLANO_CONTAS
+    const faltantes = PLANO_CONTAS_COOPERATIVA
       .filter(conta => !existentes.has(conta.codigo))
       .map(conta => ({ ...conta }));
     return [...mantidas, ...faltantes];
@@ -1090,7 +1096,16 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [pedidosProdutorPAA, setPedidosProdutorPAA] = useState<PedidoProdutorPAA[]>(() => loadPersistedList('pedidosProdutorPAA', INITIAL_PEDIDOS_PRODUTOR));
   const [ordensCompra, setOrdensCompra] = useState<OrdemCompra[]>(() => loadPersistedList('ordensCompra', INITIAL_ORDENS_COMPRA));
   const [planoContas, setPlanoContas] = useState<PlanoContaContabil[]>(loadPlanoContasPersistido);
-  const [lancamentosContabeis, setLancamentosContabeis] = useState<LancamentoContabil[]>(() => loadPersistedList('lancamentosContabeis', INITIAL_LANCAMENTOS_CONTABEIS));
+  const [lancamentosContabeis, setLancamentosContabeisBase] = useState<LancamentoContabil[]>(() => loadPersistedList('lancamentosContabeis', INITIAL_LANCAMENTOS_CONTABEIS));
+  // Lançamentos sempre no plano de contas atual: códigos do plano anterior são
+  // convertidos (inclusive os gerados automaticamente pelos módulos).
+  const setLancamentosContabeis = (acao: React.SetStateAction<LancamentoContabil[]>) =>
+    setLancamentosContabeisBase(prev =>
+      migrarLancamentosContabeis(typeof acao === 'function' ? (acao as (p: LancamentoContabil[]) => LancamentoContabil[])(prev) : acao)
+    );
+  useEffect(() => {
+    setLancamentosContabeisBase(prev => migrarLancamentosContabeis(prev));
+  }, []);
   const [patrimonio, setPatrimonio] = useState<ItemPatrimonio[]>(() => loadPersistedList('patrimonio', INITIAL_PATRIMONIO));
   const [contasPagarReceber, setContasPagarReceber] = useState<ContaPagarReceber[]>(() => loadPersistedList('contasPagarReceber', INITIAL_CONTAS_PAGAR_RECEBER));
   const [extratoBancario, setExtratoBancario] = useState<ExtratoBancario>(() => loadPersistedValue('extratoBancario', INITIAL_EXTRATO_BANCARIO));
@@ -1102,6 +1117,13 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [folhaPagamento, setFolhaPagamento] = useState<FolhaPagamento[]>(() => loadPersistedList('folhaPagamento', INITIAL_FOLHA_PAGAMENTO));
   const [escolasPnae, setEscolasPnae] = useState<EscolaPnae[]>(() => loadPersistedList('escolasPnae', INITIAL_ESCOLAS_PNAE));
   const [motoristas, setMotoristas] = useState<Motorista[]>(() => loadPersistedList('motoristas', []));
+  const [contasBancarias, setContasBancarias] = useState<ContaBancaria[]>(() => loadPersistedList('contasBancarias', []));
+  // Conta contábil do banco (Financeiro → Contas Bancárias); sem definição, usa a padrão.
+  const codigoBancoContabil = (contaBancariaId?: string) => {
+    const doTenant = contasBancarias.filter(b => pertenceAoTenant(b, currentTenant?.id));
+    const cb = doTenant.find(b => b.id === contaBancariaId) || doTenant.find(b => b.padrao && b.ativa !== false);
+    return cb?.contaContabilCodigo || CODIGO_BANCO_PADRAO;
+  };
   const [entregasEscola, setEntregasEscola] = useState<EntregaEscolaPnae[]>(() => loadPersistedList('entregasEscola', INITIAL_ENTREGAS_ESCOLA));
   const [romaneiosMotorista, setRomaneiosMotorista] = useState<RomaneioMotorista[]>(() => loadPersistedList('romaneiosMotorista', INITIAL_ROMANEIOS_MOTORISTA));
 
@@ -1465,6 +1487,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         folhaPagamento,
         escolasPnae,
         motoristas,
+        contasBancarias,
         entregasEscola,
         romaneiosMotorista,
         lastSavedAt: new Date().toISOString()
@@ -1480,7 +1503,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     programacoesEntrega, prestacoesContas, pedidosProdutorPAA, ordensCompra, planoContas,
     lancamentosContabeis, patrimonio, contasPagarReceber, extratoBancario, solicitacoesCompra,
     fornecedores, estoque, movimentacoesEstoque, funcionariosRH, folhaPagamento, escolasPnae,
-    entregasEscola, romaneiosMotorista, motoristas
+    entregasEscola, romaneiosMotorista, motoristas, contasBancarias
   ]);
 
   // Mantém users/{uid} no Firestore sincronizado com o tenant do usuário
@@ -2534,9 +2557,9 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // pagar em parcelas): Débito Capital a Integralizar (conta devedora,
       // funciona como um "a receber" do cooperado) / Crédito Capital
       // Subscrito — conforme o Plano de Contas da cooperativa.
-      contaDebitoCodigo: isPaid ? '1.1.01.002' : '3.1.01.003',
+      contaDebitoCodigo: isPaid ? codigoBancoContabil(transacaoData.contaBancariaId) : '24102.0001',
       contaDebitoNome: isPaid ? 'Bancos Conta Movimento' : 'Capital a Integralizar',
-      contaCreditoCodigo: isPaid ? '3.1.01.002' : '3.1.01.001',
+      contaCreditoCodigo: isPaid ? '24101.0002' : '24101.0002',
       contaCreditoNome: isPaid ? 'Capital Integralizado' : 'Capital Subscrito',
       valor: valorNum,
       historico: `Lançamento de Capital Social (${transacaoData.tipo}) - Cooperado ${cooperadoNome}`,
@@ -2593,9 +2616,9 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
             data: nowIsoDate,
             // Baixa da parcela: entra dinheiro no banco, reduzindo o valor
             // ainda "a integralizar" pelo cooperado.
-            contaDebitoCodigo: '1.1.01.002',
+            contaDebitoCodigo: '11102.0001',
             contaDebitoNome: 'Bancos Conta Movimento',
-            contaCreditoCodigo: '3.1.01.003',
+            contaCreditoCodigo: '24102.0001',
             contaCreditoNome: 'Capital a Integralizar',
             valor: totalPagoParcela,
             historico: `Baixa Parcela Cota-Parte Capital (${reciboNum}) - Cooperado ${tx.cooperadoNome || 'Cooperado'}`,
@@ -3027,6 +3050,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         lancamentos: []
       };
   const tenantMotoristas = motoristas.filter(m => pertenceAoTenant(m, activeTenantId));
+  const tenantContasBancarias = contasBancarias.filter(b => pertenceAoTenant(b, activeTenantId));
   const tenantEntregasEscola = entregasEscola.filter(e => pertenceAoTenant(e, activeTenantId));
   const tenantRomaneiosMotorista = romaneiosMotorista.filter(r => pertenceAoTenant(r, activeTenantId));
   const tenantNotasFiscais = notasFiscais.filter(n => pertenceAoTenant(n, activeTenantId));
@@ -3376,9 +3400,9 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       tenantId: currentTenant.id,
       numeroLancamento: 2000 + Math.floor(Math.random() * 8000),
       data: newPed.dataPedido,
-      contaDebitoCodigo: '4.1.01.001',
+      contaDebitoCodigo: '31101.0009',
       contaDebitoNome: 'Custo da Produção e Repasse aos Cooperados',
-      contaCreditoCodigo: '2.1.01.001',
+      contaCreditoCodigo: '21302.0900',
       contaCreditoNome: 'Fornecedores e Produtores Rurais',
       valor: newPed.valorTotalPedido,
       historico: `Pedido de Produtos ${newPed.programa} aos Produtores (${newPed.numeroPedido}) - ${newPed.fonteRecursos}`,
@@ -3668,7 +3692,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addAuditLog('SISCONT', 'EXCLUSAO', `Excluiu conta do plano de contas ${(alvo?.codigo + " - " + alvo?.nome) || id}`);
   };
 
-  const addLancamentoExtrato = (item: { data: string; historico: string; documento: string; tipo: 'CREDITO' | 'DEBITO'; valor: number; categoria: string }) => {
+  const addLancamentoExtrato = (item: { data: string; historico: string; documento: string; tipo: 'CREDITO' | 'DEBITO'; valor: number; categoria: string; contaBancariaId?: string }) => {
     setExtratoBancario(prev => {
       // Se o extrato salvo no navegador pertence a outra cooperativa (ex.:
       // sessão anterior de outro tenant), começa do zero em vez de somar em
@@ -3741,11 +3765,11 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // compra for financiada, o contador pode ajustar manualmente depois.
     if (newItem.valorAquisicao > 0) {
       const contaImobilizado: Record<string, { codigo: string; nome: string }> = {
-        VEICULO: { codigo: '1.2.03.004', nome: 'Veículos' },
-        MAQUINARIO: { codigo: '1.2.03.003', nome: 'Máquinas e Equipamentos' },
-        IMOVEL: { codigo: '1.2.03.002', nome: 'Edificações' },
-        EQUIPAMENTO: { codigo: '1.2.03.003', nome: 'Máquinas e Equipamentos' },
-        MOVEIS: { codigo: '1.2.03.005', nome: 'Móveis e Utensílios' }
+        VEICULO: { codigo: '12302.0003', nome: 'Veículos' },
+        MAQUINARIO: { codigo: '12302.0005', nome: 'Máquinas e Equipamentos' },
+        IMOVEL: { codigo: '12302.0001', nome: 'Edificações' },
+        EQUIPAMENTO: { codigo: '12302.0005', nome: 'Máquinas e Equipamentos' },
+        MOVEIS: { codigo: '12302.0004', nome: 'Móveis e Utensílios' }
       };
       const conta = contaImobilizado[newItem.categoria || ''] || contaImobilizado.MAQUINARIO;
       const proximoNumero = Math.max(1000, ...lancamentosContabeis.map(l => Number(l.numeroLancamento) || 0)) + 1;
@@ -3756,7 +3780,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         data: newItem.dataAquisicao || new Date().toISOString().split('T')[0],
         contaDebitoCodigo: conta.codigo,
         contaDebitoNome: conta.nome,
-        contaCreditoCodigo: '1.1.01.002',
+        contaCreditoCodigo: '11102.0001',
         contaCreditoNome: 'Bancos Conta Movimento',
         valor: newItem.valorAquisicao,
         historico: `[Lançamento automático] Aquisição de bem patrimonial: ${newItem.descricao}`,
@@ -3793,11 +3817,11 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const CONTA_DEPRECIACAO_POR_CATEGORIA: Record<string, { codigo: string; nome: string }> = {
-    VEICULO: { codigo: '1.2.04.003', nome: '(-) Depreciação de Veículos' },
-    MAQUINARIO: { codigo: '1.2.04.002', nome: '(-) Depreciação de Máquinas e Equipamentos' },
-    EQUIPAMENTO: { codigo: '1.2.04.002', nome: '(-) Depreciação de Máquinas e Equipamentos' },
-    IMOVEL: { codigo: '1.2.04.001', nome: '(-) Depreciação de Edificações' },
-    MOVEIS: { codigo: '1.2.04.004', nome: '(-) Depreciação de Móveis e Utensílios' }
+    VEICULO: { codigo: '12309.0001', nome: '(-) Depreciação de Veículos' },
+    MAQUINARIO: { codigo: '12309.0001', nome: '(-) Depreciação de Máquinas e Equipamentos' },
+    EQUIPAMENTO: { codigo: '12309.0001', nome: '(-) Depreciação de Máquinas e Equipamentos' },
+    IMOVEL: { codigo: '12309.0001', nome: '(-) Depreciação de Edificações' },
+    MOVEIS: { codigo: '12309.0001', nome: '(-) Depreciação de Móveis e Utensílios' }
   };
 
   // Processa a depreciação de UM mês/competência para todos os bens do
@@ -3829,7 +3853,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         tenantId: currentTenant.id,
         numeroLancamento: proximoNumeroBase + contadorNumero,
         data: new Date().toISOString().split('T')[0],
-        contaDebitoCodigo: '6.1.02.011',
+        contaDebitoCodigo: '31901.0060',
         contaDebitoNome: 'Depreciação',
         contaCreditoCodigo: contaDep.codigo,
         contaCreditoNome: contaDep.nome,
@@ -3871,12 +3895,12 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Códigos conforme o Plano de Contas padronizado da cooperativa (4
   // níveis, com separação entre atos cooperativos e não cooperativos).
   const CONTAS_POR_CATEGORIA: Record<string, { ativoPassivoCodigo: string; ativoPassivoNome: string; receitaDespesaCodigo: string; receitaDespesaNome: string }> = {
-    'FOLHA_PAGAMENTO': { ativoPassivoCodigo: '2.1.02.001', ativoPassivoNome: 'Salários a Pagar', receitaDespesaCodigo: '6.1.01.001', receitaDespesaNome: 'Salários' },
-    'COMPRAS_INSUMOS': { ativoPassivoCodigo: '2.1.01.002', ativoPassivoNome: 'Fornecedores de Insumos', receitaDespesaCodigo: '5.2.01.001', receitaDespesaNome: 'Aquisição de Produtos de Terceiros' },
-    'Impostos e Retenções': { ativoPassivoCodigo: '2.1.03.005', ativoPassivoNome: 'Outros Tributos a Recolher (FUNRURAL)', receitaDespesaCodigo: '5.1.01.001', receitaDespesaNome: 'Aquisição da Produção dos Cooperados' },
-    'Taxa Administrativa PAA/PNAE': { ativoPassivoCodigo: '1.1.02.001', ativoPassivoNome: 'Clientes', receitaDespesaCodigo: '4.1.04.001', receitaDespesaNome: 'Outras Receitas de Atos Cooperativos' },
-    'DEFAULT_PAGAR': { ativoPassivoCodigo: '2.1.04.001', ativoPassivoNome: 'Produção a Pagar aos Cooperados', receitaDespesaCodigo: '5.1.01.001', receitaDespesaNome: 'Aquisição da Produção dos Cooperados' },
-    'DEFAULT_RECEBER': { ativoPassivoCodigo: '1.1.02.001', ativoPassivoNome: 'Clientes', receitaDespesaCodigo: '4.1.01.001', receitaDespesaNome: 'Venda da Produção dos Cooperados' }
+    'FOLHA_PAGAMENTO': { ativoPassivoCodigo: '21601.0099', ativoPassivoNome: 'Salários a Pagar', receitaDespesaCodigo: '31901.0001', receitaDespesaNome: 'Salários' },
+    'COMPRAS_INSUMOS': { ativoPassivoCodigo: '21302.0900', ativoPassivoNome: 'Fornecedores de Insumos', receitaDespesaCodigo: '35601.0009', receitaDespesaNome: 'Aquisição de Produtos de Terceiros' },
+    'Impostos e Retenções': { ativoPassivoCodigo: '21401.0025', ativoPassivoNome: 'Outros Tributos a Recolher (FUNRURAL)', receitaDespesaCodigo: '31601.0009', receitaDespesaNome: 'Aquisição da Produção dos Cooperados' },
+    'Taxa Administrativa PAA/PNAE': { ativoPassivoCodigo: '11201.9999', ativoPassivoNome: 'Clientes', receitaDespesaCodigo: '31103.0999', receitaDespesaNome: 'Outras Receitas de Atos Cooperativos' },
+    'DEFAULT_PAGAR': { ativoPassivoCodigo: '21001.0001', ativoPassivoNome: 'Produção a Pagar aos Cooperados', receitaDespesaCodigo: '31601.0009', receitaDespesaNome: 'Aquisição da Produção dos Cooperados' },
+    'DEFAULT_RECEBER': { ativoPassivoCodigo: '11201.9999', ativoPassivoNome: 'Clientes', receitaDespesaCodigo: '31101.0009', receitaDespesaNome: 'Venda da Produção dos Cooperados' }
   };
 
   const gerarLancamentoContabilAutomatico = (params: {
@@ -4210,6 +4234,48 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const alvo = motoristas.find(x => x.id === id);
     setMotoristas(prev => prev.filter(m => m.id !== id));
     addAuditLog('CADASTROS', 'EXCLUSAO', `Excluiu motorista ${alvo?.nome || id}`);
+
+  // Contas bancárias da cooperativa (Financeiro → Contas Bancárias).
+  const addContaBancaria = (cData: Omit<ContaBancaria, 'id' | 'tenantId'>) => {
+    const nova: ContaBancaria = {
+      ...cData,
+      id: `cb-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      tenantId: currentTenant.id,
+    };
+    setContasBancarias(prev => [
+      nova,
+      ...(nova.padrao ? prev.map(b => (pertenceAoTenant(b, currentTenant.id) ? { ...b, padrao: false } : b)) : prev),
+    ]);
+    addAuditLog('SISFIN', 'INCLUSAO', `Cadastrou conta bancária: ${nova.banco} ${nova.agencia}/${nova.conta}`);
+  };
+
+  const updateContaBancaria = (id: string, cData: Partial<ContaBancaria>) => {
+    const alvo = contasBancarias.find(b => b.id === id);
+    setContasBancarias(prev =>
+      prev.map(b => {
+        if (b.id === id) return { ...b, ...cData };
+        if (cData.padrao && pertenceAoTenant(b, currentTenant.id)) return { ...b, padrao: false };
+        return b;
+      })
+    );
+    addAuditLog('SISFIN', 'ALTERACAO', `Atualizou conta bancária ${alvo ? `${alvo.banco} ${alvo.agencia}/${alvo.conta}` : id}`);
+  };
+
+  const deleteContaBancaria = (id: string) => {
+    const alvo = contasBancarias.find(b => b.id === id);
+    const emUso =
+      contasPagarReceber.some(c => c.contaBancariaId === id) ||
+      (extratoBancario?.lancamentos || []).some((l: any) => l.contaBancariaId === id) ||
+      (transacoesCapital || []).some(tx => tx.contaBancariaId === id);
+    if (emUso) {
+      // Conta com lançamentos não é apagada, para não perder o histórico: só é desativada.
+      setContasBancarias(prev => prev.map(b => (b.id === id ? { ...b, ativa: false, padrao: false } : b)));
+      addAuditLog('SISFIN', 'ALTERACAO', `Desativou conta bancária em uso ${alvo ? `${alvo.banco} ${alvo.agencia}/${alvo.conta}` : id}`);
+      return;
+    }
+    setContasBancarias(prev => prev.filter(b => b.id !== id));
+    addAuditLog('SISFIN', 'EXCLUSAO', `Excluiu conta bancária ${alvo ? `${alvo.banco} ${alvo.agencia}/${alvo.conta}` : id}`);
+  };
   };
 
   const addEntregaEscola = (eData: Omit<EntregaEscolaPnae, 'id' | 'tenantId'>) => {
@@ -4255,9 +4321,9 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addLancamentoContabil({
       numeroLancamento: 6000 + Math.floor(Math.random() * 3000),
       data: dataEntregaReal,
-      contaDebitoCodigo: '1.1.02.001',
+      contaDebitoCodigo: '11201.9999',
       contaDebitoNome: 'Clientes',
-      contaCreditoCodigo: '4.1.01.001',
+      contaCreditoCodigo: '31101.0009',
       contaCreditoNome: 'Venda da Produção dos Cooperados',
       valor: valorTotalEntrega,
       historico: `Entrega de Alimentos PNAE - Escola ${newEnt.escolaNome}`,
@@ -4323,7 +4389,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // de conta inventados que não existem no Plano de Contas.
       const contaOriginal = (targetConta as ContaPagarReceber).categoria;
       const contasRef = (contaOriginal && CONTAS_POR_CATEGORIA[contaOriginal]) || CONTAS_POR_CATEGORIA[isReceber ? 'DEFAULT_RECEBER' : 'DEFAULT_PAGAR'];
-      const contaCaixaBanco = { codigo: '1.1.01.002', nome: 'Bancos Conta Movimento' };
+      const contaCaixaBanco = { codigo: '11102.0001', nome: 'Bancos Conta Movimento' };
       addLancamentoContabil({
         numeroLancamento: 4000 + Math.floor(Math.random() * 5000),
         data: nowIso,
@@ -4372,10 +4438,10 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if ((mData.tipoMovimento === 'SAIDA' || mData.tipoMovimento === 'PERDA') && itemMovimentado?.valorUnitarioMedio) {
       const valorMovimentado = Number((mData.quantidade * itemMovimentado.valorUnitarioMedio).toFixed(2));
       if (valorMovimentado > 0) {
-        const contaEstoque = { codigo: '1.1.04.003', nome: 'Insumos Agrícolas' };
+        const contaEstoque = { codigo: '11501.9999', nome: 'Insumos Agrícolas' };
         const contaContrapartida = mData.tipoMovimento === 'PERDA'
-          ? { codigo: '5.1.02.002', nome: 'Perdas de Estoques' }
-          : { codigo: '5.1.02.001', nome: 'Custos de Comercialização' };
+          ? { codigo: '31601.0009', nome: 'Perdas de Estoques' }
+          : { codigo: '31601.0009', nome: 'Custos de Comercialização' };
         const proximoNumero = Math.max(1000, ...lancamentosContabeis.map(l => Number(l.numeroLancamento) || 0)) + 1;
         setLancamentosContabeis(prev => [{
           id: `lanc-est-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
@@ -5040,6 +5106,10 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateEscolaPnae,
         deleteEscolaPnae,
         motoristas: tenantMotoristas,
+        contasBancarias: tenantContasBancarias,
+        addContaBancaria,
+        updateContaBancaria,
+        deleteContaBancaria,
         addMotorista,
         updateMotorista,
         deleteMotorista,

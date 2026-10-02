@@ -1,6 +1,7 @@
 import { formatarData } from '../utils/dateHelpers';
 import React, { useState } from 'react';
 import { useCoop } from '../context/CoopContext';
+import { ContasBancariasTab, SelectContaBancaria, nomeContaBancaria } from '../components/ContasBancariasTab';
 import {
   CircleDollarSign,
   Plus,
@@ -76,17 +77,25 @@ export const SisFinView: React.FC = () => {
     planoContas,
     canWriteModule
   } = useCoop();
+  // Contas bancárias (aba Contas Bancárias) usadas nos títulos e no extrato.
+  const { contasBancarias } = useCoop();
+  const contasBancariasAtivas = contasBancarias.filter(b => b.ativa !== false);
+  const contaPadraoId = (contasBancariasAtivas.find(b => b.padrao) || contasBancariasAtivas[0])?.id || '';
+  const nomeConta = (id?: string) => nomeContaBancaria(contasBancarias, id);
 
   const canWrite = canWriteModule('sisfin');
   const blockWriteAction = () => {
     alert('Seu perfil de acesso tem permissão apenas de leitura neste módulo. Fale com um administrador para solicitar permissão de edição.');
   };
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'dre' | 'fluxo' | 'contas' | 'estoque' | 'custos' | 'extrato' | 'balanco'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'dre' | 'fluxo' | 'contas' | 'estoque' | 'custos' | 'extrato' | 'balanco' | 'bancos'>('dashboard');
   const [filtroMes, setFiltroMes] = useState(String(new Date().getMonth() + 1).padStart(2, '0'));
   const [filtroAno, setFiltroAno] = useState(String(new Date().getFullYear()));
   const [filtroCategoria, setFiltroCategoria] = useState('TODAS');
   const [filtroConta, setFiltroConta] = useState('TODAS');
+  const [filtroBanco, setFiltroBanco] = useState('TODAS');
+  // Filtro de conta bancária: vale para Dashboard, DRE, Fluxo de Caixa, Contas e Extrato.
+  const noBanco = (id?: string) => filtroBanco === 'TODAS' || (id || '') === filtroBanco;
   const [fluxoAnoCompleto, setFluxoAnoCompleto] = useState(true);
 
   // Modals & Editing
@@ -100,7 +109,8 @@ export const SisFinView: React.FC = () => {
     documento: `PIX-${Date.now().toString().slice(-6)}`,
     tipo: 'CREDITO' as 'CREDITO' | 'DEBITO',
     valor: 2500,
-    categoria: 'RECEITA_VENDA'
+    categoria: 'RECEITA_VENDA',
+    contaBancariaId: contaPadraoId as string
   });
 
   const [contaForm, setContaForm] = useState({
@@ -112,7 +122,8 @@ export const SisFinView: React.FC = () => {
     categoria: 'FORNECEDOR' as any,
     subcategoria: '',
     classificacaoDespesa: 'VARIAVEL' as 'FIXA' | 'VARIAVEL',
-    status: 'PENDENTE' as any
+    status: 'PENDENTE' as any,
+    contaBancariaId: contaPadraoId as string
   });
 
   const handleOpenModal = (c?: ContaPagarReceber) => {
@@ -128,7 +139,8 @@ if (c) {
         categoria: c.categoria,
         subcategoria: c.subcategoria || '',
         classificacaoDespesa: c.classificacaoDespesa || 'VARIAVEL',
-        status: c.status
+        status: c.status,
+        contaBancariaId: c.contaBancariaId || ''
       });
     } else {
       setEditingConta(null);
@@ -141,7 +153,8 @@ if (c) {
         categoria: 'FORNECEDOR',
         subcategoria: '',
         classificacaoDespesa: 'VARIAVEL',
-        status: 'PENDENTE'
+        status: 'PENDENTE',
+        contaBancariaId: contaPadraoId
       });
     }
     setShowModal(true);
@@ -183,8 +196,8 @@ if (c) {
     return anoOk && mesOk;
   };
   const chaveMesAno = `${filtroAno}-${filtroMes}`;
-  const contasDoPeriodo = contasPagarReceber.filter(c => dataNoPeriodo(c.dataEmissao || c.dataVencimento));
-  const extratoDoPeriodo = (extratoBancario?.lancamentos || []).filter(l => dataNoPeriodo(l.data));
+  const contasDoPeriodo = contasPagarReceber.filter(c => dataNoPeriodo(c.dataEmissao || c.dataVencimento) && noBanco(c.contaBancariaId));
+  const extratoDoPeriodo = (extratoBancario?.lancamentos || []).filter(l => dataNoPeriodo(l.data) && noBanco((l as any).contaBancariaId));
   const periodoPagar = contasDoPeriodo.filter(c => c.tipo === 'PAGAR').reduce((sum, c) => sum + (c.valor || 0), 0);
   const periodoReceber = contasDoPeriodo.filter(c => c.tipo === 'RECEBER').reduce((sum, c) => sum + (c.valor || 0), 0);
   const periodoPago = contasDoPeriodo.filter(c => c.tipo === 'PAGAR' && c.status === 'PAGO').reduce((sum, c) => sum + (c.valor || 0), 0);
@@ -225,9 +238,9 @@ if (c) {
   const fluxoAnual = mesesAno.map(mes => {
     const contasMes = contasPagarReceber.filter(c => {
       const data = c.dataEmissao || c.dataVencimento || '';
-      return (filtroAno === 'TODAS' || data.startsWith(filtroAno)) && data.slice(5, 7) === mes;
+      return (filtroAno === 'TODAS' || data.startsWith(filtroAno)) && data.slice(5, 7) === mes && noBanco(c.contaBancariaId);
     });
-    const extratoMes = (extratoBancario?.lancamentos || []).filter(l => (filtroAno === 'TODAS' || l.data.startsWith(filtroAno)) && l.data.slice(5, 7) === mes);
+    const extratoMes = (extratoBancario?.lancamentos || []).filter(l => (filtroAno === 'TODAS' || l.data.startsWith(filtroAno)) && l.data.slice(5, 7) === mes && noBanco((l as any).contaBancariaId));
     return {
       mes: `${mes}/${filtroAno === 'TODAS' ? 'Todos' : filtroAno.slice(-2)}`,
       entradas: extratoMes.filter(l => l.tipo === 'CREDITO').reduce((s, l) => s + l.valor, 0),
@@ -369,6 +382,16 @@ if (c) {
           <Landmark className="w-4 h-4" /> Extrato Conciliado ({extratoBancario?.bancoNome || 'Sicoob Credi'})
         </button>
         <button
+          onClick={() => setActiveTab('bancos')}
+          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
+            activeTab === 'bancos'
+              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <Landmark className="w-4 h-4" /> Contas Bancárias
+        </button>
+        <button
           onClick={() => setActiveTab('balanco')}
           className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${activeTab === 'balanco' ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl' : 'border-transparent text-slate-500 hover:text-slate-900'}`}
         >
@@ -384,6 +407,7 @@ if (c) {
             <div><label className="block text-[11px] font-bold text-slate-500 mb-1">Ano</label><select value={filtroAno} onChange={e => setFiltroAno(e.target.value)} className="p-2.5 rounded-xl border border-slate-200 text-sm w-28"><option value="TODAS">Todos</option>{anosDisponiveis.map(ano => <option key={ano} value={ano}>{ano}</option>)}</select></div>
             <div><label className="block text-[11px] font-bold text-slate-500 mb-1">Categoria</label><select value={filtroCategoria} onChange={e => setFiltroCategoria(e.target.value)} className="p-2.5 rounded-xl border border-slate-200 text-sm"><option value="TODAS">Todas as categorias</option>{categoriasFinanceiras.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
             <div><label className="block text-[11px] font-bold text-slate-500 mb-1">Conta / centro de custo</label><select value={filtroConta} onChange={e => setFiltroConta(e.target.value)} className="p-2.5 rounded-xl border border-slate-200 text-sm"><option value="TODAS">Todas as contas</option>{contasFluxo.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+            <div><label className="block text-[11px] font-bold text-slate-500 mb-1">Conta bancária</label><SelectContaBancaria value={filtroBanco} onChange={setFiltroBanco} contas={contasBancarias} todasLabel="Todas as contas bancárias" className="p-2.5 rounded-xl border border-slate-200 text-sm" /></div>
             <button onClick={aplicarFiltros} className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50">Limpar filtros</button>
           </div>
 
@@ -805,9 +829,15 @@ if (c) {
       )}
 
       {/* Tab Contas */}
+      {activeTab === 'bancos' && <ContasBancariasTab canWrite={canWrite} onBlocked={blockWriteAction} />}
+
       {activeTab === 'contas' && (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-4">
           <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-black text-slate-900">Contas a Pagar e Receber</h2><p className="text-xs text-slate-500 mt-1">Títulos financeiros registrados no período.</p></div><button onClick={() => gerarRelatorioGerencialPdf('PAGAR_RECEBER')} className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold">Exportar PDF</button></div>
+          <div className="flex items-center gap-2 mb-3 text-xs">
+            <span className="font-bold text-slate-600">Conta bancária:</span>
+            <SelectContaBancaria value={filtroBanco} onChange={setFiltroBanco} contas={contasBancarias} todasLabel="Todas as contas" className="p-2 border border-slate-200 rounded-xl" />
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
@@ -816,13 +846,14 @@ if (c) {
                   <th className="p-3">Descrição</th>
                   <th className="p-3">Pessoa / Favorecido</th>
                   <th className="p-3">Vencimento</th>
+                  <th className="p-3">Conta Bancária</th>
                   <th className="p-3">Valor</th>
                   <th className="p-3">Status</th>
                   <th className="p-3 text-right">Ação</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {contasPagarReceber.map(c => (
+                {contasPagarReceber.filter(c => filtroBanco === 'TODAS' || (c.contaBancariaId || '') === filtroBanco).map(c => (
                   <tr key={c.id} className="hover:bg-slate-50/80">
                     <td className="p-3">
                       <span className={`px-2 py-0.5 rounded font-bold text-[10px] ${
@@ -848,6 +879,7 @@ if (c) {
                     </td>
                     <td className="p-3 text-slate-700">{c.pessoaNome}</td>
                     <td className="p-3 text-slate-600 font-mono">{formatarData(c.dataVencimento)}</td>
+                    <td className="p-3 text-slate-600 whitespace-nowrap">{nomeConta(c.contaBancariaId)}</td>
                     <td className={`p-3 font-bold ${c.tipo === 'RECEBER' ? 'text-emerald-700' : 'text-slate-900'}`}>
                       R$ {(c.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </td>
@@ -901,21 +933,27 @@ if (c) {
             <span className="text-emerald-700">Saldo Atual: R$ {(extratoBancario?.saldoAtual || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
           </div>
 
+          <div className="flex items-center gap-2 mb-3 text-xs">
+            <span className="font-bold text-slate-600">Conta bancária:</span>
+            <SelectContaBancaria value={filtroBanco} onChange={setFiltroBanco} contas={contasBancarias} todasLabel="Todas as contas" className="p-2 border border-slate-200 rounded-xl" />
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="bg-slate-50 text-slate-500 font-bold uppercase border-b border-slate-200">
                   <th className="p-3">Data</th>
                   <th className="p-3">Histórico / Lançamento</th>
+                  <th className="p-3">Conta Bancária</th>
                   <th className="p-3">Tipo</th>
                   <th className="p-3 text-right">Valor</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {(extratoBancario?.lancamentos || []).map(l => (
+                {(extratoBancario?.lancamentos || []).filter(l => filtroBanco === 'TODAS' || (l as any).contaBancariaId === filtroBanco).map(l => (
                   <tr key={l.id} className="hover:bg-slate-50/80">
                     <td className="p-3 text-slate-600 font-mono">{formatarData(l.data)}</td>
                     <td className="p-3 font-bold text-slate-900">{l.historico}</td>
+                    <td className="p-3 text-slate-600 whitespace-nowrap">{nomeConta((l as any).contaBancariaId)}</td>
                     <td className="p-3">
                       <span className={`px-2 py-0.5 rounded font-bold text-[10px] ${
                         l.tipo === 'CREDITO' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
@@ -1001,6 +1039,15 @@ if (c) {
                   value={contaForm.dataVencimento}
                   onChange={e => setContaForm({ ...contaForm, dataVencimento: e.target.value })}
                   className="w-full p-2.5 border border-slate-200 rounded-xl"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">Conta Bancária</label>
+                <SelectContaBancaria
+                  value={(contaForm as any).contaBancariaId || ''}
+                  onChange={id => setContaForm({ ...contaForm, contaBancariaId: id })}
+                  contas={contasBancarias}
                 />
               </div>
 
@@ -1144,6 +1191,14 @@ if (c) {
                     value={extratoForm.documento}
                     onChange={e => setExtratoForm({ ...extratoForm, documento: e.target.value })}
                     className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">Conta Bancária</label>
+                  <SelectContaBancaria
+                    value={(extratoForm as any).contaBancariaId || ''}
+                    onChange={id => setExtratoForm({ ...extratoForm, contaBancariaId: id })}
+                    contas={contasBancarias}
                   />
                 </div>
               </div>

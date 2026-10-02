@@ -1,6 +1,7 @@
 import { formatarData } from '../utils/dateHelpers';
 import React, { useState } from 'react';
 import { useCoop } from '../context/CoopContext';
+import { SelectContaBancaria, nomeContaBancaria } from '../components/ContasBancariasTab';
 import {
   TransacaoCapital,
   TipoTransacaoCapital,
@@ -34,6 +35,9 @@ export const CapitalSocialView: React.FC = () => {
     config,
     canWriteModule
   } = useCoop();
+  // Conta bancária onde o capital entra ou sai (Financeiro → Contas Bancárias).
+  const { contasBancarias } = useCoop();
+  const contaPadraoId = (contasBancarias.filter(b => b.ativa !== false).find(b => b.padrao) || contasBancarias.filter(b => b.ativa !== false)[0])?.id || '';
 
   const canWrite = canWriteModule('capital');
   const blockWriteAction = () => {
@@ -79,7 +83,8 @@ export const CapitalSocialView: React.FC = () => {
     observacao: '',
     gerarParcelas: false,
     qtdParcelas: 2,
-    cooperadoDestinoId: ''
+    cooperadoDestinoId: '',
+    contaBancariaId: contaPadraoId as string
   });
 
   // Calculate Totals
@@ -173,6 +178,7 @@ export const CapitalSocialView: React.FC = () => {
       valor: valorNumerico,
       data: formData.data || new Date().toISOString().substring(0, 10),
       formaPagamento: formData.formaPagamento,
+      contaBancariaId: formData.contaBancariaId || undefined,
       numeroDocumento: formData.numeroDocumento || `REC-${Date.now().toString().substring(6)}`,
       status: 'CONCLUIDO',
       observacao: formData.observacao || '',
@@ -325,6 +331,7 @@ export const CapitalSocialView: React.FC = () => {
                     <th className="p-4">Cooperado</th>
                     <th className="p-4">Tipo de Operação</th>
                     <th className="p-4">Forma Pagto</th>
+                    <th className="p-4">Conta Bancária</th>
                     <th className="p-4">Valor (R$)</th>
                     <th className="p-4 text-right">Ações</th>
                   </tr>
@@ -356,6 +363,7 @@ export const CapitalSocialView: React.FC = () => {
                       <td className="p-4 text-slate-700 dark:text-slate-300">
                         {tx.formaPagamento}
                       </td>
+                      <td className="p-4 text-slate-700 dark:text-slate-300 whitespace-nowrap">{nomeContaBancaria(contasBancarias, tx.contaBancariaId)}</td>
 
                       <td className="p-4 font-mono font-bold text-slate-900 dark:text-white text-sm">
                         R$ {tx.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -624,6 +632,16 @@ export const CapitalSocialView: React.FC = () => {
                     <option value="DINHEIRO" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">Dinheiro Espécie</option>
                     <option value="DESCONTO_FOLHA" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">Desconto em Folha</option>
                   </select>
+                </div>
+
+                <div>
+                  <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Conta Bancária</label>
+                  <SelectContaBancaria
+                    value={formData.contaBancariaId || ''}
+                    onChange={id => setFormData({ ...formData, contaBancariaId: id })}
+                    contas={contasBancarias}
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
+                  />
                 </div>
               </div>
 

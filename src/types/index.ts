@@ -211,6 +211,8 @@ export interface TransacaoCapital {
   numeroDocumento: string;
   status: 'CONCLUIDO' | 'PENDENTE' | 'CANCELADO';
   observacao?: string;
+  /** Conta bancária onde o valor entrou ou saiu (Financeiro → Contas Bancárias). */
+  contaBancariaId?: string;
   anexoUrl?: string;
   usuario: string;
   cooperadoDestinoId?: string; // para transferência
@@ -1036,6 +1038,29 @@ export interface ContaPagarReceber {
   formaPagamento?: FormaPagamento;
   comprovanteUrl?: string;
   centroCusto?: string;
+  /** Conta bancária por onde o título é pago ou recebido (Financeiro → Contas Bancárias). */
+  contaBancariaId?: string;
+}
+
+/** Conta bancária da cooperativa (Financeiro → Contas Bancárias). */
+export interface ContaBancaria {
+  id: string;
+  tenantId: string;
+  banco: string;
+  codigoBanco?: string;
+  agencia: string;
+  conta: string;
+  tipo: 'CORRENTE' | 'POUPANCA' | 'PAGAMENTO' | 'APLICACAO' | 'CAIXA';
+  titular?: string;
+  documentoTitular?: string;
+  chavePix?: string;
+  /** Conta analítica do plano de contas (ex.: 11102.0001) usada nos lançamentos contábeis desta conta. */
+  contaContabilCodigo?: string;
+  saldoInicial: number;
+  dataSaldoInicial?: string;
+  ativa: boolean;
+  padrao?: boolean;
+  observacao?: string;
 }
 
 export interface ExtratoBancario {
@@ -1049,6 +1074,7 @@ export interface ExtratoBancario {
   saidasMes: number;
   lancamentos?: {
     id: string;
+    contaBancariaId?: string;
     data: string;
     historico: string;
     tipo: 'CREDITO' | 'DEBITO';
