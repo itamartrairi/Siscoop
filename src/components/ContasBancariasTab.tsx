@@ -56,6 +56,7 @@ const formVazio = {
   titular: '',
   documentoTitular: '',
   chavePix: '',
+  contaContabilCodigo: '',
   saldoInicial: 0,
   dataSaldoInicial: new Date().toISOString().split('T')[0],
   ativa: true,
@@ -64,7 +65,7 @@ const formVazio = {
 };
 
 export const ContasBancariasTab: React.FC<{ canWrite?: boolean; onBlocked?: () => void }> = ({ canWrite = true, onBlocked }) => {
-  const { contasBancarias, addContaBancaria, updateContaBancaria, deleteContaBancaria, contasPagarReceber, extratoBancario, transacoesCapital } = useCoop();
+  const { contasBancarias, addContaBancaria, updateContaBancaria, deleteContaBancaria, contasPagarReceber, extratoBancario, transacoesCapital, planoContas } = useCoop();
   const [editando, setEditando] = useState<ContaBancaria | null>(null);
   const [aberto, setAberto] = useState(false);
   const [form, setForm] = useState({ ...formVazio });
@@ -125,6 +126,7 @@ export const ContasBancariasTab: React.FC<{ canWrite?: boolean; onBlocked?: () =
             titular: b.titular || '',
             documentoTitular: b.documentoTitular || '',
             chavePix: b.chavePix || '',
+            contaContabilCodigo: b.contaContabilCodigo || '',
             dataSaldoInicial: b.dataSaldoInicial || formVazio.dataSaldoInicial,
             observacao: b.observacao || '',
             padrao: !!b.padrao,
@@ -226,6 +228,7 @@ export const ContasBancariasTab: React.FC<{ canWrite?: boolean; onBlocked?: () =
                         {b.banco}
                       </span>
                       {b.chavePix && <span className="block font-normal text-slate-500">PIX: {b.chavePix}</span>}
+                      {b.contaContabilCodigo && <span className="block font-normal text-slate-500">Contábil: {b.contaContabilCodigo}</span>}
                     </td>
                     <td className="p-3 font-mono">
                       {b.agencia} / {b.conta}
@@ -307,6 +310,20 @@ export const ContasBancariasTab: React.FC<{ canWrite?: boolean; onBlocked?: () =
               <div className="md:col-span-3">
                 <label className={rotulo}>Chave PIX</label>
                 <input value={form.chavePix} onChange={e => setForm({ ...form, chavePix: e.target.value })} placeholder="CNPJ, e-mail, telefone ou chave aleatória" className={campo} />
+              </div>
+              <div className="md:col-span-3">
+                <label className={rotulo}>Conta contábil (plano de contas)</label>
+                <select value={form.contaContabilCodigo} onChange={e => setForm({ ...form, contaContabilCodigo: e.target.value })} className={campo}>
+                  <option value="">Usar a conta bancária padrão do plano (11102.0001)</option>
+                  {(planoContas || [])
+                    .filter((c: any) => c.aceitaLancamento && c.ativo !== false && c.codigo.startsWith('111'))
+                    .map((c: any) => (
+                      <option key={c.codigo} value={c.codigo}>
+                        {c.codigo} — {c.nome}
+                      </option>
+                    ))}
+                </select>
+                <p className="mt-1 text-[11px] text-slate-500">Os lançamentos contábeis desta conta (ex.: integralização de capital) usam este código.</p>
               </div>
               <div>
                 <label className={rotulo}>Saldo inicial (R$)</label>
