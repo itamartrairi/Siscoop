@@ -6,11 +6,23 @@
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="icon" type="image/png" href="/cooperativismo.png" />
     <link rel="apple-touch-icon" href="/cooperativismo.png" />
-    <title>SISCOOP AGRO — Sistema de Gestão de Cooperativas Agrícolas</title>
-    <meta name="description" content="Plataforma ERP completa para gestão de cooperativas agrícolas: comercialização de safras (PAA/PNAE), quadro social de cooperados, capital social, NF-e SEFAZ, galpão de estoque, compras de insumos e financeiro." />
-    <meta property="og:title" content="SISCOOP AGRO — Sistema de Gestão de Cooperativas Agrícolas" />
-    <meta property="og:description" content="Plataforma ERP completa para gestão de cooperativas agrícolas: comercialização de safras (PAA/PNAE), quadro social de cooperados, capital social, NF-e SEFAZ, galpão de estoque, compras de insumos e financeiro." />
+    <title>SICOOP PLATFORM - Sistema Integrado de Gestão de Cooperativas</title>
+    <meta name="description" content="Plataforma ERP modular e integrada para gestão completa de cooperativas, SisGepa (PAA/PNAE), SisCont, SisFin, Compras, Estoque, RH, BI e Portais." />
+    <meta property="og:title" content="SICOOP PLATFORM - Sistema Integrado de Gestão de Cooperativas" />
+    <meta property="og:description" content="Plataforma ERP modular e integrada para gestão completa de cooperativas, SisGepa (PAA/PNAE), SisCont, SisFin, Compras, Estoque, RH, BI e Portais." />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#00733c" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Siscoop" />
     <script src="https://apis.google.com/js/api.js" async defer></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

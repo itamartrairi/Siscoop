@@ -3,6 +3,7 @@ import { CoopProvider, useCoop } from './context/CoopContext';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { GlobalSearchModal } from './components/GlobalSearchModal';
+import { PwaInstallPrompt } from './components/PwaInstallPrompt';
 
 // Telas de entrada: carregadas junto com o app porque são a primeira coisa que
 // um visitante não autenticado vê. Esperar um chunk aqui atrasaria o login.
@@ -283,6 +284,9 @@ const MainAppContent: React.FC = () => {
         onClose={() => setIsSearchOpen(false)}
         onSelectModule={setActiveModule}
       />
+
+      {/* Banner / Prompt de Instalação do Aplicativo com Ícone do Cooperativismo */}
+      <PwaInstallPrompt />
     </div>
   );
 };
