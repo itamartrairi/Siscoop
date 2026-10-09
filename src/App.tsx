@@ -192,7 +192,7 @@ const MainAppContent: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 flex flex-col font-sans selection:bg-emerald-500/20 selection:text-emerald-900">
+    <div className="h-screen overflow-hidden bg-white text-slate-900 flex flex-col font-sans selection:bg-emerald-500/20 selection:text-emerald-900">
       {/* Top Header Navigation */}
       <Header
         activeView={activeModule}
