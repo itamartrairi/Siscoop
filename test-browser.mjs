@@ -9,7 +9,10 @@ import puppeteer from 'puppeteer';
       console.log('PAGE LOG ERROR:', msg.text());
     }
   });
-  page.on('pageerror', error => console.log('PAGE ERROR:', error.message));
+  page.on('pageerror', error => {
+    console.log('PAGE ERROR:', error.message);
+    console.log('STACK:', error.stack);
+  });
 
   try {
     console.log('Navigating to local dev server...');

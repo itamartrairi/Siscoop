@@ -4234,6 +4234,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const alvo = motoristas.find(x => x.id === id);
     setMotoristas(prev => prev.filter(m => m.id !== id));
     addAuditLog('CADASTROS', 'EXCLUSAO', `Excluiu motorista ${alvo?.nome || id}`);
+  };
 
   // Contas bancárias da cooperativa (Financeiro → Contas Bancárias).
   const addContaBancaria = (cData: Omit<ContaBancaria, 'id' | 'tenantId'>) => {
@@ -4276,7 +4277,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setContasBancarias(prev => prev.filter(b => b.id !== id));
     addAuditLog('SISFIN', 'EXCLUSAO', `Excluiu conta bancária ${alvo ? `${alvo.banco} ${alvo.agencia}/${alvo.conta}` : id}`);
   };
-  };
+
 
   const addEntregaEscola = (eData: Omit<EntregaEscolaPnae, 'id' | 'tenantId'>) => {
     const newEnt: EntregaEscolaPnae = {
