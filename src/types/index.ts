@@ -32,6 +32,7 @@ export type SystemToolModule =
   | 'estoque'
   | 'rh'
   | 'bi'
+  | 'aluguel-maquinas'
   | 'portal-cooperado'
   | 'portal-escola'
   | 'app-produtor'
@@ -1436,4 +1437,38 @@ export interface OrdemCompra {
   }[];
   condicaoPagamento: string;
   observacoes?: string;
+}
+
+// ==========================================
+// MÁQUINAS E EQUIPAMENTOS (ALUGUEL / LOCAÇÃO)
+// ==========================================
+
+export interface Maquina {
+  id: string;
+  tenantId: string;
+  nome: string;
+  tipo: 'TRATOR' | 'COLHEITADEIRA' | 'PULVERIZADOR' | 'IMPLEMENTO' | 'OUTRO';
+  placaOuChassi?: string;
+  valorHora: number;
+  valorDiaria: number;
+  status: 'DISPONIVEL' | 'ALUGADA' | 'MANUTENCAO' | 'INATIVA';
+  aquisicaoData?: string;
+  vidaUtilAnos?: number;
+}
+
+export interface LocacaoMaquina {
+  id: string;
+  tenantId: string;
+  maquinaId: string;
+  cooperadoId: string;
+  dataInicio: string;
+  dataFim: string;
+  tipoCobranca: 'HORA' | 'DIARIA';
+  quantidadeCobranca: number; // quantidade de horas ou dias
+  valorTotal: number;
+  status: 'ATIVA' | 'CONCLUIDA' | 'CANCELADA';
+  statusPagamento: 'PENDENTE' | 'PAGO';
+  observacoes?: string;
+  financeiroLancamentoId?: string; // vínculo com o financeiro
+  contabilLancamentoId?: string; // vínculo com o contábil
 }

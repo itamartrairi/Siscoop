@@ -29,7 +29,8 @@ import {
   Sprout,
   Database,
   FileText,
-  Share2
+  Share2,
+  Tractor
 } from 'lucide-react';
 import { useCoop } from '../context/CoopContext';
 import { SharePortalsModal } from './SharePortalsModal';
@@ -70,6 +71,7 @@ export const Sidebar: React.FC<Props> = ({
     'estoque': 'estoque',
     'rh': 'rh',
     'bi': 'bi',
+    'aluguel-maquinas': 'aluguel-maquinas',
     'portal-cooperado': 'portal-cooperado',
     'portal-escola': 'portal-escola',
     'app-produtor': 'app-produtor',
@@ -105,6 +107,7 @@ export const Sidebar: React.FC<Props> = ({
         { id: 'fiscal', label: 'Notas Fiscais (NF-e / SEFAZ)', icon: FileText },
         { id: 'estoque', label: 'Galpão & Estoque Agrícola', icon: Boxes },
         { id: 'compras', label: 'Compras & Insumos Agrícolas', icon: ShoppingCart },
+        { id: 'aluguel-maquinas', label: 'Aluguel de Máquinas', icon: Tractor },
         { id: 'sisfin', label: 'Financeiro & Contas da Cooperativa', icon: CircleDollarSign },
         { id: 'siscont', label: 'Contabilidade & Livro Diário', icon: Calculator },
         { id: 'rh', label: 'Colaboradores & Folha', icon: UserCheck },

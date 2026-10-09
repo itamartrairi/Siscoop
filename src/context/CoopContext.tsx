@@ -52,7 +52,9 @@ import {
   NotaFiscal,
   NotaFiscalItem,
   SistemaTributarioNFe,
-  SefazCeConfig
+  SefazCeConfig,
+  Maquina,
+  LocacaoMaquina
 } from '../types';
 import { calcularImpostosItem, ALERTA_CRONOGRAMA_TEXTO } from '../utils/tributacaoReforma';
 import { transmitirParaNuvemFiscal } from '../services/nuvemFiscalService';
@@ -134,6 +136,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissionsMap = {
     estoque: 'ADMIN',
     rh: 'ADMIN',
     bi: 'ADMIN',
+    'aluguel-maquinas': 'ADMIN',
     'portal-cooperado': 'ADMIN',
     'portal-escola': 'ADMIN',
     'app-produtor': 'ADMIN',
@@ -158,6 +161,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissionsMap = {
     estoque: 'READ',
     rh: 'ADMIN',
     bi: 'ADMIN',
+    'aluguel-maquinas': 'ADMIN',
     'portal-cooperado': 'READ',
     'portal-escola': 'READ',
     'app-produtor': 'READ',
@@ -182,6 +186,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissionsMap = {
     estoque: 'WRITE',
     rh: 'READ',
     bi: 'ADMIN',
+    'aluguel-maquinas': 'ADMIN',
     'portal-cooperado': 'NONE',
     'portal-escola': 'NONE',
     'app-produtor': 'NONE',
@@ -206,6 +211,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissionsMap = {
     estoque: 'ADMIN',
     rh: 'ADMIN',
     bi: 'ADMIN',
+    'aluguel-maquinas': 'ADMIN',
     'portal-cooperado': 'READ',
     'portal-escola': 'READ',
     'app-produtor': 'READ',
@@ -230,6 +236,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissionsMap = {
     estoque: 'READ',
     rh: 'WRITE',
     bi: 'READ',
+    'aluguel-maquinas': 'ADMIN',
     'portal-cooperado': 'WRITE',
     'portal-escola': 'READ',
     'app-produtor': 'READ',
@@ -254,6 +261,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissionsMap = {
     estoque: 'READ',
     rh: 'READ',
     bi: 'WRITE',
+    'aluguel-maquinas': 'ADMIN',
     'portal-cooperado': 'NONE',
     'portal-escola': 'NONE',
     'app-produtor': 'NONE',
@@ -278,6 +286,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissionsMap = {
     estoque: 'READ',
     rh: 'READ',
     bi: 'READ',
+    'aluguel-maquinas': 'ADMIN',
     'portal-cooperado': 'NONE',
     'portal-escola': 'NONE',
     'app-produtor': 'NONE',
@@ -302,6 +311,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissionsMap = {
     estoque: 'WRITE',
     rh: 'NONE',
     bi: 'READ',
+    'aluguel-maquinas': 'ADMIN',
     'portal-cooperado': 'READ',
     'portal-escola': 'READ',
     'app-produtor': 'ADMIN',
@@ -326,6 +336,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissionsMap = {
     estoque: 'READ',
     rh: 'READ',
     bi: 'READ',
+    'aluguel-maquinas': 'ADMIN',
     'portal-cooperado': 'READ',
     'portal-escola': 'READ',
     'app-produtor': 'READ',
@@ -350,6 +361,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissionsMap = {
     estoque: 'NONE',
     rh: 'NONE',
     bi: 'NONE',
+    'aluguel-maquinas': 'ADMIN',
     'portal-cooperado': 'ADMIN',
     'portal-escola': 'NONE',
     'app-produtor': 'WRITE',
@@ -374,6 +386,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissionsMap = {
     estoque: 'READ',
     rh: 'NONE',
     bi: 'NONE',
+    'aluguel-maquinas': 'ADMIN',
     'portal-cooperado': 'NONE',
     'portal-escola': 'NONE',
     'app-produtor': 'NONE',
@@ -398,6 +411,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissionsMap = {
     estoque: 'NONE',
     rh: 'NONE',
     bi: 'NONE',
+    'aluguel-maquinas': 'ADMIN',
     'portal-cooperado': 'NONE',
     'portal-escola': 'ADMIN',
     'app-produtor': 'NONE',
@@ -422,6 +436,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissionsMap = {
     estoque: 'NONE',
     rh: 'NONE',
     bi: 'NONE',
+    'aluguel-maquinas': 'ADMIN',
     'portal-cooperado': 'NONE',
     'portal-escola': 'NONE',
     'app-produtor': 'NONE',
@@ -446,6 +461,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissionsMap = {
     estoque: 'READ',
     rh: 'READ',
     bi: 'READ',
+    'aluguel-maquinas': 'ADMIN',
     'portal-cooperado': 'READ',
     'portal-escola': 'READ',
     'app-produtor': 'READ',
@@ -692,6 +708,17 @@ interface CoopContextType {
   testWebhook: (id: string, event: WebhookEvent) => Promise<{ success: boolean; statusCode: number; message: string }>;
   triggerWebhooks: (event: WebhookEvent, payload: any) => Promise<void>;
 
+  // Máquinas e Equipamentos (Aluguel)
+  maquinas: Maquina[];
+  addMaquina: (m: Omit<Maquina, 'id' | 'tenantId'>) => void;
+  updateMaquina: (id: string, m: Partial<Maquina>) => void;
+  deleteMaquina: (id: string) => void;
+
+  locacoesMaquinas: LocacaoMaquina[];
+  addLocacaoMaquina: (l: Omit<LocacaoMaquina, 'id' | 'tenantId'>) => void;
+  updateLocacaoMaquina: (id: string, l: Partial<LocacaoMaquina>) => void;
+  deleteLocacaoMaquina: (id: string) => void;
+  concluirLocacao: (id: string) => void; // Optional helper to conclude rental and process financial/accounting entries
 
   // UI / Navigation helpers
   searchQuery: string;
@@ -1118,6 +1145,8 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [escolasPnae, setEscolasPnae] = useState<EscolaPnae[]>(() => loadPersistedList('escolasPnae', INITIAL_ESCOLAS_PNAE));
   const [motoristas, setMotoristas] = useState<Motorista[]>(() => loadPersistedList('motoristas', []));
   const [contasBancarias, setContasBancarias] = useState<ContaBancaria[]>(() => loadPersistedList('contasBancarias', []));
+  const [maquinas, setMaquinas] = useState<Maquina[]>(() => loadPersistedList('maquinas', []));
+  const [locacoesMaquinas, setLocacoesMaquinas] = useState<LocacaoMaquina[]>(() => loadPersistedList('locacoesMaquinas', []));
   // Conta contábil do banco (Financeiro → Contas Bancárias); sem definição, usa a padrão.
   const codigoBancoContabil = (contaBancariaId?: string) => {
     const doTenant = contasBancarias.filter(b => pertenceAoTenant(b, currentTenant?.id));
@@ -1488,6 +1517,8 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         escolasPnae,
         motoristas,
         contasBancarias,
+        maquinas,
+        locacoesMaquinas,
         entregasEscola,
         romaneiosMotorista,
         lastSavedAt: new Date().toISOString()
@@ -1503,7 +1534,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     programacoesEntrega, prestacoesContas, pedidosProdutorPAA, ordensCompra, planoContas,
     lancamentosContabeis, patrimonio, contasPagarReceber, extratoBancario, solicitacoesCompra,
     fornecedores, estoque, movimentacoesEstoque, funcionariosRH, folhaPagamento, escolasPnae,
-    entregasEscola, romaneiosMotorista, motoristas, contasBancarias
+    entregasEscola, romaneiosMotorista, motoristas, contasBancarias, maquinas, locacoesMaquinas
   ]);
 
   // Mantém users/{uid} no Firestore sincronizado com o tenant do usuário
@@ -3051,6 +3082,8 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
   const tenantMotoristas = motoristas.filter(m => pertenceAoTenant(m, activeTenantId));
   const tenantContasBancarias = contasBancarias.filter(b => pertenceAoTenant(b, activeTenantId));
+  const tenantMaquinas = maquinas.filter(m => pertenceAoTenant(m, activeTenantId));
+  const tenantLocacoesMaquinas = locacoesMaquinas.filter(l => pertenceAoTenant(l, activeTenantId));
   const tenantEntregasEscola = entregasEscola.filter(e => pertenceAoTenant(e, activeTenantId));
   const tenantRomaneiosMotorista = romaneiosMotorista.filter(r => pertenceAoTenant(r, activeTenantId));
   const tenantNotasFiscais = notasFiscais.filter(n => pertenceAoTenant(n, activeTenantId));
@@ -4278,6 +4311,95 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addAuditLog('SISFIN', 'EXCLUSAO', `Excluiu conta bancária ${alvo ? `${alvo.banco} ${alvo.agencia}/${alvo.conta}` : id}`);
   };
 
+  const addMaquina = (mData: Omit<Maquina, 'id' | 'tenantId'>) => {
+    const nova: Maquina = {
+      ...mData,
+      id: `maq-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      tenantId: currentTenant.id,
+    };
+    setMaquinas(prev => [nova, ...prev]);
+    addAuditLog('CADASTROS', 'INCLUSAO', `Cadastrou máquina: ${nova.nome}`);
+  };
+
+  const updateMaquina = (id: string, mData: Partial<Maquina>) => {
+    const alvo = maquinas.find(m => m.id === id);
+    setMaquinas(prev => prev.map(m => (m.id === id ? { ...m, ...mData } : m)));
+    addAuditLog('CADASTROS', 'ALTERACAO', `Atualizou máquina ${alvo?.nome || id}`);
+  };
+
+  const deleteMaquina = (id: string) => {
+    const alvo = maquinas.find(m => m.id === id);
+    const emUso = locacoesMaquinas.some(l => l.maquinaId === id);
+    if (emUso) {
+      alert('Não é possível excluir esta máquina pois ela possui histórico de locações. Considere inativá-la.');
+      return;
+    }
+    setMaquinas(prev => prev.filter(m => m.id !== id));
+    addAuditLog('CADASTROS', 'EXCLUSAO', `Excluiu máquina ${alvo?.nome || id}`);
+  };
+
+  const addLocacaoMaquina = (lData: Omit<LocacaoMaquina, 'id' | 'tenantId'>) => {
+    const nova: LocacaoMaquina = {
+      ...lData,
+      id: `loc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      tenantId: currentTenant.id,
+    };
+    
+    // Atualiza status da máquina para ALUGADA
+    if (nova.status === 'ATIVA') {
+      updateMaquina(nova.maquinaId, { status: 'ALUGADA' });
+    }
+    
+    setLocacoesMaquinas(prev => [nova, ...prev]);
+    addAuditLog('CADASTROS', 'INCLUSAO', `Cadastrou locação de máquina para o cooperado ${nova.cooperadoId}`);
+  };
+
+  const updateLocacaoMaquina = (id: string, lData: Partial<LocacaoMaquina>) => {
+    setLocacoesMaquinas(prev => prev.map(l => (l.id === id ? { ...l, ...lData } : l)));
+    addAuditLog('CADASTROS', 'ALTERACAO', `Atualizou locação ${id}`);
+  };
+
+  const deleteLocacaoMaquina = (id: string) => {
+    const alvo = locacoesMaquinas.find(l => l.id === id);
+    if (alvo?.statusPagamento === 'PAGO' || alvo?.financeiroLancamentoId || alvo?.contabilLancamentoId) {
+      alert('Não é possível excluir uma locação com vínculo financeiro/contábil. Cancele-a.');
+      return;
+    }
+    setLocacoesMaquinas(prev => prev.filter(l => l.id !== id));
+    if (alvo?.status === 'ATIVA') {
+      updateMaquina(alvo.maquinaId, { status: 'DISPONIVEL' });
+    }
+    addAuditLog('CADASTROS', 'EXCLUSAO', `Excluiu locação ${id}`);
+  };
+
+  const concluirLocacao = (id: string) => {
+    const locacao = locacoesMaquinas.find(l => l.id === id);
+    if (!locacao || locacao.status !== 'ATIVA') return;
+    
+    // 1. Atualizar status da locação e da máquina
+    updateLocacaoMaquina(id, { status: 'CONCLUIDA' });
+    updateMaquina(locacao.maquinaId, { status: 'DISPONIVEL' });
+    
+    // 2. Gerar lançamento financeiro (Conta a Receber)
+    const maquina = maquinas.find(m => m.id === locacao.maquinaId);
+    const descricao = `Locação de Máquina (${maquina?.nome || 'Trator'})`;
+    
+    const contaId = addContaPagarReceber({
+      tipo: 'RECEBER',
+      status: 'PENDENTE',
+      descricao,
+      valor: locacao.valorTotal,
+      dataVencimento: new Date().toISOString().split('T')[0],
+      categoria: 'Receita Operacional',
+      subcategoria: 'Locação de Máquinas',
+      classificacao: 'VARIAVEL',
+      cooperadoId: locacao.cooperadoId,
+      origem: 'SISTEMA'
+    });
+    
+    updateLocacaoMaquina(id, { financeiroLancamentoId: contaId });
+    addAuditLog('SISFIN', 'INCLUSAO', `Gerou conta a receber automática da locação ${id}`);
+  };
 
   const addEntregaEscola = (eData: Omit<EntregaEscolaPnae, 'id' | 'tenantId'>) => {
     const newEnt: EntregaEscolaPnae = {
@@ -5109,6 +5231,8 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         motoristas: tenantMotoristas,
         contasBancarias: tenantContasBancarias,
         addContaBancaria,
+        maquinas: tenantMaquinas, addMaquina, updateMaquina, deleteMaquina,
+        locacoesMaquinas: tenantLocacoesMaquinas, addLocacaoMaquina, updateLocacaoMaquina, deleteLocacaoMaquina, concluirLocacao,
         updateContaBancaria,
         deleteContaBancaria,
         addMotorista,
