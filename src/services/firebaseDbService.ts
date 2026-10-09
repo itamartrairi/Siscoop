@@ -34,10 +34,6 @@ export async function checkFirestoreDatabaseConnection(): Promise<FirestoreStatu
   const databaseId = firebaseConfig.firestoreDatabaseId || '(default)';
 
   try {
-    // Write test document to confirm write access
-    const testDoc = doc(db, 'test', 'ping');
-    await setDoc(testDoc, { ping: true, timestamp: new Date().toISOString() });
-
     // Fetch counts from key collections
     const collectionsToCheck = [
       'cooperados',
@@ -46,6 +42,14 @@ export async function checkFirestoreDatabaseConnection(): Promise<FirestoreStatu
       'assembleias',
       'backups'
     ];
+
+    // Test read access to confirm connection (according to firestore rules, test/connection is readable)
+    try {
+      const testDoc = doc(db, 'test', 'connection');
+      await getDoc(testDoc);
+    } catch (e) {
+      console.warn('Test document read failed, but continuing:', e);
+    }
 
     const collectionsStatus: { name: string; count: number }[] = [];
 
@@ -375,9 +379,8 @@ export async function saveTransacaoCapitalToFirestore(transacao: TransacaoCapita
  * e sobrescrevia os dados já isolados por tenant vindos do Context.
  */
 export function subscribeToCooperados(callback: (data: Cooperado[]) => void, tenantId?: string): Unsubscribe {
-  const target = tenantId
-    ? query(collection(db, 'cooperados'), where('tenantId', '==', tenantId))
-    : collection(db, 'cooperados');
+  if (!tenantId) return () => {};
+  const target = query(collection(db, 'cooperados'), where('tenantId', '==', tenantId));
   return onSnapshot(
     target,
     snapshot => {
@@ -385,7 +388,7 @@ export function subscribeToCooperados(callback: (data: Cooperado[]) => void, ten
       snapshot.forEach(docSnap => {
         list.push(docSnap.data() as Cooperado);
       });
-      callback(tenantId ? list.filter(c => !c.tenantId || c.tenantId === tenantId) : list);
+      callback(list);
     },
     error => {
       console.warn('[Firestore Realtime] Error on Cooperados listener:', error);
@@ -397,9 +400,8 @@ export function subscribeToCooperados(callback: (data: Cooperado[]) => void, ten
  * Subscribes to real-time updates for Transações de Capital from Firestore
  */
 export function subscribeToTransacoesCapital(callback: (data: TransacaoCapital[]) => void, tenantId?: string): Unsubscribe {
-  const target = tenantId
-    ? query(collection(db, 'transacoesCapital'), where('tenantId', '==', tenantId))
-    : collection(db, 'transacoesCapital');
+  if (!tenantId) return () => {};
+  const target = query(collection(db, 'transacoesCapital'), where('tenantId', '==', tenantId));
   return onSnapshot(
     target,
     snapshot => {
@@ -407,7 +409,7 @@ export function subscribeToTransacoesCapital(callback: (data: TransacaoCapital[]
       snapshot.forEach(docSnap => {
         list.push(docSnap.data() as TransacaoCapital);
       });
-      callback(tenantId ? list.filter(t => !t.tenantId || t.tenantId === tenantId) : list);
+      callback(list);
     },
     error => {
       console.warn('[Firestore Realtime] Error on TransacoesCapital listener:', error);
@@ -419,9 +421,8 @@ export function subscribeToTransacoesCapital(callback: (data: TransacaoCapital[]
  * Subscribes to real-time updates for Contas Financeiras from Firestore
  */
 export function subscribeToContasFinanceiras(callback: (data: ContaPagarReceber[]) => void, tenantId?: string): Unsubscribe {
-  const target = tenantId
-    ? query(collection(db, 'contasFinanceiras'), where('tenantId', '==', tenantId))
-    : collection(db, 'contasFinanceiras');
+  if (!tenantId) return () => {};
+  const target = query(collection(db, 'contasFinanceiras'), where('tenantId', '==', tenantId));
   return onSnapshot(
     target,
     snapshot => {
@@ -429,7 +430,7 @@ export function subscribeToContasFinanceiras(callback: (data: ContaPagarReceber[
       snapshot.forEach(docSnap => {
         list.push(docSnap.data() as ContaPagarReceber);
       });
-      callback(tenantId ? list.filter(c => !c.tenantId || c.tenantId === tenantId) : list);
+      callback(list);
     },
     error => {
       console.warn('[Firestore Realtime] Error on ContasFinanceiras listener:', error);
