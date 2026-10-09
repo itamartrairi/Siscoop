@@ -3082,8 +3082,8 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
   const tenantMotoristas = motoristas.filter(m => pertenceAoTenant(m, activeTenantId));
   const tenantContasBancarias = contasBancarias.filter(b => pertenceAoTenant(b, activeTenantId));
-  const tenantMaquinas = maquinas.filter(m => pertenceAoTenant(m, activeTenantId));
-  const tenantLocacoesMaquinas = locacoesMaquinas.filter(l => pertenceAoTenant(l, activeTenantId));
+  const tenantMaquinas = (maquinas || []).filter(m => pertenceAoTenant(m, activeTenantId));
+  const tenantLocacoesMaquinas = (locacoesMaquinas || []).filter(l => pertenceAoTenant(l, activeTenantId));
   const tenantEntregasEscola = entregasEscola.filter(e => pertenceAoTenant(e, activeTenantId));
   const tenantRomaneiosMotorista = romaneiosMotorista.filter(r => pertenceAoTenant(r, activeTenantId));
   const tenantNotasFiscais = notasFiscais.filter(n => pertenceAoTenant(n, activeTenantId));

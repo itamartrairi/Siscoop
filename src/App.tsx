@@ -41,7 +41,7 @@ const SisGepaView = carregar(() => import('./views/SisGepaView'), 'SisGepaView')
 const SisContView = carregar(() => import('./views/SisContView'), 'SisContView');
 const SisFinView = carregar(() => import('./views/SisFinView'), 'SisFinView');
 const ComprasView = carregar(() => import('./views/ComprasView'), 'ComprasView');
-const AluguelMaquinasView = carregar(() => import('./views/AluguelMaquinasView').then(m => ({ default: m.AluguelMaquinasView })), 'AluguelMaquinasView');
+const AluguelMaquinasView = carregar(() => import('./views/AluguelMaquinasView'), 'AluguelMaquinasView');
 const EstoqueView = carregar(() => import('./views/EstoqueView'), 'EstoqueView');
 const RhView = carregar(() => import('./views/RhView'), 'RhView');
 const BiView = carregar(() => import('./views/BiView'), 'BiView');
