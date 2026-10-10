@@ -1304,7 +1304,7 @@ export const CadastrosView: React.FC = () => {
 
       {/* Tab 4: Programas Governamentais */}
       {activeTab === 'programas' && (
-        <div className="space-y-4">
+        <div className="space-y-4 pt-6">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="relative flex-1 w-full">
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
