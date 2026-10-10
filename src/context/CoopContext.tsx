@@ -1681,6 +1681,8 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         cotaParteMinima: result.cotaParteMinima ?? prev.cotaParteMinima,
         emailOficial: result.email || prev.emailOficial,
         telefoneOficial: result.telefone || prev.telefoneOficial,
+        inscricaoEstadual: result.inscricaoEstadual ?? prev.inscricaoEstadual,
+        inscricaoMunicipal: result.inscricaoMunicipal ?? prev.inscricaoMunicipal,
         enderecoSede: {
           ...prev.enderecoSede,
           cep: result.cep || prev.enderecoSede?.cep,
@@ -2857,6 +2859,8 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         estado: newConfig.estado ?? currentTenant.estado,
         cotaParteValor: newConfig.cotaParteValor ?? currentTenant.cotaParteValor,
         cotaParteMinima: newConfig.cotaParteMinima ?? currentTenant.cotaParteMinima,
+        inscricaoEstadual: newConfig.inscricaoEstadual ?? currentTenant.inscricaoEstadual,
+        inscricaoMunicipal: newConfig.inscricaoMunicipal ?? currentTenant.inscricaoMunicipal,
       };
       setCurrentTenant(updatedTenant);
       setTenants(prev => prev.map(t => t.id === updatedTenant.id ? updatedTenant : t));
