@@ -1353,6 +1353,7 @@ export const CadastrosView: React.FC = () => {
               </div>
             </div>
           ))}
+          </div>
         </div>
       )}
 
