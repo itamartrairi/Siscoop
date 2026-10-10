@@ -1229,8 +1229,20 @@ export const CadastrosView: React.FC = () => {
       {/* Tab 2: Produtos Agropecuários */}
       {activeTab === 'produtos' && (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-6 space-y-4 shadow-xs">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-4">
+            <div className="relative flex-1 w-full">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+              <input
+                type="text"
+                placeholder="Buscar por produto ou categoria..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {produtos.map(p => (
+            {produtos.filter(p => p.nome.toLowerCase().includes(searchTerm.toLowerCase()) || p.categoria.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
               <div key={p.id} className="p-4 rounded-xl border border-slate-200/80 bg-slate-50/50 space-y-2 relative group">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-md">
@@ -1292,8 +1304,21 @@ export const CadastrosView: React.FC = () => {
 
       {/* Tab 4: Programas Governamentais */}
       {activeTab === 'programas' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {programas.map(prog => (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="relative flex-1 w-full">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+              <input
+                type="text"
+                placeholder="Buscar por programa..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {programas.filter(prog => prog.nome.toLowerCase().includes(searchTerm.toLowerCase()) || (prog.tipo && prog.tipo.toLowerCase().includes(searchTerm.toLowerCase()))).map(prog => (
             <div key={prog.id} className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-3 relative">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-lg">
@@ -1342,6 +1367,18 @@ export const CadastrosView: React.FC = () => {
             recipientLabel="escolas"
           /> */}
         <div className="bg-white rounded-2xl border border-slate-200/80 p-6 space-y-4 shadow-xs">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="relative flex-1 w-full">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+              <input
+                type="text"
+                placeholder="Buscar por escola ou INEP..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
@@ -1354,7 +1391,7 @@ export const CadastrosView: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {escolasPnae.map(e => (
+                {escolasPnae.filter(e => e.nomeEscola.toLowerCase().includes(searchTerm.toLowerCase()) || (e.inepCodigo && e.inepCodigo.includes(searchTerm))).map(e => (
                   <tr key={e.id} className="hover:bg-slate-50/80">
                     <td className="p-3 font-bold text-slate-900">
                       {e.nomeEscola}
@@ -1427,6 +1464,18 @@ export const CadastrosView: React.FC = () => {
           /> */}
 
           <div className="bg-white rounded-2xl border border-slate-200/80 p-6 space-y-4 shadow-xs">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="relative flex-1 w-full">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                <input
+                  type="text"
+                  placeholder="Buscar por motorista..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>
@@ -1447,7 +1496,7 @@ export const CadastrosView: React.FC = () => {
                         Nenhum motorista cadastrado. Clique em "Novo Motorista" ou compartilhe o link do App do Motorista acima para que ele se cadastre.
                       </td>
                     </tr>
-                  ) : motoristas.map(m => {
+                  ) : motoristas.filter(m => m.nome.toLowerCase().includes(searchTerm.toLowerCase())).map(m => {
                     const entregas = getEntregasDoMotorista(m);
                     return (
                       <tr key={m.id} className="hover:bg-slate-50/80">
