@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import QRCode from 'qrcode';
 import {
   Share2,
@@ -209,9 +210,9 @@ export const SharePortalsModal: React.FC<Props> = ({ isOpen, onClose, initialPor
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-6xl max-h-full shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-6xl max-h-[calc(100dvh-2rem)] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
         {/* Header */}
         <div className="p-5 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/70 dark:bg-slate-800/40 shrink-0">
           <div className="flex items-center gap-3">
@@ -492,6 +493,7 @@ export const SharePortalsModal: React.FC<Props> = ({ isOpen, onClose, initialPor
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
