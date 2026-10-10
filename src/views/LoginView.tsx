@@ -203,74 +203,8 @@ export const LoginView: React.FC<Props> = ({ onLoginSuccess, onOpenCooperativeSe
                   <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
                   <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                 </svg>
-                Continuar com o Google
+                {isLoading ? 'Autenticando...' : 'Continuar com o Google'}
               </button>
-
-              <div className="login-divider">Ou entre com seu email</div>
-
-              <form onSubmit={handleEmailLogin} className="login-form" style={{ gap: '16px' }}>
-                <div className="login-field-group">
-                  <div className="login-label-row">
-                    <label className="login-label">E-mail Corporativo</label>
-                  </div>
-                  <div className="login-input-wrap">
-                    <Mail className="login-input-icon" />
-                    <input
-                      type="email"
-                      required
-                      value={loginEmail}
-                      onChange={e => setLoginEmail(e.target.value)}
-                      placeholder="seu.email@cooperativa.com.br"
-                      className="login-input"
-                    />
-                  </div>
-                </div>
-
-                <div className="login-field-group">
-                  <div className="login-label-row">
-                    <label className="login-label">Senha de Acesso</label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setRecoveryEmail(loginEmail);
-                        setActiveTab('forgot');
-                        setErrorMessage(null);
-                        setSuccessMessage(null);
-                      }}
-                      className="login-forgot-btn"
-                    >
-                      Esqueceu a senha?
-                    </button>
-                  </div>
-                  <div className="login-input-wrap">
-                    <Lock className="login-input-icon" />
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      required
-                      value={loginPassword}
-                      onChange={e => setLoginPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="login-input"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="login-input-toggle"
-                    >
-                      {showPassword ? 'Ocultar' : 'Exibir'}
-                    </button>
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="login-submit-btn"
-                >
-                  <span>{isLoading ? 'Autenticando...' : 'Entrar no SisCoope'}</span>
-                  <ArrowRight size={16} />
-                </button>
-              </form>
             </div>
           )}
 
