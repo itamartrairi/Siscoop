@@ -212,7 +212,7 @@ export function converterParaPayloadNuvemFiscal(nf: NotaFiscal, config: SefazCeC
       det: (nf.itens || []).map((item, index) => ({
         nItem: index + 1,
         prod: {
-          cProd: item.codigoProduto || `PROD-${index + 1}`,
+          cProd: item.produtoId || `PROD-${index + 1}`,
           cEAN: 'SEM GTIN',
           xProd: item.descricao,
           NCM: (item.ncm || '08013100').replace(/\D/g, ''),

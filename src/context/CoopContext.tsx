@@ -4430,7 +4430,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       dataVencimento: new Date().toISOString().split('T')[0],
       categoria: 'Receita Operacional',
       subcategoria: 'Locação de Máquinas',
-      classificacao: 'VARIAVEL',
+      classificacaoDespesa: 'VARIAVEL',
       cooperadoId: locacao.cooperadoId,
       origem: 'SISTEMA'
     });
