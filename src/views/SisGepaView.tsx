@@ -3840,54 +3840,57 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
           <span>Relatórios de Pedidos e Entregas</span>
         </button>
       </div>
+
+      {/* Dynamic Sticky Sub-Headers */}
+      {activeTab === 'chamadas' && (
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+              <Building className="w-5 h-5 text-emerald-700" />
+              Chamadas Públicas e Editais de Compra Institucional
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Gerencie os editais do PNAE e PAA com escolas contempladas, produtos, preços máximos, fontes de recursos e importação de planilhas XLS.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => baixarModeloPlanilhaChamadaPublica()}
+              className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 border border-slate-300 shadow-xs cursor-pointer"
+              title="Baixar modelo em Excel para preenchimento da Chamada Pública"
+            >
+              <Download className="w-4 h-4 text-emerald-700" />
+              <span>Baixar Modelo (.xlsx)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowImportChamadaModal(true)}
+              className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 border border-emerald-300 shadow-xs cursor-pointer"
+              title="Fazer upload de planilha XLS/XLSX com dados do edital"
+            >
+              <UploadCloud className="w-4 h-4 text-emerald-700" />
+              <span>Importar Planilha Edital</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleOpenChamada()}
+              className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 shadow-md cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Nova Chamada Pública</span>
+            </button>
+          </div>
+        </div>
+      )}
       </div>
 
       {/* Tab Chamadas Públicas */}
       {activeTab === 'chamadas' && (
         <div className="space-y-4">
-          {/* Top Actions Toolbar */}
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-                <Building className="w-5 h-5 text-emerald-700" />
-                Chamadas Públicas e Editais de Compra Institucional
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Gerencie os editais do PNAE e PAA com escolas contempladas, produtos, preços máximos, fontes de recursos e importação de planilhas XLS.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => baixarModeloPlanilhaChamadaPublica()}
-                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 border border-slate-300 shadow-xs cursor-pointer"
-                title="Baixar modelo em Excel para preenchimento da Chamada Pública"
-              >
-                <Download className="w-4 h-4 text-emerald-700" />
-                <span>Baixar Modelo (.xlsx)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setShowImportChamadaModal(true)}
-                className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 border border-emerald-300 shadow-xs cursor-pointer"
-                title="Fazer upload de planilha XLS/XLSX com dados do edital"
-              >
-                <UploadCloud className="w-4 h-4 text-emerald-700" />
-                <span>Importar Planilha Edital</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleOpenChamada()}
-                className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 shadow-md cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Nova Chamada Pública</span>
-              </button>
-            </div>
-          </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {filteredChamadas.length === 0 ? (
