@@ -207,8 +207,8 @@ export const CapitalSocialView: React.FC = () => {
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      {/* Sticky Header Group */}
-      <div className="sticky top-0 z-30 -mt-6 pt-6 -mx-6 px-6 bg-slate-50/95 dark:bg-slate-900/95 backdrop-blur-sm pb-4 space-y-6 shadow-sm border-b border-slate-200/50 dark:border-slate-800/50">
+      {/* Non-Sticky Header Group */}
+      <div className="space-y-6 pb-2">
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
@@ -269,8 +269,11 @@ export const CapitalSocialView: React.FC = () => {
               {allParcelas.filter(p => p.status === 'PAGO').length} quitadas • {allParcelas.filter(p => p.status === 'PENDENTE').length} pendentes
             </div>
           </div>
-        </div>
+      </div>
+      </div>
 
+      {/* Sticky Header Group for Tabs */}
+      <div className="sticky top-0 z-30 -mt-6 pt-6 -mx-6 px-6 bg-slate-50/95 dark:bg-slate-900/95 backdrop-blur-sm pb-4 space-y-4 shadow-sm border-b border-slate-200/50 dark:border-slate-800/50">
         {/* Tabs for Extrato vs Parcelas */}
         <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-700 pb-2">
           <button
