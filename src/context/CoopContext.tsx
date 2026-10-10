@@ -4431,8 +4431,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       categoria: 'Receita Operacional',
       subcategoria: 'Locação de Máquinas',
       classificacaoDespesa: 'VARIAVEL',
-      cooperadoId: locacao.cooperadoId,
-      origem: 'SISTEMA'
+      pessoaNome: cooperados.find(c => c.id === locacao.cooperadoId)?.nome || 'Cooperado',
     });
     
     updateLocacaoMaquina(id, { financeiroLancamentoId: contaId });
