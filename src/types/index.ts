@@ -1370,6 +1370,8 @@ export interface PedidoProdutorPAA {
   itens: ItemPedidoProdutor[];
   valorTotalPedido: number;
   observacoes?: string;
+  pagamentoProdutorRealizado?: boolean;
+  dataPagamentoProdutor?: string;
   qtdeEntregas?: number;
   cronogramaEntregas?: Array<{
     numero: number;

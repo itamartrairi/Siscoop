@@ -103,7 +103,9 @@ import {
   sendPasswordResetEmail,
   signOut,
   updateProfile,
-  onAuthStateChanged
+  onAuthStateChanged,
+  signInWithPopup,
+  googleProvider
 } from '../services/firebase';
 import { checkAndRunWeeklyBackupIfNeeded } from '../services/firebaseBackupService';
 import {
@@ -1901,7 +1903,39 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const loginWithGoogle = async () => {
-    return { success: false, requiresCooperativeSetup: false, error: 'O login via Google foi desativado.' };
+    try {
+      const userCredential = await signInWithPopup(auth, googleProvider);
+      if (userCredential?.user) {
+        const fbUser = userCredential.user;
+        const loggedInUser: User = {
+          id: fbUser.uid,
+          name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Administrador Google',
+          email: fbUser.email || '',
+          role: papelDoUsuario(fbUser.email),
+          avatar: fbUser.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100',
+          tenantId: currentTenant?.id || '',
+          active: true,
+          lastLogin: new Date().toISOString()
+        };
+        setCurrentUser(loggedInUser);
+        setIsAuthenticated(true);
+
+        const userTenant = tenants.find(t => t.id === loggedInUser.tenantId) || tenants.find(t => t.ownerUid === loggedInUser.id);
+        if (userTenant) {
+          setCurrentTenant(userTenant);
+          setIsPendingCooperativeSetup(false);
+        } else {
+          setIsPendingCooperativeSetup(true);
+        }
+
+        addAuditLog('AUTH', 'LOGIN', `Usuário ${loggedInUser.name} realizou login via Google Auth (${loggedInUser.email})`);
+        return { success: true, requiresCooperativeSetup: !userTenant };
+      }
+    } catch (error: any) {
+      console.warn('Tentativa de login Google Firebase Auth:', error?.message);
+      return { success: false, requiresCooperativeSetup: false, error: 'Login via Google cancelado ou falhou.' };
+    }
+    return { success: false, requiresCooperativeSetup: false, error: 'O login via Google não retornou usuário.' };
   };
 
   const registerUser = async (name: string, email: string, pass: string, role: UserRole) => {

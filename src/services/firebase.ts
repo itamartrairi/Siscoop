@@ -8,6 +8,7 @@ import {
   signOut,
   updateProfile,
   onAuthStateChanged,
+  signInWithPopup,
   User as FirebaseUser
 } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
@@ -95,6 +96,7 @@ export {
   sendPasswordResetEmail,
   signOut,
   updateProfile,
-  onAuthStateChanged
+  onAuthStateChanged,
+  signInWithPopup
 };
 export type { FirebaseUser };

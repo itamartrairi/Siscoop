@@ -1578,8 +1578,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
     return `PED-${proximoSequencial}/${anoAtual}`;
   };
 
-  // Garante que pedidos da mesma Chamada Pública / Edital compartilhem o mesmo
-  // número de pedido, independentemente da fonte de recursos utilizada.
   const getNumeroPedidoParaChamada = (chamadaId?: string, numeroEdital?: string): string => {
     if (chamadaId || numeroEdital) {
       const pedidoExistente = pedidosProdutorPAA.find(p =>
@@ -1591,6 +1589,68 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
       }
     }
     return gerarProximoNumeroPedido();
+  };
+
+  const handleRegistrarPagamentoProdutor = (pedido: PedidoProdutorPAA) => {
+    if (pedido.pagamentoProdutorRealizado) return;
+    
+    const confirmMessage = `Confirma o pagamento ao produtor referente ao pedido ${pedido.numeroPedido}?\n\nIsso irá registrar o pagamento e gerar as retenções no financeiro (FUNRURAL e Taxa Administrativa) com data de hoje.`;
+    if (!confirm(confirmMessage)) return;
+
+    let updatedPedido = { 
+      ...pedido, 
+      pagamentoProdutorRealizado: true, 
+      dataPagamentoProdutor: new Date().toISOString() 
+    };
+
+    const funruralValorTotal = pedido.funruralValorTotal || 0;
+    const taxaAdmValorTotal = pedido.taxaAdministrativaValorTotal || 0;
+    const nomesProdutoresEnvolvidos = Array.from(new Set(pedido.itens.map(it => it.produtorNome))).join(', ');
+    const dataPrimeiraEntrega = pedido.cronogramaEntregas?.[0]?.dataPrevista || pedido.dataPrevistaEntrega;
+
+    // Registra FUNRURAL no SisFin
+    if (pedido.funruralAtivo && funruralValorTotal > 0 && !pedido.funruralContaPagarId) {
+      const dataVencimentoFunrural = (() => {
+        const d = new Date(dataPrimeiraEntrega + 'T12:00:00');
+        d.setMonth(d.getMonth() + 1, 20); // vencimento padrão: dia 20 do mês seguinte
+        return d.toISOString().split('T')[0];
+      })();
+      const descricaoFunrural = `FUNRURAL retido — Pedido ${pedido.numeroPedido} (${nomesProdutoresEnvolvidos})`;
+      
+      const novoId = addContaPagarReceber({
+        tipo: 'PAGAR',
+        descricao: descricaoFunrural,
+        pessoaNome: 'INSS / Receita Federal (FUNRURAL)',
+        categoria: 'Impostos e Retenções',
+        valor: funruralValorTotal,
+        dataEmissao: updatedPedido.dataPagamentoProdutor.split('T')[0],
+        dataVencimento: dataVencimentoFunrural,
+        status: 'PENDENTE',
+        centroCusto: pedido.programaNome || pedido.programa
+      });
+      updatedPedido.funruralContaPagarId = novoId;
+    }
+
+    // Registra Taxa Adm no SisFin
+    if (pedido.taxaAdministrativaAtiva && taxaAdmValorTotal > 0 && !pedido.taxaAdministrativaContaReceberId) {
+      const descricaoTaxaAdm = `Taxa administrativa (${pedido.taxaAdministrativaPercentual}%) — Pedido ${pedido.numeroPedido} (${nomesProdutoresEnvolvidos})`;
+      
+      const novoId = addContaPagarReceber({
+        tipo: 'RECEBER',
+        descricao: descricaoTaxaAdm,
+        pessoaNome: 'Cooperativa (receita própria)',
+        categoria: 'Taxa Administrativa PAA/PNAE',
+        valor: taxaAdmValorTotal,
+        dataEmissao: updatedPedido.dataPagamentoProdutor.split('T')[0],
+        dataVencimento: dataPrimeiraEntrega,
+        status: 'PENDENTE',
+        centroCusto: pedido.programaNome || pedido.programa
+      });
+      updatedPedido.taxaAdministrativaContaReceberId = novoId;
+    }
+    
+    updatePedidoProdutorPAA(pedido.id, updatedPedido);
+    playActionCompleteSound();
   };
 
   const handleOpenPedido = (p?: PedidoProdutorPAA) => {
@@ -2404,63 +2464,31 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
     const nomesProdutoresEnvolvidos = Array.from(new Set(pedidoItens.map(it => it.produtorNome))).join(', ');
 
     if (pedidoForm.funruralAtivo && funruralValorTotal > 0) {
-      const dataVencimentoFunrural = (() => {
-        const d = new Date(dataPrimeiraEntrega + 'T12:00:00');
-        d.setMonth(d.getMonth() + 1, 20); // vencimento padrão: dia 20 do mês seguinte
-        return d.toISOString().split('T')[0];
-      })();
-      const descricaoFunrural = `FUNRURAL retido — Pedido ${payload.numeroPedido} (${nomesProdutoresEnvolvidos})`;
-
       if (payload.funruralContaPagarId) {
+        const dataVencimentoFunrural = (() => {
+          const d = new Date(dataPrimeiraEntrega + 'T12:00:00');
+          d.setMonth(d.getMonth() + 1, 20); // vencimento padrão: dia 20 do mês seguinte
+          return d.toISOString().split('T')[0];
+        })();
+        const descricaoFunrural = `FUNRURAL retido — Pedido ${payload.numeroPedido} (${nomesProdutoresEnvolvidos})`;
         updateContaPagarReceber(payload.funruralContaPagarId, {
           descricao: descricaoFunrural,
           valor: funruralValorTotal,
           dataVencimento: dataVencimentoFunrural,
           centroCusto: payload.programaNome || payload.programa
         });
-      } else {
-        const novoId = addContaPagarReceber({
-          tipo: 'PAGAR',
-          descricao: descricaoFunrural,
-          pessoaNome: 'INSS / Receita Federal (FUNRURAL)',
-          categoria: 'Impostos e Retenções',
-          valor: funruralValorTotal,
-          dataEmissao: pedidoForm.dataPedido,
-          dataVencimento: dataVencimentoFunrural,
-          status: 'PENDENTE',
-          centroCusto: payload.programaNome || payload.programa
-        });
-        payload.funruralContaPagarId = novoId;
       }
     }
 
-    // Registra (ou atualiza) a taxa administrativa retida como conta a
-    // RECEBER no SisFin — diferente do FUNRURAL, essa taxa é receita
-    // própria da cooperativa (custeio da gestão do PAA/PNAE), não um
-    // repasse a terceiros. Mesma lógica de criar/atualizar sem duplicar.
     if (pedidoForm.taxaAdministrativaAtiva && taxaAdmValorTotal > 0) {
-      const descricaoTaxaAdm = `Taxa administrativa (${taxaAdmPercentualFinal}%) — Pedido ${payload.numeroPedido} (${nomesProdutoresEnvolvidos})`;
-
       if (payload.taxaAdministrativaContaReceberId) {
+        const descricaoTaxaAdm = `Taxa administrativa (${taxaAdmPercentualFinal}%) — Pedido ${payload.numeroPedido} (${nomesProdutoresEnvolvidos})`;
         updateContaPagarReceber(payload.taxaAdministrativaContaReceberId, {
           descricao: descricaoTaxaAdm,
           valor: taxaAdmValorTotal,
           dataVencimento: dataPrimeiraEntrega,
           centroCusto: payload.programaNome || payload.programa
         });
-      } else {
-        const novoId = addContaPagarReceber({
-          tipo: 'RECEBER',
-          descricao: descricaoTaxaAdm,
-          pessoaNome: 'Cooperativa (receita própria)',
-          categoria: 'Taxa Administrativa PAA/PNAE',
-          valor: taxaAdmValorTotal,
-          dataEmissao: pedidoForm.dataPedido,
-          dataVencimento: dataPrimeiraEntrega,
-          status: 'PENDENTE',
-          centroCusto: payload.programaNome || payload.programa
-        });
-        payload.taxaAdministrativaContaReceberId = novoId;
       }
     }
 
@@ -4525,6 +4553,22 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                             title="Relatório PDF e Envio de Pedidos aos Produtores via WhatsApp"
                           >
                             <FileText className="w-3 h-3" /> WhatsApp / PDF
+                          </button>
+                          
+                          <button
+                            onClick={() => handleRegistrarPagamentoProdutor(p)}
+                            disabled={!!p.pagamentoProdutorRealizado}
+                            className={`px-2 py-1 font-bold rounded-lg text-[10px] flex items-center gap-1 transition-all shadow-xs ${
+                              p.pagamentoProdutorRealizado
+                                ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                                : 'bg-teal-600 hover:bg-teal-700 text-white cursor-pointer'
+                            }`}
+                            title={p.pagamentoProdutorRealizado
+                              ? `Pagamento ao produtor registrado em ${new Date(p.dataPagamentoProdutor!).toLocaleDateString('pt-BR')}`
+                              : 'Registrar pagamento ao produtor (Gera Funrural e Taxa Adm no SisFin)'}
+                          >
+                            {p.pagamentoProdutorRealizado ? <CheckCircle2 className="w-3 h-3" /> : <DollarSign className="w-3 h-3" />}
+                            {p.pagamentoProdutorRealizado ? 'Produtor Pago' : 'Pagar Produtor'}
                           </button>
                           {(() => {
                             const nfEntradaExistente = notasFiscais.find(nf => nf.pedidoId === p.id && nf.tipoOperacao === 'ENTRADA_PRODUTOR');
