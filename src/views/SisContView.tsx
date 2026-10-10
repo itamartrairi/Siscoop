@@ -304,71 +304,68 @@ if (p) {
         </div>
       </div>
 
-      {/* Sticky Header Group */}
-      <div className="sticky top-0 z-30 -mt-6 pt-6 lg:-mt-8 lg:pt-8 -mx-6 px-6 lg:-mx-8 lg:px-8 bg-slate-50/95 backdrop-blur-sm pb-2 shadow-sm border-b border-slate-200/50">
-        {/* Tabs */}
-        <div className="flex border-b border-slate-200 gap-2 overflow-x-auto pt-2">
-          <button
-            onClick={() => setActiveTab('lancamentos')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-              activeTab === 'lancamentos'
-                ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-                : 'border-transparent text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <FileSpreadsheet className="w-4 h-4" /> Lançamentos Contábeis ({lancamentosContabeis.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('plano')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-              activeTab === 'plano'
-                ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-                : 'border-transparent text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <Calculator className="w-4 h-4" /> Plano de Contas ({planoContas.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('balancete')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-              activeTab === 'balancete'
-                ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-                : 'border-transparent text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <TrendingUp className="w-4 h-4" /> Balancete de Verificação
-          </button>
-          <button
-            onClick={() => setActiveTab('balanco')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-              activeTab === 'balanco'
-                ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-                : 'border-transparent text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <TrendingUp className="w-4 h-4" /> Balanço Patrimonial
-          </button>
-          <button
-            onClick={() => setActiveTab('dsp')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-              activeTab === 'dsp'
-                ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-                : 'border-transparent text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <TrendingUp className="w-4 h-4" /> Sobras ou Perdas
-          </button>
-          <button
-            onClick={() => setActiveTab('patrimonio')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-              activeTab === 'patrimonio'
-                ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-                : 'border-transparent text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <Building2 className="w-4 h-4" /> Patrimônio e Ativos ({patrimonio.length})
-          </button>
-        </div>
+      {/* Tabs */}
+      <div className="flex border-b border-slate-200 gap-2 overflow-x-auto">
+        <button
+          onClick={() => setActiveTab('lancamentos')}
+          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
+            activeTab === 'lancamentos'
+              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <FileSpreadsheet className="w-4 h-4" /> Lançamentos Contábeis ({lancamentosContabeis.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('plano')}
+          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
+            activeTab === 'plano'
+              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <Calculator className="w-4 h-4" /> Plano de Contas ({planoContas.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('balancete')}
+          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
+            activeTab === 'balancete'
+              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <TrendingUp className="w-4 h-4" /> Balancete de Verificação
+        </button>
+        <button
+          onClick={() => setActiveTab('balanco')}
+          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
+            activeTab === 'balanco'
+              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <TrendingUp className="w-4 h-4" /> Balanço Patrimonial
+        </button>
+        <button
+          onClick={() => setActiveTab('dsp')}
+          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
+            activeTab === 'dsp'
+              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <TrendingUp className="w-4 h-4" /> Sobras ou Perdas
+        </button>
+        <button
+          onClick={() => setActiveTab('patrimonio')}
+          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
+            activeTab === 'patrimonio'
+              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <Building2 className="w-4 h-4" /> Patrimônio e Ativos ({patrimonio.length})
+        </button>
       </div>
 
       {/* Tab Lançamentos */}

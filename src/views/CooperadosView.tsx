@@ -353,11 +353,8 @@ export const CooperadosView: React.FC = () => {
         recipients={(cooperados || []).map(c => ({ id: c.id, nome: c.nome, whatsapp: c.whatsapp, celular: c.celular, telefone: c.telefone }))}
         recipientLabel="cooperados"
       /> */}
-      {/* Sticky Header Group */}
-      <div className="sticky top-0 z-30 -mt-6 pt-6 lg:-mt-8 lg:pt-8 -mx-6 px-6 lg:-mx-8 lg:px-8 bg-slate-50/95 dark:bg-slate-900/95 backdrop-blur-sm pb-2 space-y-4 shadow-sm border-b border-slate-200/50 dark:border-slate-800/50">
-      
       {/* View Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4 shrink-0">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
             Gestão de Quadro Social
@@ -472,7 +469,6 @@ export const CooperadosView: React.FC = () => {
             </button>
           )}
         </div>
-      </div>
       </div>
 
       {/* Members Table */}

@@ -216,65 +216,59 @@ if (item) {
 
   return (
     <div className="space-y-6">
-      {/* Sticky Header Group */}
-      <div className="sticky top-0 z-30 -mt-6 pt-6 lg:-mt-8 lg:pt-8 -mx-6 px-6 lg:-mx-8 lg:px-8 bg-slate-50/95 backdrop-blur-sm pb-2 space-y-6 shadow-sm border-b border-slate-200/50">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full w-fit border border-emerald-200 mb-2">
-              <Boxes className="w-3.5 h-3.5" /> Entreposto & Armazenamento da Cooperativa
-            </div>
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Galpão & Estoque de Produção Agrícola</h1>
-            <p className="text-sm text-slate-500 mt-1">
-              Controle do saldo físico de safras recebidas dos cooperados (hortifruti, grãos, beneficiados), insumos e embalagens nos galpões e entrepostos.
-            </p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full w-fit border border-emerald-200 mb-2">
+            <Boxes className="w-3.5 h-3.5" /> Entreposto & Armazenamento da Cooperativa
           </div>
-
-          <div className="flex items-center gap-2">
-            {activeTab === 'saldos' && (
-              <button
-                onClick={() => handleOpenItem()}
-                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" /> Novo Item de Estoque
-              </button>
-            )}
-            {activeTab === 'movimentacoes' && (
-              <button
-                onClick={() => setShowMovModal(true)}
-                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" /> Lançar Movimentação
-              </button>
-            )}
-          </div>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Galpão & Estoque de Produção Agrícola</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Controle do saldo físico de safras recebidas dos cooperados (hortifruti, grãos, beneficiados), insumos e embalagens nos galpões e entrepostos.
+          </p>
         </div>
 
-        {/* Tabs */}
-      {/* Sticky Header Group */}
-      <div className="sticky top-0 z-30 -mt-6 pt-6 lg:-mt-8 lg:pt-8 -mx-6 px-6 lg:-mx-8 lg:px-8 bg-slate-50/95 backdrop-blur-sm pb-2 shadow-sm border-b border-slate-200/50">
-        <div className="flex border-b border-slate-200 gap-2 overflow-x-auto pt-2">
-          <button
-            onClick={() => setActiveTab('saldos')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-              activeTab === 'saldos'
-                ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-                : 'border-transparent text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <Package className="w-4 h-4" /> Saldo Atual de Produtos ({estoque.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('movimentacoes')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-              activeTab === 'movimentacoes'
-                ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-                : 'border-transparent text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <Boxes className="w-4 h-4" /> Histórico de Movimentações ({movimentacoesEstoque.length})
-          </button>
+        <div className="flex items-center gap-2">
+          {activeTab === 'saldos' && (
+            <button
+              onClick={() => handleOpenItem()}
+              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" /> Novo Item de Estoque
+            </button>
+          )}
+          {activeTab === 'movimentacoes' && (
+            <button
+              onClick={() => setShowMovModal(true)}
+              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" /> Lançar Movimentação
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Tabs */}
+      <div className="flex border-b border-slate-200 gap-2 overflow-x-auto">
+        <button
+          onClick={() => setActiveTab('saldos')}
+          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
+            activeTab === 'saldos'
+              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <Package className="w-4 h-4" /> Saldo Atual de Produtos ({estoque.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('movimentacoes')}
+          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
+            activeTab === 'movimentacoes'
+              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <Boxes className="w-4 h-4" /> Histórico de Movimentações ({movimentacoesEstoque.length})
+        </button>
       </div>
 
       {/* Tab Saldos */}

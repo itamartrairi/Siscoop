@@ -249,7 +249,7 @@ export const DemonstracoesContabeis: React.FC<{ modo: Modo }> = ({ modo }) => {
 
     return (
       <div className="space-y-4">
-        <div className="sticky top-0 z-30 bg-slate-50/95 backdrop-blur -mt-6 -mx-6 p-6 shadow-sm border-b border-slate-200 flex flex-wrap items-end justify-between gap-3 mb-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
           {filtros}
           <button type="button" onClick={pdf} className="px-4 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold flex items-center gap-1.5">
             <FileDown className="w-4 h-4" /> Exportar PDF
@@ -414,7 +414,7 @@ export const DemonstracoesContabeis: React.FC<{ modo: Modo }> = ({ modo }) => {
 
     return (
       <div className="space-y-4">
-        <div className="sticky top-0 z-30 bg-slate-50/95 backdrop-blur -mt-6 -mx-6 p-6 shadow-sm border-b border-slate-200 flex flex-wrap items-end justify-between gap-3 mb-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
           {filtros}
           <button type="button" onClick={pdf} className="px-4 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold flex items-center gap-1.5">
             <FileDown className="w-4 h-4" /> Exportar PDF
@@ -498,7 +498,7 @@ export const DemonstracoesContabeis: React.FC<{ modo: Modo }> = ({ modo }) => {
 
   return (
     <div className="space-y-4">
-      <div className="sticky top-0 z-30 bg-slate-50/95 backdrop-blur -mt-6 -mx-6 p-6 shadow-sm border-b border-slate-200 flex flex-wrap items-end justify-between gap-3 mb-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         {filtros}
         <button type="button" onClick={pdfDsp} className="px-4 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold flex items-center gap-1.5">
           <FileDown className="w-4 h-4" /> Exportar PDF

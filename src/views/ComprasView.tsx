@@ -340,86 +340,85 @@ if (f) {
 
   return (
     <div className="space-y-6">
-      {/* Sticky Header Group */}
-      <div className="sticky top-0 z-30 -mt-6 pt-6 lg:-mt-8 lg:pt-8 -mx-6 px-6 lg:-mx-8 lg:px-8 bg-slate-50/95 backdrop-blur-sm pb-2 space-y-6 shadow-sm border-b border-slate-200/50">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full w-fit border border-emerald-200 mb-2">
-              <ShoppingCart className="w-3.5 h-3.5" /> Suprimentos & Insumos da Cooperativa
-            </div>
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Compras & Insumos Agrícolas</h1>
-            <p className="text-sm text-slate-500 mt-1">
-              Gestão de pedidos de compra coletiva, sementes, defensivos, embalagens para escoamento da safra e homologação de fornecedores agropecuários.
-            </p>
+      {/* Header Banner */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full w-fit border border-emerald-200 mb-2">
+            <ShoppingCart className="w-3.5 h-3.5" /> Suprimentos & Insumos da Cooperativa
           </div>
-
-          <div className="flex items-center gap-2">
-            {activeTab === 'solicitacoes' && (
-              <button
-                onClick={() => handleOpenSolicitacao()}
-                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" /> Nova Solicitação de Compra
-              </button>
-            )}
-            {activeTab === 'ordens' && (
-              <button
-                onClick={() => handleOpenOrdem()}
-                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" /> Emissão de Ordem de Compra
-              </button>
-            )}
-            {activeTab === 'fornecedores' && (
-              <button
-                onClick={() => handleOpenFornecedor()}
-                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" /> Novo Fornecedor Homologado
-              </button>
-            )}
-          </div>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Compras & Insumos Agrícolas</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Gestão de pedidos de compra coletiva, sementes, defensivos, embalagens para escoamento da safra e homologação de fornecedores agropecuários.
+          </p>
         </div>
 
-        {/* Tabs */}
-      {/* Sticky Header Group */}
-      <div className="sticky top-0 z-30 -mt-6 pt-6 lg:-mt-8 lg:pt-8 -mx-6 px-6 lg:-mx-8 lg:px-8 bg-slate-50/95 backdrop-blur-sm pb-2 shadow-sm border-b border-slate-200/50">
-        <div className="flex border-b border-slate-200 gap-2 overflow-x-auto pt-2">
-          <button
-            onClick={() => setActiveTab('solicitacoes')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-              activeTab === 'solicitacoes'
-                ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-                : 'border-transparent text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <ShoppingCart className="w-4 h-4" /> Solicitações de Compras ({solicitacoesCompra.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('ordens')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-              activeTab === 'ordens'
-                ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-                : 'border-transparent text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <ShoppingCart className="w-4 h-4 text-emerald-600" /> Ordens de Compra OC ({ordensCompra.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('fornecedores')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-              activeTab === 'fornecedores'
-                ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-                : 'border-transparent text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <Truck className="w-4 h-4" /> Fornecedores Homologados ({fornecedores.length})
-          </button>
+        <div className="flex items-center gap-2">
+          {activeTab === 'solicitacoes' && (
+            <button
+              onClick={() => handleOpenSolicitacao()}
+              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" /> Nova Solicitação de Compra
+            </button>
+          )}
+          {activeTab === 'ordens' && (
+            <button
+              onClick={() => handleOpenOrdem()}
+              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" /> Emissão de Ordem de Compra
+            </button>
+          )}
+          {activeTab === 'fornecedores' && (
+            <button
+              onClick={() => handleOpenFornecedor()}
+              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" /> Novo Fornecedor Homologado
+            </button>
+          )}
         </div>
+      </div>
 
-        {/* Tab Filters in Sticky Header */}
-        {activeTab === 'solicitacoes' && (
-          <div className="flex flex-wrap items-end gap-3 pb-2 pt-2">
+      {/* Tabs */}
+      <div className="flex border-b border-slate-200 gap-2 overflow-x-auto">
+        <button
+          onClick={() => setActiveTab('solicitacoes')}
+          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
+            activeTab === 'solicitacoes'
+              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <ShoppingCart className="w-4 h-4" /> Solicitações de Compras ({solicitacoesCompra.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('ordens')}
+          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
+            activeTab === 'ordens'
+              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <ShoppingCart className="w-4 h-4 text-emerald-600" /> Ordens de Compra OC ({ordensCompra.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('fornecedores')}
+          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
+            activeTab === 'fornecedores'
+              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <Truck className="w-4 h-4" /> Fornecedores Homologados ({fornecedores.length})
+        </button>
+      </div>
+
+      {/* Tab Solicitacoes */}
+      {activeTab === 'solicitacoes' && (
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-4">
+          {/* Filtros */}
+          <div className="flex flex-wrap items-end gap-3 pb-4 border-b border-slate-100">
             <div className="flex items-center gap-2 text-xs font-bold text-slate-500 mr-1">
               <Filter className="w-3.5 h-3.5" /> Filtros
             </div>
@@ -460,55 +459,7 @@ if (f) {
               {solicitacoesFiltradas.length} de {solicitacoesCompra.length} registro(s)
             </span>
           </div>
-        )}
 
-        {activeTab === 'ordens' && (
-          <div className="flex flex-wrap items-end gap-3 pb-2 pt-2">
-            <div className="flex items-center gap-2 text-xs font-bold text-slate-500 mr-1">
-              <Filter className="w-3.5 h-3.5" /> Filtros
-            </div>
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 mb-1">Ano</label>
-              <select value={filtroOrdAno} onChange={e => setFiltroOrdAno(e.target.value)} className="p-2 border border-slate-200 rounded-xl text-xs font-semibold bg-white">
-                <option value="TODOS">Todos</option>
-                {ordAnosDisponiveis.map(ano => <option key={ano} value={ano}>{ano}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 mb-1">Mês</label>
-              <select value={filtroOrdMes} onChange={e => setFiltroOrdMes(e.target.value)} className="p-2 border border-slate-200 rounded-xl text-xs font-semibold bg-white">
-                <option value="TODOS">Todos</option>
-                {MESES_LABEL.map((nome, idx) => <option key={nome} value={String(idx + 1).padStart(2, '0')}>{nome}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 mb-1">Status</label>
-              <select value={filtroOrdStatus} onChange={e => setFiltroOrdStatus(e.target.value)} className="p-2 border border-slate-200 rounded-xl text-xs font-semibold bg-white">
-                <option value="TODOS">Todos</option>
-                {ordStatusDisponiveis.map(st => <option key={st} value={st}>{st}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 mb-1">Fornecedor</label>
-              <select value={filtroOrdFornecedorId} onChange={e => setFiltroOrdFornecedorId(e.target.value)} className="p-2 border border-slate-200 rounded-xl text-xs font-semibold bg-white max-w-[220px]">
-                <option value="TODOS">Todos</option>
-                {fornecedores.map(f => <option key={f.id} value={f.id}>{f.nomeFantasia || f.razaoSocial}</option>)}
-              </select>
-            </div>
-            <button onClick={limparFiltrosOrdens} className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-all">
-              <RotateCcw className="w-3.5 h-3.5" /> Limpar
-            </button>
-            <span className="text-[11px] text-slate-400 font-semibold ml-auto">
-              {ordensFiltradas.length} de {ordensCompra.length} registro(s)
-            </span>
-          </div>
-        )}
-      </div>
-      </div>
-
-      {/* Tab Solicitacoes */}
-      {activeTab === 'solicitacoes' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-4">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
@@ -590,6 +541,47 @@ if (f) {
       {/* Tab Ordens de Compra */}
       {activeTab === 'ordens' && (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-4">
+          {/* Filtros */}
+          <div className="flex flex-wrap items-end gap-3 pb-4 border-b border-slate-100">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-500 mr-1">
+              <Filter className="w-3.5 h-3.5" /> Filtros
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 mb-1">Ano</label>
+              <select value={filtroOrdAno} onChange={e => setFiltroOrdAno(e.target.value)} className="p-2 border border-slate-200 rounded-xl text-xs font-semibold bg-white">
+                <option value="TODOS">Todos</option>
+                {ordAnosDisponiveis.map(ano => <option key={ano} value={ano}>{ano}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 mb-1">Mês</label>
+              <select value={filtroOrdMes} onChange={e => setFiltroOrdMes(e.target.value)} className="p-2 border border-slate-200 rounded-xl text-xs font-semibold bg-white">
+                <option value="TODOS">Todos</option>
+                {MESES_LABEL.map((nome, idx) => <option key={nome} value={String(idx + 1).padStart(2, '0')}>{nome}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 mb-1">Status</label>
+              <select value={filtroOrdStatus} onChange={e => setFiltroOrdStatus(e.target.value)} className="p-2 border border-slate-200 rounded-xl text-xs font-semibold bg-white">
+                <option value="TODOS">Todos</option>
+                {ordStatusDisponiveis.map(st => <option key={st} value={st}>{st}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 mb-1">Fornecedor</label>
+              <select value={filtroOrdFornecedorId} onChange={e => setFiltroOrdFornecedorId(e.target.value)} className="p-2 border border-slate-200 rounded-xl text-xs font-semibold bg-white max-w-[220px]">
+                <option value="TODOS">Todos</option>
+                {fornecedores.map(f => <option key={f.id} value={f.id}>{f.nomeFantasia || f.razaoSocial}</option>)}
+              </select>
+            </div>
+            <button onClick={limparFiltrosOrdens} className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-all">
+              <RotateCcw className="w-3.5 h-3.5" /> Limpar
+            </button>
+            <span className="text-[11px] text-slate-400 font-semibold ml-auto">
+              {ordensFiltradas.length} de {ordensCompra.length} registro(s)
+            </span>
+          </div>
+
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>

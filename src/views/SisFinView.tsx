@@ -327,7 +327,6 @@ if (c) {
 
   return (
     <div className="space-y-6">
-      {/* Header with Title */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
         <div>
           <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full w-fit border border-emerald-200 mb-2">
@@ -360,51 +359,49 @@ if (c) {
         </div>
       </div>
 
-      {/* Sticky Header Group */}
-      <div className="sticky top-0 z-30 -mt-6 pt-6 lg:-mt-8 lg:pt-8 -mx-6 px-6 lg:-mx-8 lg:px-8 bg-slate-50/95 backdrop-blur-sm pb-2 space-y-4 shadow-sm border-b border-slate-200/50">
-        {/* Tabs */}
-        <div className="flex border-b border-slate-200 gap-2 overflow-x-auto pt-2">
-          <button
-            onClick={() => setActiveTab('contas')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-              activeTab === 'contas'
-                ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-                : 'border-transparent text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <CircleDollarSign className="w-4 h-4" /> Títulos & Lançamentos ({contasPagarReceber.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('extrato')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-              activeTab === 'extrato'
-                ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-                : 'border-transparent text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <Landmark className="w-4 h-4" /> Extrato Conciliado ({extratoBancario?.bancoNome || 'Sicoob Credi'})
-          </button>
-          <button
-            onClick={() => setActiveTab('bancos')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-              activeTab === 'bancos'
-                ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-                : 'border-transparent text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <Landmark className="w-4 h-4" /> Contas Bancárias
-          </button>
-          <button
-            onClick={() => setActiveTab('balanco')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${activeTab === 'balanco' ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl' : 'border-transparent text-slate-500 hover:text-slate-900'}`}
-          >
-            <BarChart3 className="w-4 h-4" /> Balanço Financeiro
-          </button>
-          {([['dashboard', 'Dashboard'], ['dre', 'DRE'], ['fluxo', 'Fluxo de Caixa'], ['estoque', 'Estoque'], ['custos', 'Custos']] as const).map(([tab, label]) => <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2.5 text-xs font-bold border-b-2 whitespace-nowrap ${activeTab === tab ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl' : 'border-transparent text-slate-500 hover:text-slate-900'}`}>{label}</button>)}
-        </div>
+      {/* Tabs */}
+      <div className="flex border-b border-slate-200 gap-2 overflow-x-auto">
+        <button
+          onClick={() => setActiveTab('contas')}
+          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
+            activeTab === 'contas'
+              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <CircleDollarSign className="w-4 h-4" /> Títulos & Lançamentos ({contasPagarReceber.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('extrato')}
+          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
+            activeTab === 'extrato'
+              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <Landmark className="w-4 h-4" /> Extrato Conciliado ({extratoBancario?.bancoNome || 'Sicoob Credi'})
+        </button>
+        <button
+          onClick={() => setActiveTab('bancos')}
+          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
+            activeTab === 'bancos'
+              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <Landmark className="w-4 h-4" /> Contas Bancárias
+        </button>
+        <button
+          onClick={() => setActiveTab('balanco')}
+          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${activeTab === 'balanco' ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl' : 'border-transparent text-slate-500 hover:text-slate-900'}`}
+        >
+          <BarChart3 className="w-4 h-4" /> Balanço Financeiro
+        </button>
+        {([['dashboard', 'Dashboard'], ['dre', 'DRE'], ['fluxo', 'Fluxo de Caixa'], ['estoque', 'Estoque'], ['custos', 'Custos']] as const).map(([tab, label]) => <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2.5 text-xs font-bold border-b-2 whitespace-nowrap ${activeTab === tab ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl' : 'border-transparent text-slate-500 hover:text-slate-900'}`}>{label}</button>)}
+      </div>
 
-        {/* Tab Filters */}
-        {(activeTab === 'dashboard' || activeTab === 'dre' || activeTab === 'fluxo' || activeTab === 'estoque' || activeTab === 'custos') && (
+      {(activeTab === 'dashboard' || activeTab === 'dre' || activeTab === 'fluxo' || activeTab === 'estoque' || activeTab === 'custos') && (
+        <div className="space-y-5">
           <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm flex flex-col xl:flex-row xl:items-end gap-3">
             <div><label className="block text-[11px] font-bold text-slate-500 mb-1">Mês</label><select value={filtroMes} onChange={e => setFiltroMes(e.target.value)} className="p-2.5 rounded-xl border border-slate-200 text-sm"><option value="TODOS">Todos</option><option value="01">Janeiro</option><option value="02">Fevereiro</option><option value="03">Março</option><option value="04">Abril</option><option value="05">Maio</option><option value="06">Junho</option><option value="07">Julho</option><option value="08">Agosto</option><option value="09">Setembro</option><option value="10">Outubro</option><option value="11">Novembro</option><option value="12">Dezembro</option></select></div>
             <div><label className="block text-[11px] font-bold text-slate-500 mb-1">Ano</label><select value={filtroAno} onChange={e => setFiltroAno(e.target.value)} className="p-2.5 rounded-xl border border-slate-200 text-sm w-28"><option value="TODAS">Todos</option>{anosDisponiveis.map(ano => <option key={ano} value={ano}>{ano}</option>)}</select></div>
@@ -413,11 +410,6 @@ if (c) {
             <div><label className="block text-[11px] font-bold text-slate-500 mb-1">Conta bancária</label><SelectContaBancaria value={filtroBanco} onChange={setFiltroBanco} contas={contasBancarias} todasLabel="Todas as contas bancárias" className="p-2.5 rounded-xl border border-slate-200 text-sm" /></div>
             <button onClick={aplicarFiltros} className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50">Limpar filtros</button>
           </div>
-        )}
-      </div>
-
-      {(activeTab === 'dashboard' || activeTab === 'dre' || activeTab === 'fluxo' || activeTab === 'estoque' || activeTab === 'custos') && (
-        <div className="space-y-5">
 
           {activeTab === 'dashboard' && <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
