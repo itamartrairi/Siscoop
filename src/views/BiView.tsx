@@ -261,8 +261,10 @@ export const BiView: React.FC = () => {
         </div>
       </div>
 
-      {/* Main View Navigation Tabs */}
-      <div className="flex items-center gap-2 p-1.5 bg-slate-200/80 dark:bg-slate-800 rounded-2xl border border-slate-300/80 dark:border-slate-700 w-fit">
+      {/* Sticky Header Group */}
+      <div className="sticky top-0 z-30 -mt-6 pt-6 lg:-mt-8 lg:pt-8 -mx-6 px-6 lg:-mx-8 lg:px-8 bg-slate-50/95 dark:bg-slate-900/95 backdrop-blur-sm pb-4 space-y-4 shadow-sm border-b border-slate-200/50 dark:border-slate-800/50">
+        {/* Main View Navigation Tabs */}
+        <div className="flex items-center gap-2 p-1.5 bg-slate-200/80 dark:bg-slate-800 rounded-2xl border border-slate-300/80 dark:border-slate-700 w-fit">
         <button
           onClick={() => setActiveTab('vendas_vs_estoque')}
           className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
@@ -307,11 +309,8 @@ export const BiView: React.FC = () => {
           <TrendingUp className="w-4 h-4" /> Sazonalidade & Logística
         </button>
       </div>
-
-      {/* TAB 1: VENDAS VS. ESTOQUE MENSAL */}
-      {activeTab === 'vendas_vs_estoque' && (
-        <div className="space-y-6">
-          {/* Controls Bar for Comparative Chart */}
+        {/* TAB 1: VENDAS VS. ESTOQUE MENSAL - Controls */}
+        {activeTab === 'vendas_vs_estoque' && (
           <div className="p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-xs flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3 flex-wrap">
               {/* Unit Toggle */}
@@ -365,12 +364,17 @@ export const BiView: React.FC = () => {
                 </select>
               </div>
             </div>
-
             <div className="flex items-center gap-2 text-xs font-mono font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-950 dark:text-emerald-300 px-3 py-1.5 rounded-xl border border-emerald-200/60 dark:border-emerald-800">
               <RefreshCw className="w-3.5 h-3.5 text-emerald-600 animate-spin-slow" />
               Sincronizado com Sistema de Estoque
             </div>
           </div>
+        )}
+      </div>
+
+      {/* TAB 1: VENDAS VS. ESTOQUE MENSAL - Content */}
+      {activeTab === 'vendas_vs_estoque' && (
+        <div className="space-y-6">
 
           {/* Comparative Metrics KPI Bar */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -699,8 +703,8 @@ export const BiView: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 3: METAS ESTRATÉGICAS */}
-      {activeTab === 'metas' && (
+        {/* TAB 3: METAS - Content */}
+        {activeTab === 'metas' && (
         <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-700 shadow-xs space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-3">
             <div className="flex items-center gap-2 font-extrabold text-slate-900 dark:text-white text-base">

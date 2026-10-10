@@ -860,6 +860,16 @@ export const CadastrosView: React.FC = () => {
                 <Trash2 className="w-4 h-4" /> Excluir Tudo
               </button>
               <button
+                onClick={() => {
+                  syncCooperadosWithProdutores();
+                  alert('Produtores rurais sincronizados com sucesso a partir do cadastro de cooperados!');
+                }}
+                className="px-4 py-2.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2"
+                title="Sincronizar produtores a partir do cadastro do quadro social de cooperados"
+              >
+                <Users className="w-4 h-4" /> Sincronizar Cooperados
+              </button>
+              <button
                 onClick={() => handleOpenProdutor()}
                 className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2"
               >
@@ -1030,6 +1040,74 @@ export const CadastrosView: React.FC = () => {
           <Truck className="w-4 h-4" /> Motoristas ({motoristas.length})
         </button>
       </div>
+
+      {/* Tab Filters in Sticky Header */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col gap-3">
+        <div className="relative w-full">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+          <input
+            type="text"
+            placeholder={
+              activeTab === 'produtores' ? "Buscar por nome, CPF/CNPJ ou CAF/DAP..." :
+              activeTab === 'produtos' ? "Buscar por produto ou categoria..." :
+              activeTab === 'programas' ? "Buscar por programa..." :
+              activeTab === 'escolas' ? "Buscar por escola ou INEP..." :
+              "Buscar por motorista..."
+            }
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </div>
+
+        {activeTab === 'produtores' && (
+          <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100">
+            <span className="text-xs font-bold text-slate-500 flex items-center gap-1 mr-1 mt-2">
+              <Filter className="w-3.5 h-3.5" /> Status da CAF / DAP:
+            </span>
+            <button
+              onClick={() => setFilterCafStatus('TODOS')}
+              className={`mt-2 px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                filterCafStatus === 'TODOS'
+                  ? 'bg-slate-800 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Todos ({produtoresComCafInfo.length})
+            </button>
+            <button
+              onClick={() => setFilterCafStatus('PRESTES_A_EXPIRAR')}
+              className={`mt-2 px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                filterCafStatus === 'PRESTES_A_EXPIRAR'
+                  ? 'bg-amber-500 text-white shadow-xs font-extrabold'
+                  : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100'
+              }`}
+            >
+              ⚠️ Expira em ≤ 30 dias ({produtoresPrestesExpira.length})
+            </button>
+            <button
+              onClick={() => setFilterCafStatus('EXPIRADO')}
+              className={`mt-2 px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                filterCafStatus === 'EXPIRADO'
+                  ? 'bg-rose-600 text-white shadow-xs font-extrabold'
+                  : 'bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100'
+              }`}
+            >
+              ⛔ CAF Expirada ({produtoresExpirados.length})
+            </button>
+            <button
+              onClick={() => setFilterCafStatus('VALIDO')}
+              className={`mt-2 px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                filterCafStatus === 'VALIDO'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+              }`}
+            >
+              ✓ CAF Válida ({produtoresComCafInfo.length - totalAlertasCaf})
+            </button>
+          </div>
+        )}
+      </div>
       </div>
 
       {/* Tab 1: Produtores Rurais */}
@@ -1042,85 +1120,7 @@ export const CadastrosView: React.FC = () => {
             recipients={produtores.map(p => ({ id: p.id, nome: p.nome, telefone: p.telefone }))}
             recipientLabel="produtores"
           /> */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 space-y-4 shadow-xs">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="relative flex-1 w-full">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-              <input
-                type="text"
-                placeholder="Buscar por nome, CPF/CNPJ ou CAF/DAP..."
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-            <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
-              <button
-                onClick={() => {
-                  syncCooperadosWithProdutores();
-                  alert('Produtores rurais sincronizados com sucesso a partir do cadastro de cooperados!');
-                }}
-                className="px-3.5 py-2 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-                title="Sincronizar produtores a partir do cadastro do quadro social de cooperados"
-              >
-                <Users className="w-3.5 h-3.5" /> Sincronizar Cooperados
-              </button>
-              <button
-                onClick={() => handleOpenProdutor()}
-                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" /> Novo Produtor
-              </button>
-            </div>
-          </div>
-
-          {/* Filtros Rápidos de Status CAF/DAP */}
-          <div className="flex flex-wrap items-center gap-2 pt-1 pb-1 border-b border-slate-100">
-            <span className="text-xs font-bold text-slate-500 flex items-center gap-1 mr-1">
-              <Filter className="w-3.5 h-3.5" /> Status da CAF / DAP:
-            </span>
-            <button
-              onClick={() => setFilterCafStatus('TODOS')}
-              className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                filterCafStatus === 'TODOS'
-                  ? 'bg-slate-800 text-white shadow-xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              Todos ({produtoresComCafInfo.length})
-            </button>
-            <button
-              onClick={() => setFilterCafStatus('PRESTES_A_EXPIRAR')}
-              className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                filterCafStatus === 'PRESTES_A_EXPIRAR'
-                  ? 'bg-amber-500 text-white shadow-xs font-extrabold'
-                  : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100'
-              }`}
-            >
-              ⚠️ Expira em ≤ 30 dias ({produtoresPrestesExpira.length})
-            </button>
-            <button
-              onClick={() => setFilterCafStatus('EXPIRADO')}
-              className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                filterCafStatus === 'EXPIRADO'
-                  ? 'bg-rose-600 text-white shadow-xs font-extrabold'
-                  : 'bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100'
-              }`}
-            >
-              ⛔ CAF Expirada ({produtoresExpirados.length})
-            </button>
-            <button
-              onClick={() => setFilterCafStatus('VALIDO')}
-              className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                filterCafStatus === 'VALIDO'
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
-              }`}
-            >
-              ✓ CAF Válida ({produtoresComCafInfo.length - totalAlertasCaf})
-            </button>
-          </div>
-
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 space-y-4 shadow-xs mt-2">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
@@ -1228,19 +1228,7 @@ export const CadastrosView: React.FC = () => {
 
       {/* Tab 2: Produtos Agropecuários */}
       {activeTab === 'produtos' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 space-y-4 shadow-xs">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-4">
-            <div className="relative flex-1 w-full">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-              <input
-                type="text"
-                placeholder="Buscar por produto ou categoria..."
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-          </div>
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 space-y-4 shadow-xs mt-2">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {produtos.filter(p => p.nome.toLowerCase().includes(searchTerm.toLowerCase()) || p.categoria.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
               <div key={p.id} className="p-4 rounded-xl border border-slate-200/80 bg-slate-50/50 space-y-2 relative group">
@@ -1304,19 +1292,7 @@ export const CadastrosView: React.FC = () => {
 
       {/* Tab 4: Programas Governamentais */}
       {activeTab === 'programas' && (
-        <div className="space-y-4 pt-6">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="relative flex-1 w-full">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-              <input
-                type="text"
-                placeholder="Buscar por programa..."
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-          </div>
+        <div className="space-y-4 pt-2">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {programas.filter(prog => prog.nome.toLowerCase().includes(searchTerm.toLowerCase()) || (prog.tipo && prog.tipo.toLowerCase().includes(searchTerm.toLowerCase()))).map(prog => (
             <div key={prog.id} className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-3 relative">
@@ -1367,19 +1343,7 @@ export const CadastrosView: React.FC = () => {
             recipients={escolasPnae.map(e => ({ id: e.id, nome: e.nomeEscola, telefone: e.telefone, celular: e.celular }))}
             recipientLabel="escolas"
           /> */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 space-y-4 shadow-xs">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="relative flex-1 w-full">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-              <input
-                type="text"
-                placeholder="Buscar por escola ou INEP..."
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-          </div>
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 space-y-4 shadow-xs mt-2">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
@@ -1464,19 +1428,7 @@ export const CadastrosView: React.FC = () => {
             recipientLabel="motoristas"
           /> */}
 
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-6 space-y-4 shadow-xs">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="relative flex-1 w-full">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-                <input
-                  type="text"
-                  placeholder="Buscar por motorista..."
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-            </div>
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-6 space-y-4 shadow-xs mt-2">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>

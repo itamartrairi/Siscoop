@@ -623,28 +623,31 @@ export const RhView: React.FC = () => {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-slate-200 gap-2 overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('funcionarios')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-            activeTab === 'funcionarios'
-              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <Users className="w-4 h-4" /> Colaboradores Registrados ({funcionariosRH.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('folha')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-            activeTab === 'folha'
-              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <FileSpreadsheet className="w-4 h-4" /> Folha de Pagamento ({folhaPagamento.length})
-        </button>
+      {/* Sticky Header Group */}
+      <div className="sticky top-0 z-30 -mt-6 pt-6 lg:-mt-8 lg:pt-8 -mx-6 px-6 lg:-mx-8 lg:px-8 bg-slate-50/95 backdrop-blur-sm pb-2 shadow-sm border-b border-slate-200/50">
+        {/* Tabs */}
+        <div className="flex border-b border-slate-200 gap-2 overflow-x-auto pt-2">
+          <button
+            onClick={() => setActiveTab('funcionarios')}
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
+              activeTab === 'funcionarios'
+                ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
+                : 'border-transparent text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            <Users className="w-4 h-4" /> Colaboradores Registrados ({funcionariosRH.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('folha')}
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
+              activeTab === 'folha'
+                ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
+                : 'border-transparent text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            <FileSpreadsheet className="w-4 h-4" /> Folha de Pagamento ({folhaPagamento.length})
+          </button>
+        </div>
       </div>
 
       {/* Tab Funcionarios */}

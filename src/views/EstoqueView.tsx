@@ -250,7 +250,9 @@ if (item) {
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-slate-200 gap-2 overflow-x-auto">
+      {/* Sticky Header Group */}
+      <div className="sticky top-0 z-30 -mt-6 pt-6 lg:-mt-8 lg:pt-8 -mx-6 px-6 lg:-mx-8 lg:px-8 bg-slate-50/95 backdrop-blur-sm pb-2 shadow-sm border-b border-slate-200/50">
+        <div className="flex border-b border-slate-200 gap-2 overflow-x-auto pt-2">
           <button
             onClick={() => setActiveTab('saldos')}
             className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
@@ -272,6 +274,7 @@ if (item) {
             <Boxes className="w-4 h-4" /> Histórico de Movimentações ({movimentacoesEstoque.length})
           </button>
         </div>
+      </div>
       </div>
 
       {/* Tab Saldos */}

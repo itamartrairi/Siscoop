@@ -3688,8 +3688,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
             </button>
           )}
         </div>
-      </div>
-
       {/* Cross-entity Relationship Search & Filters Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-3">
         <div className="flex items-center justify-between">
@@ -3753,8 +3751,6 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
           </div>
         </div>
       </div>
-
-      {/* Navigation Tabs */}
       <div className="flex gap-3 overflow-x-auto pb-1.5 scrollbar-thin shrink-0">
         <button
           onClick={() => setActiveTab('chamadas')}
@@ -3839,6 +3835,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
           <FileText className={`w-4 h-4 ${activeTab === 'relatorios' ? 'text-emerald-200' : 'text-emerald-700'}`} />
           <span>Relatórios de Pedidos e Entregas</span>
         </button>
+      </div>
       </div>
 
       {/* Dynamic Sticky Sub-Headers */}
