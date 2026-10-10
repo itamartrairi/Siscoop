@@ -3614,6 +3614,9 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
 
   return (
     <div className="space-y-6">
+      {/* Sticky Header Group */}
+      <div className="sticky top-0 z-30 -mt-6 pt-6 lg:-mt-8 lg:pt-8 -mx-6 px-6 lg:-mx-8 lg:px-8 bg-slate-50/95 backdrop-blur-sm pb-2 space-y-6 shadow-sm border-b border-slate-200/50">
+      
       {/* Alerta Visual (Badge) no Header para Pedidos Pendentes de Envio aos Produtores Rurais */}
       {pendingPedidosCount > 0 && (
         <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 px-5 py-3.5 rounded-2xl shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border border-amber-300">
@@ -3752,7 +3755,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex border-b-2 border-slate-200 gap-3 overflow-x-auto pb-1.5 scrollbar-thin">
+      <div className="flex gap-3 overflow-x-auto pb-1.5 scrollbar-thin shrink-0">
         <button
           onClick={() => setActiveTab('chamadas')}
           className={`px-5 py-3 text-sm font-extrabold rounded-2xl flex items-center gap-2.5 transition-all whitespace-nowrap shadow-xs cursor-pointer ${
@@ -3836,6 +3839,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
           <FileText className={`w-4 h-4 ${activeTab === 'relatorios' ? 'text-emerald-200' : 'text-emerald-700'}`} />
           <span>Relatórios de Pedidos e Entregas</span>
         </button>
+      </div>
       </div>
 
       {/* Tab Chamadas Públicas */}

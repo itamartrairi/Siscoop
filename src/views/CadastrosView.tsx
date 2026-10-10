@@ -836,8 +836,10 @@ export const CadastrosView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
+      {/* Sticky Header Group */}
+      <div className="sticky top-0 z-30 -mt-6 pt-6 lg:-mt-8 lg:pt-8 -mx-6 px-6 lg:-mx-8 lg:px-8 bg-slate-50/95 backdrop-blur-sm pb-2 space-y-6 shadow-sm border-b border-slate-200/50">
+        {/* Header Banner */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs shrink-0">
         <div>
           <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full w-fit border border-emerald-200 mb-2">
             <FolderTree className="w-3.5 h-3.5" /> Módulo de Cadastros Agropecuários
@@ -971,7 +973,7 @@ export const CadastrosView: React.FC = () => {
       )}
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-200 gap-2 overflow-x-auto">
+      <div className="flex gap-2 overflow-x-auto shrink-0 pb-1">
         <button
           onClick={() => setActiveTab('produtores')}
           className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
@@ -1027,6 +1029,7 @@ export const CadastrosView: React.FC = () => {
         >
           <Truck className="w-4 h-4" /> Motoristas ({motoristas.length})
         </button>
+      </div>
       </div>
 
       {/* Tab 1: Produtores Rurais */}
