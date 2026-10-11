@@ -17,7 +17,6 @@ import {
   FileCheck2,
   AlertCircle,
   Database,
-  ArrowRight,
   Filter
 } from 'lucide-react';
 import {
