@@ -105,7 +105,10 @@ import {
   updateProfile,
   onAuthStateChanged,
   signInWithPopup,
-  googleProvider
+  googleProvider,
+  updatePassword,
+  reauthenticateWithCredential,
+  EmailAuthProvider
 } from '../services/firebase';
 import { checkAndRunWeeklyBackupIfNeeded } from '../services/firebaseBackupService';
 import {
@@ -503,6 +506,7 @@ interface CoopContextType {
   loginWithGoogle: () => Promise<{ success: boolean; requiresCooperativeSetup: boolean; error?: string }>;
   registerUser: (name: string, email: string, pass: string, role: UserRole) => Promise<{ user: User | null; requiresCooperativeSetup: boolean; error?: string }>;
   recoverPassword: (email: string) => Promise<{ success: boolean; message: string }>;
+  changeUserPassword: (newPassword: string, currentPassword?: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void> | void;
 
   // Data Collections
@@ -1867,9 +1871,13 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, requiresCooperativeSetup: false, error: 'E-mail ou senha incorretos.' };
     }
 
-    // Check existing demo users fallback
-    const foundUser = INITIAL_USERS.find(u => u.email.toLowerCase() === email.toLowerCase());
+    // Check existing users / demo users fallback
+    const foundUser = users.find(u => u.email.toLowerCase() === email.toLowerCase()) ||
+                      INITIAL_USERS.find(u => u.email.toLowerCase() === email.toLowerCase());
     if (foundUser) {
+      if (foundUser.password && foundUser.password !== pass) {
+        return { success: false, requiresCooperativeSetup: false, error: 'Senha incorreta.' };
+      }
       setCurrentUser(foundUser);
       setIsAuthenticated(true);
       const userTenant = tenants.find(t => t.id === foundUser.tenantId);
@@ -2019,6 +2027,54 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       success: true,
       message: `Enviamos as instruções de redefinição de senha para o e-mail ${email}. Por favor, verifique sua caixa de entrada e spam.`
     };
+  };
+
+  const changeUserPassword = async (newPassword: string, currentPassword?: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const fbUser = auth.currentUser;
+      if (fbUser) {
+        // Se a senha atual foi informada e o usuário tem e-mail, faz reautenticação preventiva para evitar 'auth/requires-recent-login'
+        if (currentPassword && fbUser.email) {
+          try {
+            const credential = EmailAuthProvider.credential(fbUser.email, currentPassword);
+            await reauthenticateWithCredential(fbUser, credential);
+          } catch (reauthErr: any) {
+            console.warn('Falha na reautenticação com senha atual:', reauthErr);
+            if (reauthErr?.code === 'auth/wrong-password' || reauthErr?.code === 'auth/invalid-credential') {
+              return { success: false, error: 'A senha atual informada está incorreta.' };
+            }
+          }
+        }
+
+        // Atualiza a credencial diretamente no Firebase Authentication
+        await updatePassword(fbUser, newPassword);
+      }
+
+      // Atualiza também os registros locais do usuário e da sessão
+      if (currentUser) {
+        const updatedUser = { ...currentUser, password: newPassword };
+        setCurrentUser(updatedUser);
+        setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, password: newPassword } : u));
+        addAuditLog('AUTH', 'ALTERACAO', `Senha do usuário ${currentUser.name} atualizada com sucesso`);
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      console.error('Erro ao atualizar senha no Firebase Auth:', err);
+      if (err?.code === 'auth/requires-recent-login') {
+        return {
+          success: false,
+          error: 'Por exigência de segurança do Firebase, informe a sua Senha Atual para autorizar a troca (ou faça login novamente antes de prosseguir).'
+        };
+      }
+      if (err?.code === 'auth/weak-password') {
+        return { success: false, error: 'A nova senha deve possuir pelo menos 6 caracteres no Firebase.' };
+      }
+      if (err?.code === 'auth/wrong-password' || err?.code === 'auth/invalid-credential') {
+        return { success: false, error: 'A senha atual informada está incorreta.' };
+      }
+      return { success: false, error: err?.message || 'Não foi possível atualizar a senha no serviço de autenticação.' };
+    }
   };
 
   const logout = async () => {
@@ -5144,6 +5200,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginWithGoogle,
         registerUser,
         recoverPassword,
+        changeUserPassword,
         logout,
         cooperados: tenantCooperados,
         transacoesCapital: tenantTransacoesCapital,

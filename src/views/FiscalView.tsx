@@ -37,6 +37,7 @@ import {
 import { useCoop } from '../context/CoopContext';
 import { NotaFiscal, NotaFiscalItem, SefazCeConfig, SistemaTributarioNFe } from '../types';
 import { CRONOGRAMA_REFORMA_TRIBUTARIA, ALERTA_CRONOGRAMA_TEXTO, calcularImpostosItem } from '../utils/tributacaoReforma';
+import { FortesExportModal } from '../components/FortesExportModal';
 
 export const FiscalView: React.FC = () => {
   const {
@@ -67,6 +68,7 @@ export const FiscalView: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('TODOS');
   const [modeloFilter, setModeloFilter] = useState<string>('TODOS');
   const [showCronogramaDetalhes, setShowCronogramaDetalhes] = useState(false);
+  const [showFortesModal, setShowFortesModal] = useState(false);
 
   // Modal DANFE / Visualização
   const [selectedNfForView, setSelectedNfForView] = useState<NotaFiscal | null>(null);
@@ -393,7 +395,14 @@ export const FiscalView: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setShowFortesModal(true)}
+              className="px-3.5 py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-bold rounded-xl shadow-lg transition-all flex items-center gap-2 text-sm"
+              title="Exportar Movimento Fiscal, SPED EFD e Lote de XMLs para o Fortes Total Contador"
+            >
+              <Building2 className="w-4 h-4" /> Exportar Fortes Fiscal
+            </button>
             <button
               onClick={() => setActiveTab('nova')}
               className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl shadow-lg transition-all flex items-center gap-2 text-sm"
@@ -1725,6 +1734,13 @@ export const FiscalView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Modal de Exportação para o Fortes Tecnologia - Total Contador */}
+      <FortesExportModal
+        isOpen={showFortesModal}
+        onClose={() => setShowFortesModal(false)}
+        initialTab="fiscal"
+      />
     </div>
   );
 };

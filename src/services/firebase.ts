@@ -9,6 +9,9 @@ import {
   updateProfile,
   onAuthStateChanged,
   signInWithPopup,
+  updatePassword,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
   User as FirebaseUser
 } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
@@ -23,6 +26,11 @@ export const db = firebaseConfig.firestoreDatabaseId
 
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+export {
+  updatePassword,
+  reauthenticateWithCredential,
+  EmailAuthProvider
+};
 
 export enum OperationType {
   CREATE = 'create',

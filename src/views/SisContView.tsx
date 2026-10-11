@@ -2,6 +2,7 @@ import { formatarData } from '../utils/dateHelpers';
 import React, { useState } from 'react';
 import { useCoop } from '../context/CoopContext';
 import { DemonstracoesContabeis } from '../components/DemonstracoesContabeis';
+import { FortesExportModal } from '../components/FortesExportModal';
 import {
   Calculator,
   Plus,
@@ -46,6 +47,7 @@ export const SisContView: React.FC = () => {
   const [showLancModal, setShowLancModal] = useState(false);
   const [showPatrimonioModal, setShowPatrimonioModal] = useState(false);
   const [showPlanoModal, setShowPlanoModal] = useState(false);
+  const [showFortesModal, setShowFortesModal] = useState(false);
   const [filterPlanoContas, setFilterPlanoContas] = useState('');
   const [filterLancamentos, setFilterLancamentos] = useState('');
   const [competenciaDepreciacao, setCompetenciaDepreciacao] = useState(() => {
@@ -263,7 +265,15 @@ if (p) {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setShowFortesModal(true)}
+            className="px-4 py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2 cursor-pointer"
+            title="Exportar Lançamentos, Plano de Contas e SPED ECD para o Fortes Total Contador"
+          >
+            <Building2 className="w-4 h-4" /> Exportar Fortes Contábil
+          </button>
+
           {activeTab === 'plano' && (
             <button
               onClick={() => setShowPlanoModal(true)}
@@ -931,6 +941,13 @@ if (p) {
           </div>
         </div>
       )}
+
+      {/* Modal de Exportação para o Fortes Tecnologia - Total Contador */}
+      <FortesExportModal
+        isOpen={showFortesModal}
+        onClose={() => setShowFortesModal(false)}
+        initialTab="contabil"
+      />
     </div>
   );
 };

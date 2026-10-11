@@ -23,6 +23,7 @@ import {
 import firebaseConfig from '../../firebase-applet-config.json';
 import { GooglePickerButton } from '../components/GooglePickerButton';
 import { PickedGoogleFile } from '../services/googlePickerService';
+import { FortesExportModal } from '../components/FortesExportModal';
 import {
   Settings,
   Users,
@@ -155,6 +156,7 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
     updateUser,
     deleteUser,
     updateCurrentUserProfile,
+    changeUserPassword,
     rolePermissions,
     updateRolePermission,
     resetDefaultPermissions,
@@ -201,6 +203,8 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
   const [profileMsg, setProfileMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [passMsg, setPassMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   const [profileForm, setProfileForm] = useState({
     name: currentUser?.name || '',
@@ -250,7 +254,7 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
     setTimeout(() => setProfileMsg(null), 4000);
   };
 
-  const handleSavePassword = (e: React.FormEvent) => {
+  const handleSavePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!passwordForm.newPassword || passwordForm.newPassword.length < 6) {
       setPassMsg({ type: 'error', text: 'A nova senha deve possuir pelo menos 6 caracteres.' });
@@ -260,12 +264,22 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
       setPassMsg({ type: 'error', text: 'A confirmação de senha não corresponde à nova senha.' });
       return;
     }
-    updateCurrentUserProfile({
-      password: passwordForm.newPassword
-    });
-    setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
-    setPassMsg({ type: 'success', text: 'Sua senha foi alterada com sucesso!' });
-    setTimeout(() => setPassMsg(null), 4000);
+    setIsChangingPassword(true);
+    setPassMsg(null);
+    try {
+      const res = await changeUserPassword(passwordForm.newPassword, passwordForm.currentPassword);
+      setIsChangingPassword(false);
+      if (res.success) {
+        setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+        setPassMsg({ type: 'success', text: 'Sua senha de login foi atualizada com sucesso no sistema!' });
+        setTimeout(() => setPassMsg(null), 5000);
+      } else {
+        setPassMsg({ type: 'error', text: res.error || 'Não foi possível atualizar a senha.' });
+      }
+    } catch (err: any) {
+      setIsChangingPassword(false);
+      setPassMsg({ type: 'error', text: err?.message || 'Erro inesperado ao atualizar a senha.' });
+    }
   };
 
   // User Management State
@@ -401,6 +415,7 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
 
   const backupFileInputRef = useRef<HTMLInputElement>(null);
   const [backupStatusMessage, setBackupStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [showFortesModal, setShowFortesModal] = useState(false);
 
   // Firebase Backup State
   const [isBackupRunning, setIsBackupRunning] = useState(false);
@@ -1080,7 +1095,31 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
 
                 <form onSubmit={handleSavePassword} className="space-y-3">
                   <div>
-                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Nova Senha</label>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1 text-xs">
+                      Senha Atual (para confirmação no login)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showCurrentPassword ? 'text' : 'password'}
+                        value={passwordForm.currentPassword}
+                        onChange={e => setPasswordForm(p => ({ ...p, currentPassword: e.target.value }))}
+                        placeholder="Sua senha atual de login"
+                        className="w-full px-3 py-2 pr-10 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                        className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                      >
+                        {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1 text-xs">
+                      Nova Senha
+                    </label>
 
                     <div className="relative">
                       <input
@@ -1088,7 +1127,7 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
                         value={passwordForm.newPassword}
                         onChange={e => setPasswordForm(p => ({ ...p, newPassword: e.target.value }))}
                         placeholder="Mínimo 6 caracteres"
-                        className="w-full px-3 py-2 pr-10 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+                        className="w-full px-3 py-2 pr-10 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
                         required
                       />
                       <button
@@ -1102,22 +1141,33 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
                   </div>
 
                   <div>
-                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Confirmar Nova Senha</label>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1 text-xs">
+                      Confirmar Nova Senha
+                    </label>
                     <input
                       type={showPassword ? 'text' : 'password'}
                       value={passwordForm.confirmPassword}
                       onChange={e => setPasswordForm(p => ({ ...p, confirmPassword: e.target.value }))}
                       placeholder="Repita a nova senha"
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
                       required
                     />
                   </div>
 
                   <button
                     type="submit"
-                    className="w-full mt-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-2"
+                    disabled={isChangingPassword}
+                    className="w-full mt-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 text-sm"
                   >
-                    <Key className="w-4 h-4" /> Atualizar Minha Senha
+                    {isChangingPassword ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" /> Atualizando no Firebase...
+                      </>
+                    ) : (
+                      <>
+                        <Key className="w-4 h-4" /> Atualizar Minha Senha de Login
+                      </>
+                    )}
                   </button>
                 </form>
               </div>
@@ -1732,6 +1782,30 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
                 <div className="text-[11px] text-slate-400">API gratuita ativada para autopreenchimento de CEP</div>
               </div>
               <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 font-bold">Ativo</span>
+            </div>
+
+            {/* Fortes Tecnologia Card */}
+            <div className="p-4 bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-transparent rounded-xl border border-orange-300 dark:border-orange-800/60 flex items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <Building className="w-4 h-4 text-orange-600" />
+                  <span className="font-bold text-slate-900 dark:text-white text-xs">Fortes Tecnologia — Sistema Total Contador</span>
+                  <span className="px-2 py-0.2 rounded-full bg-orange-100 dark:bg-orange-950 text-orange-700 dark:text-orange-300 font-bold text-[9px] uppercase">
+                    Contábil &amp; Fiscal
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Exportação de Lançamentos Contábeis, SPED ECD, Plano de Contas, Movimento Fiscal, SPED EFD e Lote de XMLs de NF-e/NFC-e.
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowFortesModal(true)}
+                className="px-3.5 py-2 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 shrink-0 text-xs cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" /> Abrir Exportador Fortes
+              </button>
             </div>
 
             <div className="p-4 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
@@ -2889,6 +2963,13 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
           </div>
         </div>
       )}
+
+      {/* Modal de Integração Fortes Tecnologia */}
+      <FortesExportModal
+        isOpen={showFortesModal}
+        onClose={() => setShowFortesModal(false)}
+        initialTab="contabil"
+      />
     </div>
   );
 };
