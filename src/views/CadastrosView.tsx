@@ -50,7 +50,7 @@ import { GeoLocationPicker } from '../components/GeoLocationPicker';
 import { buscarCodigosFiscais } from '../utils/produtoCodigosFiscais';
 import { POLOS_PADRAO } from '../utils/poloHelpers';
 import { PortalShareBanner } from '../components/PortalShareBanner';
-import { DataGrid } from '../components/ui/DataGrid';
+import { DataGrid, GridStatus } from '../components/ui/DataGrid';
 import {
   baixarModeloPlanilhaProdutos,
   parsePlanilhaProdutos,
@@ -1119,107 +1119,66 @@ export const CadastrosView: React.FC = () => {
             </button>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200">
-                  <th className="p-3">Produtor / Propriedade</th>
-                  <th className="p-3">CPF / CNPJ</th>
-                  <th className="p-3">Nº CAF / DAP</th>
-                  <th className="p-3">Localização</th>
-                  <th className="p-3">Área (ha)</th>
-                  <th className="p-3">Orgânico</th>
-                  <th className="p-3">Validade / Status CAF</th>
-                  <th className="p-3 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {produtoresComCafInfo
-                  .filter(p => {
-                    const matchesSearch = p.nome.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                      (p.cafDapNum && p.cafDapNum.toLowerCase().includes(searchTerm.toLowerCase())) || 
-                      (p.cpfCnpj && p.cpfCnpj.includes(searchTerm));
-                    const matchesCafFilter =
-                      filterCafStatus === 'TODOS' ? true :
-                      filterCafStatus === 'PRESTES_A_EXPIRAR' ? p.cafInfo.status === 'PRESTES_A_EXPIRAR' :
-                      filterCafStatus === 'EXPIRADO' ? p.cafInfo.status === 'EXPIRADO' :
-                      filterCafStatus === 'VALIDO' ? p.cafInfo.status === 'OK' : true;
-                    return matchesSearch && matchesCafFilter;
-                  })
-                  .map(p => (
-                    <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="p-3 font-bold text-slate-900">
-                        {p.nome}
-                        <div className="text-[10px] text-slate-500 font-normal">{p.nomePropriedade}</div>
-                      </td>
-                      <td className="p-3 font-mono text-slate-600">{p.cpfCnpj}</td>
-                      <td className="p-3">
-                        <div className="font-mono text-slate-800 font-bold">{p.cafDapNum || 'Sem Nº'}</div>
-                        <div className="text-[10px] text-slate-500">Validade: {p.cafDapValidade || '2028-12-31'}</div>
-                      </td>
-                      <td className="p-3 text-slate-600">{p.municipio} / {p.uf}</td>
-                      <td className="p-3 text-slate-700 font-medium">{p.areaHectares} ha</td>
-                      <td className="p-3">
-                        {p.certificacaoOrganica ? (
-                          <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold text-[10px]">
-                            Sim (Orgânico)
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px]">
-                            Convencional
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-3">
-                        {p.cafInfo.status === 'EXPIRADO' ? (
-                          <div className="space-y-0.5">
-                            <span className="px-2.5 py-0.5 rounded-md bg-rose-100 text-rose-800 font-extrabold text-[10px] inline-flex items-center gap-1 border border-rose-300">
-                              <AlertCircle className="w-3 h-3" /> Expirada
-                            </span>
-                            <div className="text-[10px] text-rose-600 font-bold">{p.cafInfo.label}</div>
-                          </div>
-                        ) : p.cafInfo.status === 'PRESTES_A_EXPIRAR' ? (
-                          <div className="space-y-0.5">
-                            <span className="px-2.5 py-0.5 rounded-md bg-amber-100 text-amber-900 font-extrabold text-[10px] inline-flex items-center gap-1 border border-amber-300 animate-pulse">
-                              <AlertTriangle className="w-3 h-3" /> Vence em breve
-                            </span>
-                            <div className="text-[10px] text-amber-800 font-extrabold">{p.cafInfo.label}</div>
-                          </div>
-                        ) : (
-                          <div className="space-y-0.5">
-                            <span className="px-2.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold text-[10px] inline-flex items-center gap-1 border border-emerald-200">
-                              <CheckCircle2 className="w-3 h-3" /> Válida
-                            </span>
-                            <div className="text-[10px] text-slate-500 font-mono">{p.cafInfo.label}</div>
-                          </div>
-                        )}
-                      </td>
-                      <td className="p-3 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => handleOpenProdutor(p)}
-                            title="Editar Produtor"
-                            className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-emerald-700 transition-colors"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (!canWrite) { blockWriteAction(); return; }
-                              if (confirm(`Deseja excluir o produtor ${p.nome}?`)) deleteProdutor(p.id);
-                            }}
-                            title="Excluir Produtor"
-                            className="p-1.5 hover:bg-rose-50 rounded-lg text-slate-400 hover:text-rose-600 transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
+          <DataGrid
+              rows={produtoresComCafInfo.filter(p => {
+                const matchesSearch = p.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                  (p.cafDapNum && p.cafDapNum.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                  (p.cpfCnpj && p.cpfCnpj.includes(searchTerm));
+                const matchesCafFilter =
+                  filterCafStatus === 'TODOS' ? true :
+                  filterCafStatus === 'PRESTES_A_EXPIRAR' ? p.cafInfo.status === 'PRESTES_A_EXPIRAR' :
+                  filterCafStatus === 'EXPIRADO' ? p.cafInfo.status === 'EXPIRADO' :
+                  filterCafStatus === 'VALIDO' ? p.cafInfo.status === 'OK' : true;
+                return matchesSearch && matchesCafFilter;
+              })}
+              getRowId={p => p.id}
+              onRowDoubleClick={p => handleOpenProdutor(p)}
+              panelTitle={p => p.nome}
+              panelSubtitle={p => p.cpfCnpj}
+              emptyMessage="Nenhum produtor encontrado."
+              columns={[
+                {
+                  key: 'cafStatus',
+                  header: 'Situação CAF',
+                  width: 150,
+                  value: p => (p.cafInfo.status === 'EXPIRADO' ? 'Expirada' : p.cafInfo.status === 'PRESTES_A_EXPIRAR' ? 'Vence em breve' : 'Válida'),
+                  render: p => (
+                    <GridStatus
+                      tone={p.cafInfo.status === 'EXPIRADO' ? 'danger' : p.cafInfo.status === 'PRESTES_A_EXPIRAR' ? 'warning' : 'success'}
+                      label={p.cafInfo.status === 'EXPIRADO' ? 'Expirada' : p.cafInfo.status === 'PRESTES_A_EXPIRAR' ? 'Vence em breve' : 'Válida'}
+                    />
+                  ),
+                },
+                { key: 'nome', header: 'Produtor', width: 240 },
+                { key: 'nomePropriedade', header: 'Propriedade', width: 180 },
+                { key: 'cpfCnpj', header: 'CPF / CNPJ', width: 150 },
+                { key: 'cafDapNum', header: 'Nº CAF / DAP', width: 150 },
+                { key: 'cafDapValidade', header: 'Validade CAF', width: 120, align: 'center' },
+                { key: 'localizacao', header: 'Município / UF', width: 160, value: p => [p.municipio, p.uf].filter(Boolean).join(' / ') },
+                {
+                  key: 'areaHectares',
+                  header: 'Área (ha)',
+                  width: 100,
+                  align: 'right',
+                  value: p => (p.areaHectares === undefined || p.areaHectares === null || (p.areaHectares as any) === '' ? null : Number(p.areaHectares)),
+                  render: p => (p.areaHectares || p.areaHectares === 0 ? Number(p.areaHectares).toLocaleString('pt-BR') : null),
+                },
+                { key: 'organico', header: 'Produção', width: 120, value: p => (p.certificacaoOrganica ? 'Orgânica' : 'Convencional') },
+              ]}
+              actions={[
+                { label: 'Editar', icon: Pencil, onClick: p => handleOpenProdutor(p) },
+                {
+                  label: 'Excluir',
+                  icon: Trash2,
+                  tone: 'danger',
+                  divider: true,
+                  onClick: p => {
+                    if (!canWrite) { blockWriteAction(); return; }
+                    if (confirm(`Deseja excluir o produtor ${p.nome}?`)) deleteProdutor(p.id);
+                  },
+                },
+              ]}
+            />
         </div>
         </>
       )}
@@ -1366,75 +1325,51 @@ export const CadastrosView: React.FC = () => {
               />
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 font-bold uppercase border-b border-slate-200">
-                  <th className="p-3">Escola / INEP</th>
-                  <th className="p-3">Diretor Responsável</th>
-                  <th className="p-3">Endereço / Contato</th>
-                  <th className="p-3">Alunos Atendidos</th>
-                  <th className="p-3 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {escolasPnae.filter(e => e.nomeEscola.toLowerCase().includes(searchTerm.toLowerCase()) || (e.inepCodigo && e.inepCodigo.includes(searchTerm))).map(e => (
-                  <tr key={e.id} className="hover:bg-slate-50/80">
-                    <td className="p-3 font-bold text-slate-900">
-                      {e.nomeEscola}
-                      <div className="text-[10px] text-slate-500 font-mono font-normal">INEP: {e.inepCodigo}</div>
-                    </td>
-                    <td className="p-3 text-slate-700 font-medium">{e.diretorResponsavel}</td>
-                    <td className="p-3 text-slate-600">
-                      <div className="font-medium text-slate-800">{e.endereco}</div>
-                      {e.pontoReferencia && (
-                        <div className="text-[11px] text-amber-700 font-medium mt-0.5">
-                          Ref: {e.pontoReferencia}
-                        </div>
-                      )}
-                      <div className="text-[10px] text-slate-500 font-medium flex flex-wrap items-center gap-2 mt-1">
-                        {e.latitude && e.longitude ? (
-                          <a
-                            href={`https://www.google.com/maps/search/?api=1&query=${e.latitude},${e.longitude}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 font-mono font-bold hover:bg-rose-100 transition-colors"
-                            title="Abrir localização no Google Maps"
-                          >
-                            <ExternalLink className="w-2.5 h-2.5" />
-                            GPS: {Number(e.latitude).toFixed(4)}, {Number(e.longitude).toFixed(4)}
-                          </a>
-                        ) : null}
-                        {e.telefone && <span>Tel: {e.telefone}</span>}
-                        {e.celular && <span className="text-emerald-700 font-semibold">Cel/WA: {e.celular}</span>}
-                        {e.email && <span className="text-slate-600">Email: {e.email}</span>}
-                      </div>
-                    </td>
-                    <td className="p-3 font-bold text-emerald-700">{e.alunosAtendidos} alunos</td>
-                    <td className="p-3 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => handleOpenEscola(e)}
-                          className="p-1.5 hover:bg-slate-100 rounded text-slate-600 hover:text-emerald-700"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (!canWrite) { blockWriteAction(); return; }
-                            if (confirm(`Deseja excluir a escola ${e.nomeEscola}?`)) deleteEscolaPnae(e.id);
-                          }}
-                          className="p-1.5 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataGrid
+              rows={escolasPnae.filter(e => e.nomeEscola.toLowerCase().includes(searchTerm.toLowerCase()) || (e.inepCodigo && e.inepCodigo.includes(searchTerm)))}
+              getRowId={e => e.id}
+              onRowDoubleClick={e => handleOpenEscola(e)}
+              panelTitle={e => e.nomeEscola}
+              panelSubtitle={e => (e.inepCodigo ? `INEP ${e.inepCodigo}` : '')}
+              emptyMessage="Nenhuma escola encontrada."
+              columns={[
+                { key: 'nomeEscola', header: 'Escola', width: 260 },
+                { key: 'inepCodigo', header: 'Código INEP', width: 120, align: 'center' },
+                { key: 'diretorResponsavel', header: 'Diretor Responsável', width: 190 },
+                { key: 'endereco', header: 'Endereço', width: 240 },
+                { key: 'pontoReferencia', header: 'Ponto de Referência', width: 180 },
+                { key: 'telefone', header: 'Telefone', width: 130 },
+                { key: 'celular', header: 'Celular / WhatsApp', width: 150 },
+                { key: 'email', header: 'E-mail', width: 200 },
+                {
+                  key: 'alunosAtendidos',
+                  header: 'Alunos',
+                  width: 90,
+                  align: 'right',
+                  value: e => (e.alunosAtendidos || e.alunosAtendidos === 0 ? Number(e.alunosAtendidos) : null),
+                  render: e => (e.alunosAtendidos || e.alunosAtendidos === 0 ? Number(e.alunosAtendidos).toLocaleString('pt-BR') : null),
+                },
+              ]}
+              actions={[
+                { label: 'Editar', icon: Pencil, onClick: e => handleOpenEscola(e) },
+                {
+                  label: 'Ver no mapa',
+                  icon: ExternalLink,
+                  hidden: e => !(e.latitude && e.longitude),
+                  onClick: e => window.open(`https://www.google.com/maps/search/?api=1&query=${e.latitude},${e.longitude}`, '_blank', 'noopener,noreferrer'),
+                },
+                {
+                  label: 'Excluir',
+                  icon: Trash2,
+                  tone: 'danger',
+                  divider: true,
+                  onClick: e => {
+                    if (!canWrite) { blockWriteAction(); return; }
+                    if (confirm(`Deseja excluir a escola ${e.nomeEscola}?`)) deleteEscolaPnae(e.id);
+                  },
+                },
+              ]}
+            />
         </div>
         </>
       )}
