@@ -14,6 +14,7 @@ import {
   X
 } from 'lucide-react';
 import { LancamentoContabil, ItemPatrimonio } from '../types';
+import { DataGrid, GridStatus } from '../components/ui/DataGrid';
 import { playActionCompleteSound } from '../utils/actionSound';
 import jsPDF from 'jspdf';
 
@@ -411,61 +412,60 @@ if (p) {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200">
-                  <th className="px-5 py-3">Lançamento / Data</th>
-                  <th className="px-5 py-3">Partida dobrada</th>
-                  <th className="px-5 py-3">Histórico / Origem</th>
-                  <th className="px-5 py-3 text-right">Valor</th>
-                  <th className="px-5 py-3 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {lancamentosFiltrados.length === 0 ? (
-                  <tr><td colSpan={5} className="p-12 text-center text-slate-400">Nenhum lançamento encontrado para a pesquisa.</td></tr>
-                ) : lancamentosFiltrados.map(l => {
+          <DataGrid
+            rows={lancamentosFiltrados}
+            getRowId={l => l.id}
+            pageSize={25}
+            panelTitle={l => `Lançamento #${l.numeroLancamento}`}
+            panelSubtitle={l => formatarData(l.data)}
+            emptyMessage="Nenhum lançamento encontrado para a pesquisa."
+            columns={[
+              {
+                key: 'periodo',
+                header: 'Período',
+                width: 120,
+                value: l => (prazoEdicaoLancamento(l.data).aberto ? 'Aberto' : 'Encerrado'),
+                render: l => <GridStatus tone={prazoEdicaoLancamento(l.data).aberto ? 'success' : 'neutral'} label={prazoEdicaoLancamento(l.data).aberto ? 'Aberto' : 'Encerrado'} />,
+              },
+              { key: 'numeroLancamento', header: 'Nº', width: 80, value: l => Number(l.numeroLancamento) || l.numeroLancamento },
+              { key: 'data', header: 'Data', width: 100, value: l => l.data, render: l => formatarData(l.data) },
+              { key: 'debito', header: 'Débito', width: 240, value: l => `${l.contaDebitoCodigo || ''} — ${l.contaDebito || l.contaDebitoNome || ''}` },
+              { key: 'credito', header: 'Crédito', width: 240, value: l => `${l.contaCreditoCodigo || ''} — ${l.contaCredito || l.contaCreditoNome || ''}` },
+              { key: 'historico', header: 'Histórico', width: 300 },
+              { key: 'documentoRef', header: 'Documento', width: 120 },
+              { key: 'moduloOrigem', header: 'Origem', width: 110 },
+              {
+                key: 'valor',
+                header: 'Valor',
+                width: 130,
+                align: 'right',
+                value: l => l.valor || 0,
+                render: l => (l.valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+              },
+            ]}
+            actions={[
+              {
+                label: 'Editar',
+                icon: Pencil,
+                hidden: () => !canWrite,
+                onClick: l => {
                   const prazo = prazoEdicaoLancamento(l.data);
-                  return (
-                    <tr key={l.id} className="hover:bg-emerald-50/30 transition-colors">
-                      <td className="px-5 py-4 align-top">
-                        <div className="font-mono font-black text-slate-900">#{l.numeroLancamento}</div>
-                        <div className="text-[11px] text-slate-500 mt-1">{formatarData(l.data)}</div>
-                        {!prazo.aberto && <span className="inline-block mt-2 px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[9px] font-bold">Período encerrado</span>}
-                      </td>
-                      <td className="px-5 py-4 align-top min-w-[280px]">
-                        <div className="font-semibold text-emerald-700">{l.contaDebitoCodigo} — {l.contaDebito || l.contaDebitoNome}</div>
-                        <div className="flex items-center gap-2 my-1"><span className="w-5 border-t border-slate-300" /><span className="text-[10px] text-slate-400">contra</span></div>
-                        <div className="font-semibold text-indigo-700">{l.contaCreditoCodigo} — {l.contaCredito || l.contaCreditoNome}</div>
-                      </td>
-                      <td className="px-5 py-4 align-top max-w-[360px]">
-                        <div className="text-slate-800 leading-relaxed">{l.historico}</div>
-                        <div className="flex flex-wrap gap-1.5 mt-2">
-                          {l.documentoRef && <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-500 text-[9px] font-bold">Doc. {l.documentoRef}</span>}
-                          {l.moduloOrigem && <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-[9px] font-bold">{l.moduloOrigem}</span>}
-                        </div>
-                      </td>
-                      <td className="px-5 py-4 text-right align-top font-black text-slate-900 whitespace-nowrap">R$ {(l.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                      <td className="px-5 py-4 text-right align-top whitespace-nowrap">
-                        <button
-                          onClick={() => prazo.aberto ? handleOpenLancamento(l) : alert(`Este lançamento só podia ser editado até ${prazo.prazo.toLocaleDateString('pt-BR')}.`)}
-                          disabled={!canWrite}
-                          title={prazo.aberto ? 'Editar lançamento' : `Edição encerrada em ${prazo.prazo.toLocaleDateString('pt-BR')}`}
-                          className={`p-2 rounded-lg mr-1 ${prazo.aberto && canWrite ? 'text-emerald-600 hover:bg-emerald-100' : 'text-slate-300 cursor-not-allowed'}`}
-                        ><Pencil className="w-4 h-4" /></button>
-                        <button
-                          onClick={() => { if (!canWrite) { blockWriteAction(); return; } if (confirm('Deseja estornar/excluir este lançamento contábil?')) deleteLancamentoContabil(l.id); }}
-                          className="p-2 hover:bg-rose-50 rounded-lg text-slate-400 hover:text-rose-600"
-                          title="Excluir lançamento"
-                        ><Trash2 className="w-4 h-4" /></button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  if (prazo.aberto) handleOpenLancamento(l);
+                  else alert(`Este lançamento só podia ser editado até ${prazo.prazo.toLocaleDateString('pt-BR')}.`);
+                },
+              },
+              {
+                label: 'Estornar / Excluir',
+                icon: Trash2,
+                tone: 'danger',
+                divider: true,
+                onClick: l => {
+                  if (!canWrite) { blockWriteAction(); return; }
+                  if (confirm('Deseja estornar/excluir este lançamento contábil?')) deleteLancamentoContabil(l.id);
+                },
+              },
+            ]}
+          />
         </div>
       )}
 
@@ -489,53 +489,44 @@ if (p) {
             />
             <span className="text-[11px] text-slate-400 whitespace-nowrap">{contasFiltradas.length} de {planoContas.length} contas</span>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 font-bold uppercase border-b border-slate-200">
-                  <th className="p-3">Código Estruturado</th>
-                  <th className="p-3">Descrição da Conta</th>
-                  <th className="p-3">Grupo Contábil</th>
-                  <th className="p-3">Natureza</th>
-                  <th className="p-3">Nível</th>
-                  <th className="p-3">Tipo</th>
-                  <th className="p-3">Ato</th>
-                  <th className="p-3 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {contasFiltradas.map(pc => (
-                  <tr key={pc.id} className={pc.nivel === 1 ? 'bg-slate-50 font-bold' : pc.tipoConta === 'SINTETICA' ? 'bg-slate-50/40' : ''}>
-                    <td className="p-3 font-mono text-slate-900" style={{ paddingLeft: `${0.75 + (pc.nivel - 1) * 0.9}rem` }}>{pc.codigo}</td>
-                    <td className="p-3 text-slate-900 font-semibold">{pc.nome}</td>
-                    <td className="p-3"><span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold">{pc.tipo}</span></td>
-                    <td className="p-3 text-slate-600 font-medium">{pc.natureza === 'DEVEDORA' ? 'Devedora' : 'Credora'}</td>
-                    <td className="p-3 text-slate-500">Nível {pc.nivel}</td>
-                    <td className="p-3">
-                      <span className={`px-2 py-0.5 rounded font-bold text-[10px] ${pc.tipoConta === 'ANALITICA' ? 'bg-blue-100 text-blue-800' : 'bg-slate-200 text-slate-600'}`}>
-                        {pc.tipoConta === 'ANALITICA' ? 'Analítica' : 'Sintética'}
-                      </span>
-                    </td>
-                    <td className="p-3 text-[10px] text-slate-500">
-                      {pc.atoCooperativo === 'COOPERATIVO' ? 'Cooperativo' : pc.atoCooperativo === 'NAO_COOPERATIVO' ? 'Não Coop.' : 'Ambos'}
-                    </td>
-                    <td className="p-3 text-right">
-                      <button
-                        onClick={() => {
-                          if (!canWrite) { blockWriteAction(); return; }
-                          if (confirm(`Excluir conta contábil ${pc.codigo}?`)) deletePlanoConta(pc.id);
-                        }}
-                        className="p-1 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600"
-                        title="Excluir Conta"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataGrid
+                rows={contasFiltradas}
+                getRowId={pc => pc.id}
+                pageSize={50}
+                panelTitle={pc => pc.nome}
+                panelSubtitle={pc => pc.codigo}
+                emptyMessage="Nenhuma conta encontrada."
+                columns={[
+                  {
+                    key: 'codigo',
+                    header: 'Código',
+                    width: 160,
+                    render: pc => <span style={{ paddingLeft: `${(pc.nivel - 1) * 0.9}rem`, fontWeight: pc.nivel === 1 ? 600 : undefined }}>{pc.codigo}</span>,
+                  },
+                  { key: 'nome', header: 'Descrição da Conta', width: 300, render: pc => <span style={{ fontWeight: pc.nivel === 1 || pc.tipoConta === 'SINTETICA' ? 600 : undefined }}>{pc.nome}</span> },
+                  { key: 'tipo', header: 'Grupo Contábil', width: 140 },
+                  { key: 'natureza', header: 'Natureza', width: 110, value: pc => (pc.natureza === 'DEVEDORA' ? 'Devedora' : 'Credora') },
+                  { key: 'nivel', header: 'Nível', width: 80, align: 'center' },
+                  { key: 'tipoConta', header: 'Tipo', width: 110, value: pc => (pc.tipoConta === 'ANALITICA' ? 'Analítica' : 'Sintética') },
+                  {
+                    key: 'atoCooperativo',
+                    header: 'Ato',
+                    width: 120,
+                    value: pc => (pc.atoCooperativo === 'COOPERATIVO' ? 'Cooperativo' : pc.atoCooperativo === 'NAO_COOPERATIVO' ? 'Não Coop.' : 'Ambos'),
+                  },
+                ]}
+                actions={[
+                  {
+                    label: 'Excluir conta',
+                    icon: Trash2,
+                    tone: 'danger',
+                    onClick: pc => {
+                      if (!canWrite) { blockWriteAction(); return; }
+                      if (confirm(`Excluir conta contábil ${pc.codigo}?`)) deletePlanoConta(pc.id);
+                    },
+                  },
+                ]}
+              />
         </div>
         );
       })()}
@@ -569,54 +560,43 @@ if (p) {
               Calcula e lança automaticamente a depreciação do mês para cada bem (pelo prazo de vida útil cadastrado, ou padrão por categoria), gerando o lançamento contábil correspondente. Bens já processados nesta competência são pulados — pode rodar quantas vezes quiser sem duplicar.
             </p>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 font-bold uppercase border-b border-slate-200">
-                  <th className="p-3">Ativo</th>
-                  <th className="p-3">Plaqueta / Tombamento</th>
-                  <th className="p-3">Data Aquisição</th>
-                  <th className="p-3">Valor Aquisição</th>
-                  <th className="p-3">Depreciação Acumulada</th>
-                  <th className="p-3">Valor Atual</th>
-                  <th className="p-3">Última Depreciação</th>
-                  <th className="p-3 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {patrimonio.map(item => (
-                  <tr key={item.id} className="hover:bg-slate-50/80">
-                    <td className="p-3 font-bold text-slate-900">{item.descricao}</td>
-                    <td className="p-3 font-mono text-emerald-800 font-bold">{item.tombamentoNum || item.codigoTombo}</td>
-                    <td className="p-3 text-slate-600">{item.dataAquisicao}</td>
-                    <td className="p-3 font-bold text-slate-900">R$ {(item.valorAquisicao || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                    <td className="p-3 text-rose-700 font-semibold">- R$ {(item.depreciacaoAcumulada || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                    <td className="p-3 font-bold text-emerald-700">R$ {((item.valorAtual ?? (item.valorAquisicao - (item.depreciacaoAcumulada || 0)))).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                    <td className="p-3 text-slate-500 font-mono">{item.ultimaDepreciacaoCompetencia || '—'}</td>
-                    <td className="p-3 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => handleOpenPatrimonio(item)}
-                          className="p-1.5 hover:bg-slate-100 rounded text-slate-600 hover:text-emerald-700"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (!canWrite) { blockWriteAction(); return; }
-                            if (confirm(`Deseja excluir o ativo ${item.descricao}?`)) deleteItemPatrimonio(item.id);
-                          }}
-                          className="p-1.5 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataGrid
+            rows={patrimonio}
+            getRowId={item => item.id}
+            onRowDoubleClick={item => handleOpenPatrimonio(item)}
+            panelTitle={item => item.descricao}
+            panelSubtitle={item => item.tombamentoNum || item.codigoTombo || ''}
+            emptyMessage="Nenhum bem patrimonial cadastrado."
+            columns={[
+              { key: 'descricao', header: 'Ativo', width: 240 },
+              { key: 'tombamento', header: 'Plaqueta / Tombamento', width: 160, value: item => item.tombamentoNum || item.codigoTombo },
+              { key: 'dataAquisicao', header: 'Data Aquisição', width: 120 },
+              { key: 'valorAquisicao', header: 'Valor Aquisição', width: 140, align: 'right', value: item => item.valorAquisicao || 0, render: item => (item.valorAquisicao || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) },
+              { key: 'depreciacaoAcumulada', header: 'Depreciação Acum.', width: 140, align: 'right', value: item => item.depreciacaoAcumulada || 0, render: item => (item.depreciacaoAcumulada || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) },
+              {
+                key: 'valorAtual',
+                header: 'Valor Atual',
+                width: 140,
+                align: 'right',
+                value: item => item.valorAtual ?? (item.valorAquisicao - (item.depreciacaoAcumulada || 0)),
+                render: item => (item.valorAtual ?? (item.valorAquisicao - (item.depreciacaoAcumulada || 0))).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+              },
+              { key: 'ultimaDepreciacaoCompetencia', header: 'Última Depreciação', width: 140 },
+            ]}
+            actions={[
+              { label: 'Editar', icon: Pencil, onClick: item => handleOpenPatrimonio(item) },
+              {
+                label: 'Excluir',
+                icon: Trash2,
+                tone: 'danger',
+                divider: true,
+                onClick: item => {
+                  if (!canWrite) { blockWriteAction(); return; }
+                  if (confirm(`Deseja excluir o ativo ${item.descricao}?`)) deleteItemPatrimonio(item.id);
+                },
+              },
+            ]}
+          />
         </div>
       )}
 
