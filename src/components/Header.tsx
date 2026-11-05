@@ -3,8 +3,6 @@ import { useCoop } from '../context/CoopContext';
 import {
   Search,
   Bell,
-  Sun,
-  Moon,
   Building2,
   UserCheck,
   ChevronDown,
@@ -39,8 +37,6 @@ export const Header: React.FC<Props> = ({ activeView = 'dashboard', setActiveVie
     setIsSearchOpen,
     notifications,
     markNotificationAsRead,
-    themeMode,
-    toggleTheme,
     logout,
     licenseInfo,
     trialDaysRemaining,
@@ -247,15 +243,6 @@ export const Header: React.FC<Props> = ({ activeView = 'dashboard', setActiveVie
         >
           <Share2 className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">Compartilhar Portais</span>
-        </button>
-
-        {/* Theme Toggle */}
-        <button
-          onClick={toggleTheme}
-          className="p-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors border border-transparent hover:border-slate-200"
-          title="Alternar Modo Claro / Escuro"
-        >
-          {themeMode === 'dark' ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4 text-emerald-700" />}
         </button>
 
         {/* User Role Switcher Dropdown */}
