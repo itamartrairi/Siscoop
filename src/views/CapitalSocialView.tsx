@@ -24,6 +24,7 @@ import {
   CreditCard
 } from 'lucide-react';
 import { ReceiptModal } from '../components/ReceiptModal';
+import { DataGrid, GridStatus } from '../components/ui/DataGrid';
 
 export const CapitalSocialView: React.FC = () => {
   const {
@@ -322,67 +323,44 @@ export const CapitalSocialView: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-xs overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 dark:bg-slate-900/60 text-slate-400 text-[11px] font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
-                    <th className="p-4">Data / Documento</th>
-                    <th className="p-4">Cooperado</th>
-                    <th className="p-4">Tipo de Operação</th>
-                    <th className="p-4">Forma Pagto</th>
-                    <th className="p-4">Conta Bancária</th>
-                    <th className="p-4">Valor (R$)</th>
-                    <th className="p-4 text-right">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50 text-xs">
-                  {filteredTx.map(tx => (
-                    <tr key={tx.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition-colors">
-                      <td className="p-4 font-mono">
-                        <div className="font-semibold text-slate-900 dark:text-white">{tx.numeroDocumento}</div>
-                        <div className="text-[11px] text-slate-400">{formatarData(tx.data)}</div>
-                      </td>
-
-                      <td className="p-4">
-                        <div className="font-bold text-slate-900 dark:text-white">{tx.cooperadoNome}</div>
-                        <div className="text-[11px] text-slate-400 font-mono">{tx.cooperadoMatricula}</div>
-                      </td>
-
-                      <td className="p-4">
-                        <span className={`px-2.5 py-1 rounded-full font-bold text-[10px] ${
-                          tx.tipo === 'INTEGRALIZACAO' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' :
-                          tx.tipo === 'SUBSCRICAO' ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300' :
-                          tx.tipo === 'DEVOLUCAO' ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300' :
-                          'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300'
-                        }`}>
-                          {tx.tipo}
-                        </span>
-                      </td>
-
-                      <td className="p-4 text-slate-700 dark:text-slate-300">
-                        {tx.formaPagamento}
-                      </td>
-                      <td className="p-4 text-slate-700 dark:text-slate-300 whitespace-nowrap">{nomeContaBancaria(contasBancarias, tx.contaBancariaId)}</td>
-
-                      <td className="p-4 font-mono font-bold text-slate-900 dark:text-white text-sm">
-                        R$ {tx.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </td>
-
-                      <td className="p-4 text-right">
-                        <button
-                          onClick={() => setSelectedReceiptTxId(tx.id)}
-                          className="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-emerald-50 dark:hover:bg-emerald-950 text-slate-700 dark:text-slate-200 hover:text-emerald-600 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ml-auto"
-                        >
-                          <Printer className="w-3.5 h-3.5" /> Recibo
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <DataGrid
+          rows={filteredTx}
+          getRowId={tx => tx.id}
+          pageSize={20}
+          onRowDoubleClick={tx => setSelectedReceiptTxId(tx.id)}
+          panelTitle={tx => tx.cooperadoNome}
+          panelSubtitle={tx => `${tx.numeroDocumento || ''} · ${(tx.valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`}
+          emptyMessage="Nenhuma movimentação de capital encontrada."
+          columns={[
+            {
+              key: 'tipo',
+              header: 'Operação',
+              width: 150,
+              value: tx => ({ INTEGRALIZACAO: 'Integralização', SUBSCRICAO: 'Subscrição', DEVOLUCAO: 'Devolução', AUMENTO: 'Aumento', TRANSFERENCIA: 'Transferência' } as Record<string, string>)[tx.tipo] || tx.tipo,
+              render: tx => (
+                <GridStatus
+                  tone={tx.tipo === 'INTEGRALIZACAO' ? 'success' : tx.tipo === 'DEVOLUCAO' ? 'danger' : 'warning'}
+                  label={({ INTEGRALIZACAO: 'Integralização', SUBSCRICAO: 'Subscrição', DEVOLUCAO: 'Devolução', AUMENTO: 'Aumento', TRANSFERENCIA: 'Transferência' } as Record<string, string>)[tx.tipo] || tx.tipo}
+                />
+              ),
+            },
+            { key: 'data', header: 'Data', width: 100, value: tx => tx.data, render: tx => formatarData(tx.data) },
+            { key: 'numeroDocumento', header: 'Documento', width: 140 },
+            { key: 'cooperadoNome', header: 'Cooperado', width: 240 },
+            { key: 'cooperadoMatricula', header: 'Matrícula', width: 110 },
+            { key: 'formaPagamento', header: 'Forma Pagto', width: 130 },
+            { key: 'conta', header: 'Conta Bancária', width: 170, value: tx => nomeContaBancaria(contasBancarias, tx.contaBancariaId) },
+            {
+              key: 'valor',
+              header: 'Valor',
+              width: 130,
+              align: 'right',
+              value: tx => tx.valor || 0,
+              render: tx => (tx.valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+            },
+          ]}
+          actions={[{ label: 'Emitir recibo', icon: Printer, onClick: tx => setSelectedReceiptTxId(tx.id) }]}
+        />
         </div>
       )}
 
@@ -393,82 +371,60 @@ export const CapitalSocialView: React.FC = () => {
             Gerenciamento Individual de Parcelas de Capital Social
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="text-slate-400 text-[11px] font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
-                  <th className="p-4">Parcela</th>
-                  <th className="p-4">Cooperado</th>
-                  <th className="p-4">Vencimento</th>
-                  <th className="p-4">Valor</th>
-                  <th className="p-4">Situação</th>
-                  <th className="p-4 text-right">Ação / Baixa</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50 text-xs">
-                {allParcelas.map(p => (
-                  <tr key={p.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition-colors">
-                    <td className="p-4 font-mono font-bold text-slate-900 dark:text-white">
-                      Parcela {p.numeroParcela}/{p.totalParcelas}
-                    </td>
-
-                    <td className="p-4">
-                      <div className="font-semibold text-slate-900 dark:text-white">{p.cooperadoNome}</div>
-                      <div className="text-[11px] text-slate-400 font-mono">{p.cooperadoMatricula}</div>
-                    </td>
-
-                    <td className="p-4 font-mono text-slate-700 dark:text-slate-300">
-                      {formatarData(p.dataVencimento)}
-                    </td>
-
-                    <td className="p-4 font-mono font-bold text-slate-900 dark:text-white">
-                      R$ {p.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </td>
-
-                    <td className="p-4">
-                      <span className={`px-2.5 py-1 rounded-full font-bold text-[10px] ${
-                        p.status === 'PAGO' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                      }`}>
-                        {p.status}
-                      </span>
-                    </td>
-
-                    <td className="p-4 text-right">
-                      {p.status === 'PENDENTE' ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedBaixaParcela({
-                              transacaoId: p.transacaoId,
-                              id: p.id,
-                              numeroParcela: p.numeroParcela,
-                              totalParcelas: p.totalParcelas,
-                              valor: p.valor,
-                              cooperadoNome: p.cooperadoNome,
-                              cooperadoMatricula: p.cooperadoMatricula,
-                              dataVencimento: p.dataVencimento
-                            });
-                            setBaixaForm({
-                              formaPagamento: 'PIX',
-                              reciboNum: `REC-${Date.now().toString().substring(6)}`,
-                              dataPagamento: new Date().toISOString().substring(0, 10)
-                            });
-                          }}
-                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors shadow-xs flex items-center gap-1.5 ml-auto"
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5" /> Dar Baixa (Registrar Pagamento)
-                        </button>
-                      ) : (
-                        <span className="text-slate-400 text-[11px] font-mono">
-                          Pago ({p.reciboNum || 'Recibo Quitado'})
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataGrid
+            rows={allParcelas}
+            getRowId={p => p.id}
+            pageSize={20}
+            panelTitle={p => `Parcela ${p.numeroParcela}/${p.totalParcelas}`}
+            panelSubtitle={p => p.cooperadoNome}
+            emptyMessage="Nenhuma parcela de capital registrada."
+            columns={[
+              {
+                key: 'status',
+                header: 'Situação',
+                width: 120,
+                value: p => (p.status === 'PAGO' ? 'Pago' : 'Pendente'),
+                render: p => <GridStatus tone={p.status === 'PAGO' ? 'success' : 'warning'} label={p.status === 'PAGO' ? 'Pago' : 'Pendente'} />,
+              },
+              { key: 'parcela', header: 'Parcela', width: 100, value: p => `${p.numeroParcela}/${p.totalParcelas}` },
+              { key: 'cooperadoNome', header: 'Cooperado', width: 240 },
+              { key: 'cooperadoMatricula', header: 'Matrícula', width: 110 },
+              { key: 'dataVencimento', header: 'Vencimento', width: 110, value: p => p.dataVencimento, render: p => formatarData(p.dataVencimento) },
+              {
+                key: 'valor',
+                header: 'Valor',
+                width: 130,
+                align: 'right',
+                value: p => p.valor || 0,
+                render: p => (p.valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+              },
+              { key: 'reciboNum', header: 'Recibo', width: 140, value: p => (p.status === 'PAGO' ? p.reciboNum || 'Quitado' : null) },
+            ]}
+            actions={[
+              {
+                label: 'Dar baixa (registrar pagamento)',
+                icon: CheckCircle2,
+                hidden: p => p.status !== 'PENDENTE',
+                onClick: p => {
+                  setSelectedBaixaParcela({
+                    transacaoId: p.transacaoId,
+                    id: p.id,
+                    numeroParcela: p.numeroParcela,
+                    totalParcelas: p.totalParcelas,
+                    valor: p.valor,
+                    cooperadoNome: p.cooperadoNome,
+                    cooperadoMatricula: p.cooperadoMatricula,
+                    dataVencimento: p.dataVencimento
+                  });
+                  setBaixaForm({
+                    formaPagamento: 'PIX',
+                    reciboNum: `REC-${Date.now().toString().substring(6)}`,
+                    dataPagamento: new Date().toISOString().substring(0, 10)
+                  });
+                },
+              },
+            ]}
+          />
         </div>
       )}
 
