@@ -12,6 +12,7 @@ import {
   Printer
 } from 'lucide-react';
 import { FuncionarioRH, FolhaPagamento } from '../types';
+import { DataGrid, GridStatus } from '../components/ui/DataGrid';
 import { playActionCompleteSound } from '../utils/actionSound';
 import { calcularDescontosFolha } from '../utils/folhaPagamentoHelpers';
 import jsPDF from 'jspdf';
@@ -650,56 +651,47 @@ export const RhView: React.FC = () => {
       {/* Tab Funcionarios */}
       {activeTab === 'funcionarios' && (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-4">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 font-bold uppercase border-b border-slate-200">
-                  <th className="p-3">Nome Completo</th>
-                  <th className="p-3">CPF</th>
-                  <th className="p-3">Cargo / Função</th>
-                  <th className="p-3">Departamento</th>
-                  <th className="p-3">Salário Base</th>
-                  <th className="p-3">Status</th>
-                  <th className="p-3 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {funcionariosRH.map(f => (
-                  <tr key={f.id} className="hover:bg-slate-50/80">
-                    <td className="p-3 font-bold text-slate-900">{f.nome}</td>
-                    <td className="p-3 font-mono text-slate-600">{f.cpf}</td>
-                    <td className="p-3 font-semibold text-slate-800">{f.cargo}</td>
-                    <td className="p-3 text-slate-600">{f.departamento}</td>
-                    <td className="p-3 font-bold text-emerald-700">R$ {(f.salarioBase || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                    <td className="p-3">
-                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold text-[10px]">
-                        {f.status}
-                      </span>
-                    </td>
-                    <td className="p-3 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => handleOpenFunc(f)}
-                          className="p-1.5 hover:bg-slate-100 rounded text-slate-600 hover:text-emerald-700"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (!canWrite) { blockWriteAction(); return; }
-                            if (confirm(`Deseja excluir o colaborador ${f.nome}?`)) deleteFuncionarioRH(f.id);
-                          }}
-                          className="p-1.5 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataGrid
+            rows={funcionariosRH}
+            getRowId={f => f.id}
+            onRowDoubleClick={f => handleOpenFunc(f)}
+            panelTitle={f => f.nome}
+            panelSubtitle={f => f.cargo}
+            emptyMessage="Nenhum colaborador cadastrado."
+            columns={[
+              {
+                key: 'status',
+                header: 'Situação',
+                width: 120,
+                render: f => <GridStatus tone={/ATIV/i.test(String(f.status)) && !/INATIV/i.test(String(f.status)) ? 'success' : /FERIAS|FÉRIAS|AFAST|LICEN/i.test(String(f.status)) ? 'warning' : 'neutral'} label={f.status} />,
+              },
+              { key: 'nome', header: 'Nome Completo', width: 240 },
+              { key: 'cpf', header: 'CPF', width: 140 },
+              { key: 'cargo', header: 'Cargo / Função', width: 180 },
+              { key: 'departamento', header: 'Departamento', width: 160 },
+              {
+                key: 'salarioBase',
+                header: 'Salário Base',
+                width: 130,
+                align: 'right',
+                value: f => f.salarioBase || 0,
+                render: f => (f.salarioBase || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+              },
+            ]}
+            actions={[
+              { label: 'Editar', icon: Pencil, onClick: f => handleOpenFunc(f) },
+              {
+                label: 'Excluir',
+                icon: Trash2,
+                tone: 'danger',
+                divider: true,
+                onClick: f => {
+                  if (!canWrite) { blockWriteAction(); return; }
+                  if (confirm(`Deseja excluir o colaborador ${f.nome}?`)) deleteFuncionarioRH(f.id);
+                },
+              },
+            ]}
+          />
         </div>
       )}
 
@@ -778,121 +770,74 @@ export const RhView: React.FC = () => {
               Nenhuma folha de pagamento encontrada com os filtros selecionados.
             </div>
           ) : (
-            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="bg-slate-50 text-slate-500 font-bold uppercase border-b border-slate-200 text-[11px]">
-                      <th className="p-3.5">Colaborador</th>
-                      <th className="p-3.5">Competência</th>
-                      <th className="p-3.5 text-right">Salário Bruto</th>
-                      <th className="p-3.5 text-right">INSS</th>
-                      <th className="p-3.5 text-right">IRPF</th>
-                      <th className="p-3.5 text-right">Outros Desc.</th>
-                      <th className="p-3.5 text-right">Total Descontos</th>
-                      <th className="p-3.5 text-right font-black text-emerald-800">Líquido a Pagar</th>
-                      <th className="p-3.5 text-right text-slate-400">FGTS (Encargo)</th>
-                      <th className="p-3.5 text-center">Status</th>
-                      <th className="p-3.5 text-right">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {filteredFolhaPagamento.map(folha => {
-                      const func = funcionariosRH.find(f => f.id === folha.funcionarioId);
-                      return (
-                        <tr key={folha.id} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="p-3.5">
-                            <span className="font-extrabold text-slate-900 block">{folha.funcionarioNome || func?.nome || 'Funcionário não vinculado'}</span>
-                            <span className="text-[10px] text-slate-500">{func?.cargo || 'Colaborador'}</span>
-                          </td>
-                          <td className="p-3.5 font-semibold text-slate-700 whitespace-nowrap">
-                            {folha.competencia || folha.competenciaMesAno || '—'}
-                          </td>
-                          <td className="p-3.5 text-right font-bold text-slate-900 whitespace-nowrap">
-                            R$ {(folha.totalProventos || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </td>
-                          <td className="p-3.5 text-right font-medium text-rose-600 whitespace-nowrap">
-                            - R$ {(folha.inss || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </td>
-                          <td className="p-3.5 text-right font-medium text-rose-600 whitespace-nowrap">
-                            - R$ {(folha.irpf || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </td>
-                          <td className="p-3.5 text-right font-medium text-rose-600 whitespace-nowrap">
-                            - R$ {(folha.outrosDescontos || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </td>
-                          <td className="p-3.5 text-right font-bold text-rose-700 whitespace-nowrap">
-                            - R$ {(folha.totalDescontos || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </td>
-                          <td className="p-3.5 text-right font-black text-emerald-700 bg-emerald-50/30 whitespace-nowrap text-[13px]">
-                            R$ {(folha.totalLiquido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </td>
-                          <td className="p-3.5 text-right text-slate-500 whitespace-nowrap" title="FGTS (Encargo do empregador - informativo)">
-                            R$ {(folha.fgts || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </td>
-                          <td className="p-3.5 text-center">
-                            <span className={`px-2.5 py-1 rounded-full font-bold text-[10px] uppercase ${
-                              folha.status === 'PAGA' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
-                            }`}>
-                              {folha.status}
-                            </span>
-                          </td>
-                          <td className="p-3.5 text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              <button
-                                onClick={() => handleOpenFolha(folha)}
-                                className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-emerald-700 transition-colors"
-                                title="Editar lançamento"
-                              >
-                                <Pencil className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  if (!canWrite) { blockWriteAction(); return; }
-                                  if (confirm(`Deseja excluir a folha de ${folha.competencia}?`)) deleteFolhaPagamento(folha.id);
-                                }}
-                                className="p-1.5 hover:bg-rose-50 rounded-lg text-slate-400 hover:text-rose-600 transition-colors"
-                                title="Excluir lançamento"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-slate-100/80 font-black text-slate-900 border-t-2 border-slate-300">
-                      <td className="p-3.5 uppercase text-[11px]" colSpan={2}>
-                        Total Consolidado ({filteredFolhaPagamento.length} itens)
-                      </td>
-                      <td className="p-3.5 text-right whitespace-nowrap">
-                        R$ {totalProventosGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td className="p-3.5 text-right text-rose-700 whitespace-nowrap">
-                        - R$ {totalInssGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td className="p-3.5 text-right text-rose-700 whitespace-nowrap">
-                        - R$ {totalIrpfGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td className="p-3.5 text-right text-rose-700 whitespace-nowrap">
-                        - R$ {totalOutrosDescontosGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td className="p-3.5 text-right text-rose-800 whitespace-nowrap">
-                        - R$ {totalDescontosGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td className="p-3.5 text-right text-emerald-800 bg-emerald-100/50 whitespace-nowrap text-sm">
-                        R$ {totalLiquidoGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td className="p-3.5 text-right text-slate-600 whitespace-nowrap">
-                        R$ {totalFgtsGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td colSpan={2}></td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
+            <DataGrid
+              rows={filteredFolhaPagamento}
+              getRowId={folha => folha.id}
+              pageSize={25}
+              onRowDoubleClick={folha => handleOpenFolha(folha)}
+              panelTitle={folha => folha.funcionarioNome || funcionariosRH.find(f => f.id === folha.funcionarioId)?.nome || 'Funcionário não vinculado'}
+              panelSubtitle={folha => folha.competencia || folha.competenciaMesAno || ''}
+              columns={[
+                {
+                  key: 'status',
+                  header: 'Status',
+                  width: 110,
+                  render: folha => <GridStatus tone={folha.status === 'PAGA' ? 'success' : 'warning'} label={folha.status} />,
+                },
+                {
+                  key: 'colaborador',
+                  header: 'Colaborador',
+                  width: 220,
+                  value: folha => folha.funcionarioNome || funcionariosRH.find(f => f.id === folha.funcionarioId)?.nome || 'Funcionário não vinculado',
+                },
+                { key: 'cargo', header: 'Cargo', width: 150, value: folha => funcionariosRH.find(f => f.id === folha.funcionarioId)?.cargo },
+                { key: 'competencia', header: 'Competência', width: 110, value: folha => folha.competencia || folha.competenciaMesAno },
+                ...([
+                  ['totalProventos', 'Salário Bruto'],
+                  ['inss', 'INSS'],
+                  ['irpf', 'IRPF'],
+                  ['outrosDescontos', 'Outros Desc.'],
+                  ['totalDescontos', 'Total Descontos'],
+                  ['totalLiquido', 'Líquido a Pagar'],
+                  ['fgts', 'FGTS (Encargo)'],
+                ] as [string, string][]).map(([key, header]) => ({
+                  key,
+                  header,
+                  width: 130,
+                  align: 'right' as const,
+                  value: (folha: any) => Number(folha[key]) || 0,
+                  render: (folha: any) =>
+                    key === 'totalLiquido'
+                      ? <strong>{(Number(folha[key]) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong>
+                      : (Number(folha[key]) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+                })),
+              ]}
+              summary={
+                <>
+                  <strong>Total ({filteredFolhaPagamento.length} itens)</strong>
+                  <span>Bruto: {totalProventosGeral.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                  <span>INSS: {totalInssGeral.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                  <span>IRPF: {totalIrpfGeral.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                  <span>Outros: {totalOutrosDescontosGeral.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                  <span>Descontos: {totalDescontosGeral.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                  <strong>Líquido: {totalLiquidoGeral.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong>
+                  <span>FGTS: {totalFgtsGeral.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                </>
+              }
+              actions={[
+                { label: 'Editar', icon: Pencil, onClick: folha => handleOpenFolha(folha) },
+                {
+                  label: 'Excluir',
+                  icon: Trash2,
+                  tone: 'danger',
+                  divider: true,
+                  onClick: folha => {
+                    if (!canWrite) { blockWriteAction(); return; }
+                    if (confirm(`Deseja excluir a folha de ${folha.competencia}?`)) deleteFolhaPagamento(folha.id);
+                  },
+                },
+              ]}
+            />
           )}
         </div>
       )}

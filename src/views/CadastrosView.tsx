@@ -50,6 +50,7 @@ import { GeoLocationPicker } from '../components/GeoLocationPicker';
 import { buscarCodigosFiscais } from '../utils/produtoCodigosFiscais';
 import { POLOS_PADRAO } from '../utils/poloHelpers';
 import { PortalShareBanner } from '../components/PortalShareBanner';
+import { DataGrid, GridStatus } from '../components/ui/DataGrid';
 import {
   baixarModeloPlanilhaProdutos,
   parsePlanilhaProdutos,
@@ -1118,185 +1119,132 @@ export const CadastrosView: React.FC = () => {
             </button>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200">
-                  <th className="p-3">Produtor / Propriedade</th>
-                  <th className="p-3">CPF / CNPJ</th>
-                  <th className="p-3">Nº CAF / DAP</th>
-                  <th className="p-3">Localização</th>
-                  <th className="p-3">Área (ha)</th>
-                  <th className="p-3">Orgânico</th>
-                  <th className="p-3">Validade / Status CAF</th>
-                  <th className="p-3 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {produtoresComCafInfo
-                  .filter(p => {
-                    const matchesSearch = p.nome.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                      (p.cafDapNum && p.cafDapNum.toLowerCase().includes(searchTerm.toLowerCase())) || 
-                      (p.cpfCnpj && p.cpfCnpj.includes(searchTerm));
-                    const matchesCafFilter =
-                      filterCafStatus === 'TODOS' ? true :
-                      filterCafStatus === 'PRESTES_A_EXPIRAR' ? p.cafInfo.status === 'PRESTES_A_EXPIRAR' :
-                      filterCafStatus === 'EXPIRADO' ? p.cafInfo.status === 'EXPIRADO' :
-                      filterCafStatus === 'VALIDO' ? p.cafInfo.status === 'OK' : true;
-                    return matchesSearch && matchesCafFilter;
-                  })
-                  .map(p => (
-                    <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="p-3 font-bold text-slate-900">
-                        {p.nome}
-                        <div className="text-[10px] text-slate-500 font-normal">{p.nomePropriedade}</div>
-                      </td>
-                      <td className="p-3 font-mono text-slate-600">{p.cpfCnpj}</td>
-                      <td className="p-3">
-                        <div className="font-mono text-slate-800 font-bold">{p.cafDapNum || 'Sem Nº'}</div>
-                        <div className="text-[10px] text-slate-500">Validade: {p.cafDapValidade || '2028-12-31'}</div>
-                      </td>
-                      <td className="p-3 text-slate-600">{p.municipio} / {p.uf}</td>
-                      <td className="p-3 text-slate-700 font-medium">{p.areaHectares} ha</td>
-                      <td className="p-3">
-                        {p.certificacaoOrganica ? (
-                          <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold text-[10px]">
-                            Sim (Orgânico)
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px]">
-                            Convencional
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-3">
-                        {p.cafInfo.status === 'EXPIRADO' ? (
-                          <div className="space-y-0.5">
-                            <span className="px-2.5 py-0.5 rounded-md bg-rose-100 text-rose-800 font-extrabold text-[10px] inline-flex items-center gap-1 border border-rose-300">
-                              <AlertCircle className="w-3 h-3" /> Expirada
-                            </span>
-                            <div className="text-[10px] text-rose-600 font-bold">{p.cafInfo.label}</div>
-                          </div>
-                        ) : p.cafInfo.status === 'PRESTES_A_EXPIRAR' ? (
-                          <div className="space-y-0.5">
-                            <span className="px-2.5 py-0.5 rounded-md bg-amber-100 text-amber-900 font-extrabold text-[10px] inline-flex items-center gap-1 border border-amber-300 animate-pulse">
-                              <AlertTriangle className="w-3 h-3" /> Vence em breve
-                            </span>
-                            <div className="text-[10px] text-amber-800 font-extrabold">{p.cafInfo.label}</div>
-                          </div>
-                        ) : (
-                          <div className="space-y-0.5">
-                            <span className="px-2.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold text-[10px] inline-flex items-center gap-1 border border-emerald-200">
-                              <CheckCircle2 className="w-3 h-3" /> Válida
-                            </span>
-                            <div className="text-[10px] text-slate-500 font-mono">{p.cafInfo.label}</div>
-                          </div>
-                        )}
-                      </td>
-                      <td className="p-3 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => handleOpenProdutor(p)}
-                            title="Editar Produtor"
-                            className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-emerald-700 transition-colors"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (!canWrite) { blockWriteAction(); return; }
-                              if (confirm(`Deseja excluir o produtor ${p.nome}?`)) deleteProdutor(p.id);
-                            }}
-                            title="Excluir Produtor"
-                            className="p-1.5 hover:bg-rose-50 rounded-lg text-slate-400 hover:text-rose-600 transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
+          <DataGrid
+              rows={produtoresComCafInfo.filter(p => {
+                const matchesSearch = p.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                  (p.cafDapNum && p.cafDapNum.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                  (p.cpfCnpj && p.cpfCnpj.includes(searchTerm));
+                const matchesCafFilter =
+                  filterCafStatus === 'TODOS' ? true :
+                  filterCafStatus === 'PRESTES_A_EXPIRAR' ? p.cafInfo.status === 'PRESTES_A_EXPIRAR' :
+                  filterCafStatus === 'EXPIRADO' ? p.cafInfo.status === 'EXPIRADO' :
+                  filterCafStatus === 'VALIDO' ? p.cafInfo.status === 'OK' : true;
+                return matchesSearch && matchesCafFilter;
+              })}
+              getRowId={p => p.id}
+              onRowDoubleClick={p => handleOpenProdutor(p)}
+              panelTitle={p => p.nome}
+              panelSubtitle={p => p.cpfCnpj}
+              emptyMessage="Nenhum produtor encontrado."
+              columns={[
+                {
+                  key: 'cafStatus',
+                  header: 'Situação CAF',
+                  width: 150,
+                  value: p => (p.cafInfo.status === 'EXPIRADO' ? 'Expirada' : p.cafInfo.status === 'PRESTES_A_EXPIRAR' ? 'Vence em breve' : 'Válida'),
+                  render: p => (
+                    <GridStatus
+                      tone={p.cafInfo.status === 'EXPIRADO' ? 'danger' : p.cafInfo.status === 'PRESTES_A_EXPIRAR' ? 'warning' : 'success'}
+                      label={p.cafInfo.status === 'EXPIRADO' ? 'Expirada' : p.cafInfo.status === 'PRESTES_A_EXPIRAR' ? 'Vence em breve' : 'Válida'}
+                    />
+                  ),
+                },
+                { key: 'nome', header: 'Produtor', width: 240 },
+                { key: 'nomePropriedade', header: 'Propriedade', width: 180 },
+                { key: 'cpfCnpj', header: 'CPF / CNPJ', width: 150 },
+                { key: 'cafDapNum', header: 'Nº CAF / DAP', width: 150 },
+                { key: 'cafDapValidade', header: 'Validade CAF', width: 120, align: 'center' },
+                { key: 'localizacao', header: 'Município / UF', width: 160, value: p => [p.municipio, p.uf].filter(Boolean).join(' / ') },
+                {
+                  key: 'areaHectares',
+                  header: 'Área (ha)',
+                  width: 100,
+                  align: 'right',
+                  value: p => (p.areaHectares === undefined || p.areaHectares === null || (p.areaHectares as any) === '' ? null : Number(p.areaHectares)),
+                  render: p => (p.areaHectares || p.areaHectares === 0 ? Number(p.areaHectares).toLocaleString('pt-BR') : null),
+                },
+                { key: 'organico', header: 'Produção', width: 120, value: p => (p.certificacaoOrganica ? 'Orgânica' : 'Convencional') },
+              ]}
+              actions={[
+                { label: 'Editar', icon: Pencil, onClick: p => handleOpenProdutor(p) },
+                {
+                  label: 'Excluir',
+                  icon: Trash2,
+                  tone: 'danger',
+                  divider: true,
+                  onClick: p => {
+                    if (!canWrite) { blockWriteAction(); return; }
+                    if (confirm(`Deseja excluir o produtor ${p.nome}?`)) deleteProdutor(p.id);
+                  },
+                },
+              ]}
+            />
         </div>
         </>
       )}
 
       {/* Tab 2: Produtos Agropecuários */}
       {activeTab === 'produtos' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 space-y-4 shadow-xs">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-4">
-            <div className="relative flex-1 w-full">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-              <input
-                type="text"
-                placeholder="Buscar por produto ou categoria..."
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {produtos.filter(p => p.nome.toLowerCase().includes(searchTerm.toLowerCase()) || p.categoria.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
-              <div key={p.id} className="p-4 rounded-xl border border-slate-200/80 bg-slate-50/50 space-y-2 relative group">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-md">
-                    {p.categoria}
-                  </span>
-                  <div className="flex items-center gap-1">
-                    <span className="text-[11px] text-slate-500 font-medium mr-1">Un: {p.unidadeMedida}</span>
-                    <button
-                      onClick={() => handleOpenProduto(p)}
-                      title="Editar Produto"
-                      className="p-1 hover:bg-white rounded text-slate-600 hover:text-emerald-700"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (!canWrite) { blockWriteAction(); return; }
-                        if (confirm(`Excluir o produto ${p.nome}?`)) deleteProduto(p.id);
-                      }}
-                      title="Excluir Produto"
-                      className="p-1 hover:bg-white rounded text-slate-400 hover:text-rose-600"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-                <h3 className="font-extrabold text-slate-900 text-sm">{p.nome}</h3>
-                <div className="text-xs text-slate-600 flex justify-between pt-2 border-t border-slate-200">
-                  <span>Preço PAA Ref:</span>
-                  <span className="font-bold text-emerald-700">R$ {((p.precoReferencia ?? (p as any).precoReferenciaPaa) || 0).toFixed(2)}</span>
-                </div>
-                {!!p.pesoUnitario && (
-                  <div className="text-xs text-slate-600 flex justify-between">
-                    <span>Peso Unit.:</span>
-                    <span className="font-bold text-slate-800">{p.pesoUnitario} KG</span>
-                  </div>
-                )}
-                <div className="text-[11px] text-slate-500">Sazonalidade: {p.descricao || 'Ano todo'}</div>
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${p.tipoProcessamento === 'BENEFICIADO' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
-                    {p.tipoProcessamento === 'BENEFICIADO' ? 'Beneficiado' : 'In Natura'}
-                  </span>
-                  {p.codigoNcm && (
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 bg-sky-50 text-sky-700 border border-sky-200 rounded">
-                      NCM: {p.codigoNcm}
-                    </span>
-                  )}
-                  {p.codigoConab && (
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded">
-                      CONAB: {p.codigoConab}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <DataGrid<ProdutoAgro>
+          rows={produtos}
+          getRowId={p => p.id}
+          onRowDoubleClick={p => handleOpenProduto(p)}
+          panelTitle={p => p.nome}
+          panelSubtitle={p => p.codigo}
+          emptyMessage="Nenhum produto cadastrado."
+          columns={[
+            { key: 'nome', header: 'Descrição', width: 280 },
+            { key: 'codigo', header: 'Código', width: 110 },
+            {
+              key: 'categoria',
+              header: 'Categoria',
+              width: 130,
+              value: p => ({ HORTIFRUTI: 'Hortifrúti', GRAOS: 'Grãos', LATICINIOS: 'Laticínios', PROCESSADOS: 'Processados', CARNES: 'Carnes', OUTROS: 'Outros' } as Record<string, string>)[p.categoria] ?? p.categoria,
+            },
+            { key: 'unidadeMedida', header: 'Unidade', width: 90, align: 'center' },
+            { key: 'codigoNcm', header: 'Código NCM', width: 120, align: 'center' },
+            { key: 'codigoConab', header: 'Código CONAB', width: 120, align: 'center' },
+            {
+              key: 'tipoProcessamento',
+              header: 'Processamento',
+              width: 130,
+              value: p => ((p as any).tipoProcessamento === 'BENEFICIADO' ? 'Beneficiado' : 'In natura'),
+            },
+            {
+              key: 'pesoUnitario',
+              header: 'Peso Unit. (KG)',
+              width: 120,
+              align: 'right',
+              value: p => p.pesoUnitario || null,
+              render: p => (p.pesoUnitario ? p.pesoUnitario.toLocaleString('pt-BR') : null),
+            },
+            {
+              key: 'precoReferencia',
+              header: 'Preço PAA Ref.',
+              width: 130,
+              align: 'right',
+              value: p => p.precoReferencia ?? (p as any).precoReferenciaPaa ?? 0,
+              render: p =>
+                ((p.precoReferencia ?? (p as any).precoReferenciaPaa) || 0).toLocaleString('pt-BR', {
+                  style: 'currency',
+                  currency: 'BRL',
+                }),
+            },
+          ]}
+          actions={[
+            { label: 'Editar', icon: Pencil, onClick: p => handleOpenProduto(p) },
+            {
+              label: 'Excluir',
+              icon: Trash2,
+              tone: 'danger',
+              divider: true,
+              onClick: p => {
+                if (!canWrite) { blockWriteAction(); return; }
+                if (confirm(`Excluir o produto ${p.nome}?`)) deleteProduto(p.id);
+              },
+            },
+          ]}
+        />
       )}
 
       {/* Tab 4: Programas Governamentais */}
@@ -1377,75 +1325,51 @@ export const CadastrosView: React.FC = () => {
               />
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 font-bold uppercase border-b border-slate-200">
-                  <th className="p-3">Escola / INEP</th>
-                  <th className="p-3">Diretor Responsável</th>
-                  <th className="p-3">Endereço / Contato</th>
-                  <th className="p-3">Alunos Atendidos</th>
-                  <th className="p-3 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {escolasPnae.filter(e => e.nomeEscola.toLowerCase().includes(searchTerm.toLowerCase()) || (e.inepCodigo && e.inepCodigo.includes(searchTerm))).map(e => (
-                  <tr key={e.id} className="hover:bg-slate-50/80">
-                    <td className="p-3 font-bold text-slate-900">
-                      {e.nomeEscola}
-                      <div className="text-[10px] text-slate-500 font-mono font-normal">INEP: {e.inepCodigo}</div>
-                    </td>
-                    <td className="p-3 text-slate-700 font-medium">{e.diretorResponsavel}</td>
-                    <td className="p-3 text-slate-600">
-                      <div className="font-medium text-slate-800">{e.endereco}</div>
-                      {e.pontoReferencia && (
-                        <div className="text-[11px] text-amber-700 font-medium mt-0.5">
-                          Ref: {e.pontoReferencia}
-                        </div>
-                      )}
-                      <div className="text-[10px] text-slate-500 font-medium flex flex-wrap items-center gap-2 mt-1">
-                        {e.latitude && e.longitude ? (
-                          <a
-                            href={`https://www.google.com/maps/search/?api=1&query=${e.latitude},${e.longitude}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 font-mono font-bold hover:bg-rose-100 transition-colors"
-                            title="Abrir localização no Google Maps"
-                          >
-                            <ExternalLink className="w-2.5 h-2.5" />
-                            GPS: {Number(e.latitude).toFixed(4)}, {Number(e.longitude).toFixed(4)}
-                          </a>
-                        ) : null}
-                        {e.telefone && <span>Tel: {e.telefone}</span>}
-                        {e.celular && <span className="text-emerald-700 font-semibold">Cel/WA: {e.celular}</span>}
-                        {e.email && <span className="text-slate-600">Email: {e.email}</span>}
-                      </div>
-                    </td>
-                    <td className="p-3 font-bold text-emerald-700">{e.alunosAtendidos} alunos</td>
-                    <td className="p-3 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => handleOpenEscola(e)}
-                          className="p-1.5 hover:bg-slate-100 rounded text-slate-600 hover:text-emerald-700"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (!canWrite) { blockWriteAction(); return; }
-                            if (confirm(`Deseja excluir a escola ${e.nomeEscola}?`)) deleteEscolaPnae(e.id);
-                          }}
-                          className="p-1.5 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataGrid
+              rows={escolasPnae.filter(e => e.nomeEscola.toLowerCase().includes(searchTerm.toLowerCase()) || (e.inepCodigo && e.inepCodigo.includes(searchTerm)))}
+              getRowId={e => e.id}
+              onRowDoubleClick={e => handleOpenEscola(e)}
+              panelTitle={e => e.nomeEscola}
+              panelSubtitle={e => (e.inepCodigo ? `INEP ${e.inepCodigo}` : '')}
+              emptyMessage="Nenhuma escola encontrada."
+              columns={[
+                { key: 'nomeEscola', header: 'Escola', width: 260 },
+                { key: 'inepCodigo', header: 'Código INEP', width: 120, align: 'center' },
+                { key: 'diretorResponsavel', header: 'Diretor Responsável', width: 190 },
+                { key: 'endereco', header: 'Endereço', width: 240 },
+                { key: 'pontoReferencia', header: 'Ponto de Referência', width: 180 },
+                { key: 'telefone', header: 'Telefone', width: 130 },
+                { key: 'celular', header: 'Celular / WhatsApp', width: 150 },
+                { key: 'email', header: 'E-mail', width: 200 },
+                {
+                  key: 'alunosAtendidos',
+                  header: 'Alunos',
+                  width: 90,
+                  align: 'right',
+                  value: e => (e.alunosAtendidos || e.alunosAtendidos === 0 ? Number(e.alunosAtendidos) : null),
+                  render: e => (e.alunosAtendidos || e.alunosAtendidos === 0 ? Number(e.alunosAtendidos).toLocaleString('pt-BR') : null),
+                },
+              ]}
+              actions={[
+                { label: 'Editar', icon: Pencil, onClick: e => handleOpenEscola(e) },
+                {
+                  label: 'Ver no mapa',
+                  icon: ExternalLink,
+                  hidden: e => !(e.latitude && e.longitude),
+                  onClick: e => window.open(`https://www.google.com/maps/search/?api=1&query=${e.latitude},${e.longitude}`, '_blank', 'noopener,noreferrer'),
+                },
+                {
+                  label: 'Excluir',
+                  icon: Trash2,
+                  tone: 'danger',
+                  divider: true,
+                  onClick: e => {
+                    if (!canWrite) { blockWriteAction(); return; }
+                    if (confirm(`Deseja excluir a escola ${e.nomeEscola}?`)) deleteEscolaPnae(e.id);
+                  },
+                },
+              ]}
+            />
         </div>
         </>
       )}
@@ -1474,86 +1398,58 @@ export const CadastrosView: React.FC = () => {
                 />
               </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="bg-slate-50 text-slate-500 font-bold uppercase border-b border-slate-200">
-                    <th className="p-3">Nome</th>
-                    <th className="p-3">Telefone</th>
-                    <th className="p-3">E-mail</th>
-                    <th className="p-3">Veículo Padrão</th>
-                    <th className="p-3 text-center">Status</th>
-                    <th className="p-3 text-center">Entregas Vinculadas</th>
-                    <th className="p-3 text-right">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {motoristas.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="p-8 text-center text-slate-400">
-                        Nenhum motorista cadastrado. Clique em "Novo Motorista" ou compartilhe o link do App do Motorista acima para que ele se cadastre.
-                      </td>
-                    </tr>
-                  ) : motoristas.filter(m => m.nome.toLowerCase().includes(searchTerm.toLowerCase())).map(m => {
+            <DataGrid
+              rows={motoristas.filter(m => m.nome.toLowerCase().includes(searchTerm.toLowerCase()))}
+              getRowId={m => m.id}
+              onRowDoubleClick={m => handleOpenMotorista(m)}
+              panelTitle={m => m.nome}
+              panelSubtitle={m => m.veiculoPadrao || m.telefone || ''}
+              emptyMessage={motoristas.length === 0 ? 'Nenhum motorista cadastrado. Clique em "Novo Motorista" para incluir.' : 'Nenhum motorista encontrado.'}
+              columns={[
+                {
+                  key: 'ativo',
+                  header: 'Situação',
+                  width: 110,
+                  value: m => (m.ativo === false ? 'Inativo' : 'Ativo'),
+                  render: m => <GridStatus active={m.ativo !== false} />,
+                },
+                { key: 'nome', header: 'Nome', width: 240 },
+                { key: 'telefone', header: 'Telefone', width: 150 },
+                { key: 'email', header: 'E-mail', width: 220 },
+                { key: 'veiculoPadrao', header: 'Veículo Padrão', width: 170 },
+                {
+                  key: 'entregas',
+                  header: 'Entregas Vinculadas',
+                  width: 150,
+                  align: 'right',
+                  value: m => getEntregasDoMotorista(m).length,
+                },
+              ]}
+              actions={[
+                { label: 'Editar', icon: Pencil, onClick: m => handleOpenMotorista(m) },
+                {
+                  label: 'Ver entregas',
+                  icon: PackageCheck,
+                  hidden: m => getEntregasDoMotorista(m).length === 0,
+                  onClick: m => setShowEntregasMotoristaId(m.id),
+                },
+                {
+                  label: 'Excluir',
+                  icon: Trash2,
+                  tone: 'danger',
+                  divider: true,
+                  onClick: m => {
+                    if (!canWrite) { blockWriteAction(); return; }
                     const entregas = getEntregasDoMotorista(m);
-                    return (
-                      <tr key={m.id} className="hover:bg-slate-50/80">
-                        <td className="p-3 font-bold text-slate-900">{m.nome}</td>
-                        <td className="p-3 text-slate-700">
-                          {m.telefone ? (
-                            <span className="inline-flex items-center gap-1.5"><Phone className="w-3 h-3 text-slate-400" /> {m.telefone}</span>
-                          ) : <span className="text-slate-300">—</span>}
-                        </td>
-                        <td className="p-3 text-slate-700">
-                          <span className="inline-flex items-center gap-1.5"><Mail className="w-3 h-3 text-slate-400" /> {m.email}</span>
-                        </td>
-                        <td className="p-3 text-slate-600">{m.veiculoPadrao || <span className="text-slate-300">—</span>}</td>
-                        <td className="p-3 text-center">
-                          <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
-                            m.ativo === false ? 'bg-slate-100 text-slate-500' : 'bg-emerald-100 text-emerald-800'
-                          }`}>
-                            {m.ativo === false ? 'Inativo' : 'Ativo'}
-                          </span>
-                        </td>
-                        <td className="p-3 text-center">
-                          <button
-                            onClick={() => setShowEntregasMotoristaId(m.id)}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-800 rounded-lg font-bold text-[11px] border border-purple-200 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                            disabled={entregas.length === 0}
-                            title={entregas.length === 0 ? 'Nenhuma entrega vinculada ainda' : 'Ver romaneios/entregas deste motorista'}
-                          >
-                            <PackageCheck className="w-3.5 h-3.5" /> {entregas.length}
-                          </button>
-                        </td>
-                        <td className="p-3 text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={() => handleOpenMotorista(m)}
-                              className="p-1.5 hover:bg-slate-100 rounded text-slate-600 hover:text-emerald-700"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => {
-                                if (!canWrite) { blockWriteAction(); return; }
-                                if (entregas.length > 0) {
-                                  alert(`Não é possível excluir: existem ${entregas.length} entrega(s)/romaneio(s) vinculados a este motorista.`);
-                                  return;
-                                }
-                                if (confirm(`Deseja excluir o motorista ${m.nome}?`)) deleteMotorista(m.id);
-                              }}
-                              className="p-1.5 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                    if (entregas.length > 0) {
+                      alert(`Não é possível excluir: existem ${entregas.length} entrega(s)/romaneio(s) vinculados a este motorista.`);
+                      return;
+                    }
+                    if (confirm(`Deseja excluir o motorista ${m.nome}?`)) deleteMotorista(m.id);
+                  },
+                },
+              ]}
+            />
           </div>
         </div>
       )}

@@ -1613,7 +1613,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [themeMode, setThemeMode] = useState<'light' | 'dark'>('dark');
+  const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light');
 
   const addTenant = (tenantData: Omit<CooperativeTenant, 'id'>): CooperativeTenant => {
     const newTenant: CooperativeTenant = {

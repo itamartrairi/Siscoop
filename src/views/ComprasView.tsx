@@ -12,6 +12,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { SolicitacaoCompra, Fornecedor, ItemEstoque } from '../types';
+import { DataGrid, GridStatus } from '../components/ui/DataGrid';
 
 const MESES_LABEL = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -460,81 +461,61 @@ if (f) {
             </span>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 font-bold uppercase border-b border-slate-200">
-                  <th className="p-3">Data</th>
-                  <th className="p-3">Item / Insumo</th>
-                  <th className="p-3">Departamento</th>
-                  <th className="p-3">Quantidade</th>
-                  <th className="p-3">Prioridade</th>
-                  <th className="p-3">Valor Est.</th>
-                  <th className="p-3">Status</th>
-                  <th className="p-3 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {solicitacoesFiltradas.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="p-8 text-center text-slate-400">
-                      Nenhuma solicitação encontrada para os filtros selecionados.
-                    </td>
-                  </tr>
-                ) : solicitacoesFiltradas.map(s => (
-                  <tr key={s.id} className="hover:bg-slate-50/80">
-                    <td className="p-3 text-slate-600 font-mono">{formatarData(s.dataSolicitacao)}</td>
-                    <td className="p-3 font-bold text-slate-900">
-                      {s.itens?.length ? `${s.itens.length} produto(s) solicitado(s)` : s.itemDescricao}
-                      {s.itens?.length ? <div className="text-[10px] text-emerald-700 font-semibold mt-1">{s.itens.map(i => `${i.descricao} (${i.quantidade} ${i.unidade})`).join(' · ')}</div> : null}
-                      <div className="text-[10px] text-slate-500 font-normal">{s.justificativa}</div>
-                    </td>
-                    <td className="p-3 text-slate-700">{s.departamentoSolicitante}</td>
-                    <td className="p-3 font-bold text-slate-900">{s.quantidade} {s.unidadeMedida}</td>
-                    <td className="p-3">
-                      <span className={`px-2 py-0.5 rounded font-bold text-[10px] ${
-                        s.prioridade === 'ALTA' ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-800'
-                      }`}>
-                        {s.prioridade}
-                      </span>
-                    </td>
-                    <td className="p-3 font-bold text-emerald-700">R$ {(s.valorEstimado || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                    <td className="p-3">
-                      <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded font-bold text-[10px]">
-                        {s.status}
-                      </span>
-                    </td>
-                    <td className="p-3 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => handleConvertSolicitacaoToOrdem(s)}
-                          className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg font-bold text-[10px] flex items-center gap-1 transition-all border border-emerald-200 mr-1"
-                          title="Gerar Ordem de Compra e Enviar ao Estoque"
-                        >
-                          <ShoppingCart className="w-3 h-3" /> Gerar OC
-                        </button>
-                        <button
-                          onClick={() => handleOpenSolicitacao(s)}
-                          className="p-1.5 hover:bg-slate-100 rounded text-slate-600 hover:text-emerald-700"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (!canWrite) { blockWriteAction(); return; }
-                            if (confirm('Deseja excluir esta solicitação de compra?')) deleteSolicitacaoCompra(s.id);
-                          }}
-                          className="p-1.5 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataGrid
+              rows={solicitacoesFiltradas}
+              getRowId={s => s.id}
+              pageSize={20}
+              onRowDoubleClick={s => handleOpenSolicitacao(s)}
+              panelTitle={s => (s.itens?.length ? `${s.itens.length} produto(s) solicitado(s)` : s.itemDescricao)}
+              panelSubtitle={s => [formatarData(s.dataSolicitacao), s.departamentoSolicitante].filter(Boolean).join(' · ')}
+              emptyMessage="Nenhuma solicitação encontrada para os filtros selecionados."
+              columns={[
+                {
+                  key: 'status',
+                  header: 'Status',
+                  width: 130,
+                  render: s => <GridStatus tone={/APROV|CONCLU|ATEND/i.test(String(s.status)) ? 'success' : /CANCEL|REPROV/i.test(String(s.status)) ? 'danger' : 'warning'} label={s.status} />,
+                },
+                { key: 'dataSolicitacao', header: 'Data', width: 100, value: s => s.dataSolicitacao, render: s => formatarData(s.dataSolicitacao) },
+                {
+                  key: 'item',
+                  header: 'Item / Insumo',
+                  width: 280,
+                  value: s => (s.itens?.length ? s.itens.map(i => `${i.descricao} (${i.quantidade} ${i.unidade})`).join(' · ') : s.itemDescricao),
+                },
+                { key: 'departamentoSolicitante', header: 'Departamento', width: 150 },
+                { key: 'quantidade', header: 'Quantidade', width: 110, align: 'right', value: s => (s.quantidade ? `${s.quantidade} ${s.unidadeMedida || ''}`.trim() : null) },
+                {
+                  key: 'prioridade',
+                  header: 'Prioridade',
+                  width: 110,
+                  render: s => <GridStatus tone={s.prioridade === 'ALTA' ? 'danger' : 'neutral'} label={s.prioridade} />,
+                },
+                {
+                  key: 'valorEstimado',
+                  header: 'Valor Est.',
+                  width: 120,
+                  align: 'right',
+                  value: s => s.valorEstimado || 0,
+                  render: s => (s.valorEstimado || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+                },
+                { key: 'justificativa', header: 'Justificativa', width: 220 },
+              ]}
+              actions={[
+                { label: 'Gerar Ordem de Compra', icon: ShoppingCart, onClick: s => handleConvertSolicitacaoToOrdem(s) },
+                { label: 'Editar', icon: Pencil, onClick: s => handleOpenSolicitacao(s) },
+                {
+                  label: 'Excluir',
+                  icon: Trash2,
+                  tone: 'danger',
+                  divider: true,
+                  onClick: s => {
+                    if (!canWrite) { blockWriteAction(); return; }
+                    if (confirm('Deseja excluir esta solicitação de compra?')) deleteSolicitacaoCompra(s.id);
+                  },
+                },
+              ]}
+            />
         </div>
       )}
 
@@ -582,108 +563,85 @@ if (f) {
             </span>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 font-bold uppercase border-b border-slate-200">
-                  <th className="p-3">Nº Ordem OC</th>
-                  <th className="p-3">Fornecedor</th>
-                  <th className="p-3">Data Emissão</th>
-                  <th className="p-3">Prev. Entrega</th>
-                  <th className="p-3">Condições Pagto.</th>
-                  <th className="p-3">Valor Total</th>
-                  <th className="p-3">Status OC</th>
-                  <th className="p-3 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {ordensFiltradas.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="p-8 text-center text-slate-400">
-                      Nenhuma ordem de compra encontrada para os filtros selecionados.
-                    </td>
-                  </tr>
-                ) : (
-                  ordensFiltradas.map(o => (
-                    <tr key={o.id} className="hover:bg-slate-50/80">
-                      <td className="p-3 font-mono font-extrabold text-slate-900">{o.numeroOrdem}</td>
-                      <td className="p-3 font-bold text-slate-800">
-                        {o.fornecedorNome}
-                        <div className="text-[10px] text-emerald-700 font-semibold">{o.itens?.length || 0} produto(s) • {o.solicitacaoId ? 'Vinculada à solicitação' : 'Compra avulsa'}</div>
-                        <div className="text-[10px] text-slate-500 font-normal">{o.observacoes}</div>
-                      </td>
-                      <td className="p-3 text-slate-600 font-semibold">{formatarData(o.dataEmissao)}</td>
-                      <td className="p-3 text-slate-600 font-semibold">{formatarData(o.dataPrevisaoEntrega)}</td>
-                      <td className="p-3 text-slate-700 font-medium">{o.condicoesPagamento}</td>
-                      <td className="p-3 font-extrabold text-emerald-700 text-sm">
-                        R$ {(o.valorTotal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="p-3">
-                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold text-[10px]">
-                          {o.status}
-                        </span>
-                      </td>
-                      <td className="p-3 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => handleOpenOrdem(o)}
-                            className="p-1.5 hover:bg-slate-100 rounded text-slate-600 hover:text-emerald-700"
-                            title="Editar Ordem"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (!canWrite) { blockWriteAction(); return; }
-                              if (confirm(`Deseja excluir a ordem de compra ${o.numeroOrdem}?`)) deleteOrdemCompra(o.id);
-                            }}
-                            className="p-1.5 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600"
-                            title="Excluir"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+          <DataGrid
+              rows={ordensFiltradas}
+              getRowId={o => o.id}
+              pageSize={20}
+              onRowDoubleClick={o => handleOpenOrdem(o)}
+              panelTitle={o => `OC ${o.numeroOrdem}`}
+              panelSubtitle={o => o.fornecedorNome}
+              emptyMessage="Nenhuma ordem de compra encontrada para os filtros selecionados."
+              columns={[
+                {
+                  key: 'status',
+                  header: 'Status OC',
+                  width: 130,
+                  render: o => <GridStatus tone={/RECEB|CONCLU|ENTREG/i.test(String(o.status)) ? 'success' : /CANCEL/i.test(String(o.status)) ? 'danger' : 'warning'} label={o.status} />,
+                },
+                { key: 'numeroOrdem', header: 'Nº Ordem', width: 110 },
+                { key: 'fornecedorNome', header: 'Fornecedor', width: 220 },
+                { key: 'itens', header: 'Itens', width: 80, align: 'right', value: o => o.itens?.length || 0 },
+                { key: 'origem', header: 'Origem', width: 150, value: o => (o.solicitacaoId ? 'Solicitação' : 'Compra avulsa') },
+                { key: 'dataEmissao', header: 'Emissão', width: 110, value: o => o.dataEmissao, render: o => formatarData(o.dataEmissao) },
+                { key: 'dataPrevisaoEntrega', header: 'Prev. Entrega', width: 120, value: o => o.dataPrevisaoEntrega, render: o => (o.dataPrevisaoEntrega ? formatarData(o.dataPrevisaoEntrega) : null) },
+                { key: 'condicoesPagamento', header: 'Condições Pagto.', width: 150 },
+                {
+                  key: 'valorTotal',
+                  header: 'Valor Total',
+                  width: 130,
+                  align: 'right',
+                  value: o => o.valorTotal || 0,
+                  render: o => (o.valorTotal || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+                },
+              ]}
+              actions={[
+                { label: 'Editar', icon: Pencil, onClick: o => handleOpenOrdem(o) },
+                {
+                  label: 'Excluir',
+                  icon: Trash2,
+                  tone: 'danger',
+                  divider: true,
+                  onClick: o => {
+                    if (!canWrite) { blockWriteAction(); return; }
+                    if (confirm(`Deseja excluir a ordem de compra ${o.numeroOrdem}?`)) deleteOrdemCompra(o.id);
+                  },
+                },
+              ]}
+            />
         </div>
       )}
 
       {/* Tab Fornecedores */}
       {activeTab === 'fornecedores' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {fornecedores.map(f => (
-            <div key={f.id} className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-3 relative">
-              <div className="flex items-center justify-between">
-                <span className="font-extrabold text-slate-900 text-sm">{f.razaoSocial}</span>
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold text-[10px]">{f.categoria}</span>
-                  <button
-                    onClick={() => handleOpenFornecedor(f)}
-                    className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-emerald-700"
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (!canWrite) { blockWriteAction(); return; }
-                      if (confirm(`Deseja excluir o fornecedor ${f.razaoSocial}?`)) deleteFornecedor(f.id);
-                    }}
-                    className="p-1 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-              <div className="text-xs text-slate-600 font-mono">CNPJ: {f.cnpj}</div>
-              <div className="text-xs text-slate-700">Contato: {f.contatoNome} ({f.telefone})</div>
-            </div>
-          ))}
-        </div>
+        <DataGrid
+          rows={fornecedores}
+          getRowId={f => f.id}
+          onRowDoubleClick={f => handleOpenFornecedor(f)}
+          panelTitle={f => f.razaoSocial}
+          panelSubtitle={f => f.cnpj}
+          emptyMessage="Nenhum fornecedor cadastrado."
+          columns={[
+            { key: 'razaoSocial', header: 'Razão Social', width: 260 },
+            { key: 'nomeFantasia', header: 'Nome Fantasia', width: 200 },
+            { key: 'cnpj', header: 'CNPJ', width: 160 },
+            { key: 'categoria', header: 'Categoria', width: 150 },
+            { key: 'contatoNome', header: 'Contato', width: 170 },
+            { key: 'telefone', header: 'Telefone', width: 140 },
+          ]}
+          actions={[
+            { label: 'Editar', icon: Pencil, onClick: f => handleOpenFornecedor(f) },
+            {
+              label: 'Excluir',
+              icon: Trash2,
+              tone: 'danger',
+              divider: true,
+              onClick: f => {
+                if (!canWrite) { blockWriteAction(); return; }
+                if (confirm(`Deseja excluir o fornecedor ${f.razaoSocial}?`)) deleteFornecedor(f.id);
+              },
+            },
+          ]}
+        />
       )}
 
       {/* Modal Solicitação */}

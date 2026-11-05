@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useCoop } from '../context/CoopContext';
 import { ImportarCsvModal } from '../components/ImportarCsvModal';
 import { PortalShareBanner } from '../components/PortalShareBanner';
+import { DataGrid, GridStatus } from '../components/ui/DataGrid';
 import { sanitizeCooperado } from '../utils/cooperadoSanitizer';
 import {
   Cooperado,
@@ -472,256 +473,84 @@ export const CooperadosView: React.FC = () => {
       </div>
 
       {/* Members Table */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 dark:bg-slate-900/60 text-slate-400 dark:text-slate-500 text-[11px] font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
-                <th className="p-4">Cooperado</th>
-                <th className="p-4">Matrícula / CPF</th>
-                <th className="p-4">Localidade</th>
-                <th className="p-4">Apto PAA / CAF</th>
-                <th className="p-4">Capital Integralizado</th>
-                <th className="p-4">Situação</th>
-                <th className="p-4 text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50 text-xs">
-              {filteredCooperados.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="p-12 text-center">
-                    <div className="space-y-2">
-                      <p className="text-slate-500 dark:text-slate-400">
-                        Nenhum cooperado localizado com os filtros aplicados.
-                      </p>
-                      {(searchTerm || filterSituacao !== 'TODOS' || filterCategoria !== 'TODOS' || filterPaa !== 'TODOS') && (
-                        <button
-                          onClick={handleResetFilters}
-                          className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold underline hover:text-emerald-700 cursor-pointer"
-                        >
-                          Limpar todos os filtros de busca
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                paginatedCooperados.map(c => {
-                  const isCafOk = checkCafValida(c.cafDapValidade);
-                  const isAptoPaa = c.aptoPaa !== false && isCafOk && c.situacao === 'ATIVO';
-                  const capitalInt = Number(c.capitalIntegralizado) || 0;
-                  const capitalSub = Math.max(1, Number(c.capitalSubscrito) || 1000);
-                  const percentCapital = Math.min(100, Math.round((capitalInt / capitalSub) * 100));
-
-                  return (
-                    <tr key={c.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition-colors">
-                      <td className="p-4">
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={c.fotoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'}
-                            alt={c.nome || 'Cooperado'}
-                            className="w-9 h-9 rounded-full object-cover ring-2 ring-slate-200 dark:ring-slate-700 shrink-0"
-                            referrerPolicy="no-referrer"
-                          />
-                          <div>
-                            <div className="font-bold text-slate-900 dark:text-white">{c.nome || 'COOPERADO SEM NOME'}</div>
-                            <div className="text-[11px] text-slate-500 dark:text-slate-400">{c.profissao || 'Agricultor(a)'}</div>
-                          </div>
-                        </div>
-                      </td>
-
-                      <td className="p-4 font-mono">
-                        <div className="font-semibold text-emerald-700 dark:text-emerald-400">{c.matricula || 'S/N'}</div>
-                        <div className="text-[11px] text-slate-400">{c.cpf || '000.000.000-00'}</div>
-                      </td>
-
-                      <td className="p-4">
-                        <div className="text-slate-800 dark:text-slate-200">{c.cidade || 'Trairi'} - {c.estado || 'CE'}</div>
-                        <div className="text-[11px] text-slate-400 flex items-center gap-1">
-                          <Phone className="w-3 h-3 text-emerald-600" /> {c.celular || c.telefone || '(85) 99900-0000'}
-                        </div>
-                      </td>
-
-                      <td className="p-4">
-                        {isAptoPaa ? (
-                          <div className="space-y-0.5">
-                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-bold text-[10px] inline-flex items-center gap-1">
-                              ✓ Apto PAA
-                            </span>
-                            <div className="text-[10px] text-slate-400 font-mono">
-                              CAF: {c.cafDapValidade || '2028-12-31'}
-                            </div>
-                          </div>
-                        ) : !isCafOk ? (
-                          <div className="space-y-0.5">
-                            <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 font-bold text-[10px] inline-flex items-center gap-1">
-                              ⚠ CAF Vencida
-                            </span>
-                            <div className="text-[10px] text-rose-500 font-mono">
-                              Expirou em {c.cafDapValidade}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="space-y-0.5">
-                            <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 font-medium text-[10px] inline-flex items-center gap-1">
-                              ✕ Inapto PAA
-                            </span>
-                          </div>
-                        )}
-                      </td>
-
-                      <td className="p-4 font-mono">
-                        <div className="font-bold text-emerald-700 dark:text-emerald-400">
-                          R$ {capitalInt.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </div>
-                        <div className="text-[10px] text-slate-400">
-                          Subscrito: R$ {capitalSub.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </div>
-                        <div className="w-28 bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden mt-1">
-                          <div
-                            className="bg-emerald-500 h-full"
-                            style={{ width: `${percentCapital}%` }}
-                          />
-                        </div>
-                      </td>
-
-                      <td className="p-4">
-                        <span className={`px-2.5 py-1 rounded-full font-bold text-[10px] ${
-                          c.situacao === 'ATIVO' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' :
-                          c.situacao === 'INATIVO' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' :
-                          'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
-                        }`}>
-                          {c.situacao || 'ATIVO'}
-                        </span>
-                      </td>
-
-                      <td className="p-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={() => setFichaModalCooperado(c)}
-                            title="Ficha Cadastral"
-                            className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg transition-colors cursor-pointer"
-                          >
-                            <FileText className="w-4 h-4" />
-                          </button>
-
-                          {c.whatsapp && (
-                            <a
-                              href={`https://wa.me/${c.whatsapp.replace(/\D/g, '')}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              title="WhatsApp Direto"
-                              className="p-1.5 hover:bg-emerald-50 dark:hover:bg-emerald-950 text-emerald-600 dark:text-emerald-400 rounded-lg transition-colors"
-                            >
-                              <MessageCircle className="w-4 h-4" />
-                            </a>
-                          )}
-
-                          <button
-                            onClick={() => handleOpenEdit(c)}
-                            title="Editar Cadastro"
-                            className="p-1.5 hover:bg-blue-50 dark:hover:bg-blue-950 text-blue-600 dark:text-blue-400 rounded-lg transition-colors cursor-pointer"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              if (!canWrite) { blockWriteAction(); return; }
-                              if (confirm(`Deseja remover/inativar o cooperado ${c.nome}?`)) {
-                                deleteCooperado(c.id);
-                              }
-                            }}
-                            title="Excluir"
-                            className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950 text-rose-600 dark:text-rose-400 rounded-lg transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination Footer */}
-        {totalItems > 0 && (
-          <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/40 flex flex-wrap items-center justify-between gap-4 text-xs">
-            <div className="flex items-center gap-3">
-              <span className="text-slate-500 dark:text-slate-400">
-                Exibindo <span className="font-semibold text-slate-700 dark:text-slate-200">{itemsPerPage === 0 ? 1 : ((currentPage - 1) * itemsPerPage) + 1}</span> a{' '}
-                <span className="font-semibold text-slate-700 dark:text-slate-200">{itemsPerPage === 0 ? totalItems : Math.min(currentPage * itemsPerPage, totalItems)}</span> de{' '}
-                <span className="font-semibold text-slate-900 dark:text-white">{totalItems.toLocaleString('pt-BR')}</span> cooperados
-              </span>
-
-              <div className="flex items-center gap-1.5">
-                <span className="text-slate-400 text-[11px]">Por página:</span>
-                <select
-                  value={itemsPerPage}
-                  onChange={e => {
-                    setItemsPerPage(Number(e.target.value));
-                    setCurrentPage(1);
-                  }}
-                  className="px-2 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-700 dark:text-slate-300 outline-none"
-                >
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                  <option value={250}>250</option>
-                  <option value={0}>Todos ({totalItems})</option>
-                </select>
-              </div>
-            </div>
-
-            {itemsPerPage > 0 && totalPages > 1 && (
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => setCurrentPage(1)}
-                  disabled={currentPage === 1}
-                  title="Primeira Página"
-                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-700"
-                >
-                  <ChevronsLeft className="w-4 h-4" />
-                </button>
-
-                <button
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                  title="Página Anterior"
-                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-700"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-
-                <div className="px-3 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Página {currentPage} de {totalPages}
-                </div>
-
-                <button
-                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages}
-                  title="Próxima Página"
-                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-700"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-
-                <button
-                  onClick={() => setCurrentPage(totalPages)}
-                  disabled={currentPage === totalPages}
-                  title="Última Página"
-                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-700"
-                >
-                  <ChevronsRight className="w-4 h-4" />
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+      <DataGrid
+        rows={filteredCooperados}
+        getRowId={c => c.id}
+        pageSize={25}
+        onRowDoubleClick={c => handleOpenEdit(c)}
+        panelTitle={c => c.nome || 'Cooperado sem nome'}
+        panelSubtitle={c => [c.matricula, c.cpf].filter(Boolean).join(' · ')}
+        emptyMessage="Nenhum cooperado localizado com os filtros aplicados."
+        columns={[
+          {
+            key: 'situacao',
+            header: 'Situação',
+            width: 120,
+            value: c => c.situacao || 'ATIVO',
+            render: c => {
+              const s = c.situacao || 'ATIVO';
+              return (
+                <GridStatus
+                  tone={s === 'ATIVO' ? 'success' : s === 'INATIVO' ? 'warning' : 'danger'}
+                  label={s.charAt(0) + s.slice(1).toLowerCase()}
+                />
+              );
+            },
+          },
+          { key: 'nome', header: 'Nome', width: 240 },
+          { key: 'matricula', header: 'Matrícula', width: 110 },
+          { key: 'cpf', header: 'CPF', width: 140 },
+          { key: 'localidade', header: 'Cidade / UF', width: 150, value: c => [c.cidade, c.estado].filter(Boolean).join(' - ') },
+          { key: 'contato', header: 'Celular', width: 140, value: c => c.celular || c.telefone },
+          {
+            key: 'paa',
+            header: 'Apto PAA / CAF',
+            width: 150,
+            value: c => {
+              const cafOk = checkCafValida(c.cafDapValidade);
+              return c.aptoPaa !== false && cafOk && c.situacao === 'ATIVO' ? 'Apto PAA' : !cafOk ? 'CAF vencida' : 'Inapto PAA';
+            },
+            render: c => {
+              const cafOk = checkCafValida(c.cafDapValidade);
+              const apto = c.aptoPaa !== false && cafOk && c.situacao === 'ATIVO';
+              return (
+                <GridStatus
+                  tone={apto ? 'success' : !cafOk ? 'danger' : 'neutral'}
+                  label={apto ? 'Apto PAA' : !cafOk ? 'CAF vencida' : 'Inapto PAA'}
+                />
+              );
+            },
+          },
+          {
+            key: 'capitalIntegralizado',
+            header: 'Capital Integralizado',
+            width: 160,
+            align: 'right',
+            value: c => Number(c.capitalIntegralizado) || 0,
+            render: c => (Number(c.capitalIntegralizado) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+          },
+        ]}
+        actions={[
+          { label: 'Editar', icon: Edit2, onClick: c => handleOpenEdit(c) },
+          { label: 'Ficha Cadastral', icon: FileText, onClick: c => setFichaModalCooperado(c) },
+          {
+            label: 'WhatsApp',
+            icon: MessageCircle,
+            hidden: c => !c.whatsapp,
+            onClick: c => window.open(`https://wa.me/${String(c.whatsapp).replace(/\D/g, '')}`, '_blank', 'noreferrer'),
+          },
+          {
+            label: 'Excluir',
+            icon: Trash2,
+            tone: 'danger',
+            divider: true,
+            onClick: c => {
+              if (!canWrite) { blockWriteAction(); return; }
+              if (confirm(`Deseja remover/inativar o cooperado ${c.nome}?`)) deleteCooperado(c.id);
+            },
+          },
+        ]}
+      />
 
       {/* Comprehensive Tabbed Modal for Add/Edit Member */}
       {isFormOpen && (

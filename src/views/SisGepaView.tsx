@@ -3,6 +3,7 @@ import React, { useState, useMemo } from 'react';
 import jsPDF from 'jspdf';
 import * as XLSX from '@e965/xlsx';
 import { useCoop } from '../context/CoopContext';
+import { DataGrid, GridStatus } from '../components/ui/DataGrid';
 import {
   Landmark,
   Plus,
@@ -4127,97 +4128,78 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
       {/* Tab Propostas de Oferta */}
       {activeTab === 'ofertas' && (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-4">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 font-bold uppercase border-b border-slate-200">
-                  <th className="p-3">Produtor Vinc.</th>
-                  <th className="p-3">Produto Vinc.</th>
-                  <th className="p-3">Programa / Chamada Pública</th>
-                  <th className="p-3">Valor Total</th>
-                  <th className="p-3">Status</th>
-                  <th className="p-3 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredOfertas.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="p-8 text-center text-slate-400">
-                      Nenhuma proposta de oferta registrada ou compatível com os filtros.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredOfertas.map(o => (
-                    <tr key={o.id} className="hover:bg-slate-50/80">
-                      <td className="p-3 font-bold text-slate-900 flex items-center gap-1.5">
-                        <Users className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        {o.produtorNome || o.produtorId}
-                      </td>
-                      <td className="p-3 text-emerald-900 font-bold">
-                        <div className="space-y-0.5">
-                          {o.itens && o.itens.length > 0 ? (
-                            o.itens.map((it, idx) => (
-                              <div key={idx} className="flex items-center gap-1 text-[11px]">
-                                <Sprout className="w-3 h-3 text-emerald-600 shrink-0" />
-                                <span>{it.produtoNome} ({it.quantidadeKg} {it.unidadeMedida || 'KG'})</span>
-                              </div>
-                            ))
-                          ) : (
-                            <span className="flex items-center gap-1">
-                              <Sprout className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                              {o.produtoNome || o.produtoId}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-3 text-slate-700">
-                        <div className="font-semibold text-slate-900">{o.programaNome || 'PAA/PNAE'}</div>
-                        <div className="text-[10px] text-slate-500">{o.chamadaPublicaEdital || o.chamadaPublicaId || 'Edital Geral'}</div>
-                      </td>
-                      <td className="p-3 font-extrabold text-emerald-700">R$ {(o.valorTotal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                      <td className="p-3">
-                        <select
-                          value={o.status}
-                          onChange={e => {
-                            if (!canWrite) { blockWriteAction(); return; }
-                            updateOfertaPAA(o.id, { status: e.target.value as PropostaOfertaPAA['status'] });
-                          }}
-                          className={`px-2 py-1 rounded-md font-bold text-[10px] border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
-                            o.status === 'ACEITA' ? 'bg-emerald-100 text-emerald-800'
-                            : o.status === 'RECUSADA' ? 'bg-rose-100 text-rose-800'
-                            : 'bg-amber-100 text-amber-800'
-                          }`}
-                        >
-                          <option value="SUBMETIDA">SUBMETIDA</option>
-                          <option value="ACEITA">ACEITA</option>
-                          <option value="RECUSADA">RECUSADA</option>
-                        </select>
-                      </td>
-                      <td className="p-3 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => handleOpenOferta(o)}
-                            className="p-1.5 hover:bg-slate-100 rounded text-slate-600 hover:text-emerald-700"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (!canWrite) { blockWriteAction(); return; }
-                              if (confirm('Deseja excluir esta proposta de oferta?')) deleteOfertaPAA(o.id);
-                            }}
-                            className="p-1.5 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+          <DataGrid
+            rows={filteredOfertas}
+            getRowId={o => o.id}
+            pageSize={20}
+            onRowDoubleClick={o => handleOpenOferta(o)}
+            panelTitle={o => o.produtorNome || o.produtorId}
+            panelSubtitle={o => (o.valorTotal || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            emptyMessage="Nenhuma proposta de oferta registrada ou compatível com os filtros."
+            columns={[
+              {
+                key: 'status',
+                header: 'Status',
+                width: 120,
+                value: o => ({ SUBMETIDA: 'Submetida', ACEITA: 'Aceita', RECUSADA: 'Recusada' } as Record<string, string>)[o.status] || o.status,
+                render: o => (
+                  <GridStatus
+                    tone={o.status === 'ACEITA' ? 'success' : o.status === 'RECUSADA' ? 'danger' : 'warning'}
+                    label={({ SUBMETIDA: 'Submetida', ACEITA: 'Aceita', RECUSADA: 'Recusada' } as Record<string, string>)[o.status] || o.status}
+                  />
+                ),
+              },
+              { key: 'produtor', header: 'Produtor', width: 220, value: o => o.produtorNome || o.produtorId },
+              {
+                key: 'produtos',
+                header: 'Produtos',
+                width: 300,
+                value: o => (o.itens && o.itens.length > 0
+                  ? o.itens.map(it => `${it.produtoNome} (${it.quantidadeKg} ${it.unidadeMedida || 'KG'})`).join(', ')
+                  : o.produtoNome || o.produtoId),
+              },
+              { key: 'programa', header: 'Programa', width: 120, value: o => o.programaNome || 'PAA/PNAE' },
+              { key: 'chamada', header: 'Chamada Pública', width: 180, value: o => o.chamadaPublicaEdital || o.chamadaPublicaId || 'Edital Geral' },
+              {
+                key: 'valorTotal',
+                header: 'Valor Total',
+                width: 130,
+                align: 'right',
+                value: o => o.valorTotal || 0,
+                render: o => (o.valorTotal || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+              },
+            ]}
+            actions={[
+              {
+                label: 'Aceitar proposta',
+                icon: CheckCircle2,
+                hidden: o => o.status === 'ACEITA',
+                onClick: o => { if (!canWrite) { blockWriteAction(); return; } updateOfertaPAA(o.id, { status: 'ACEITA' as PropostaOfertaPAA['status'] }); },
+              },
+              {
+                label: 'Recusar proposta',
+                icon: X,
+                hidden: o => o.status === 'RECUSADA',
+                onClick: o => { if (!canWrite) { blockWriteAction(); return; } updateOfertaPAA(o.id, { status: 'RECUSADA' as PropostaOfertaPAA['status'] }); },
+              },
+              {
+                label: 'Voltar para submetida',
+                icon: RefreshCw,
+                hidden: o => o.status === 'SUBMETIDA',
+                onClick: o => { if (!canWrite) { blockWriteAction(); return; } updateOfertaPAA(o.id, { status: 'SUBMETIDA' as PropostaOfertaPAA['status'] }); },
+              },
+              { label: 'Editar', icon: Pencil, divider: true, onClick: o => handleOpenOferta(o) },
+              {
+                label: 'Excluir',
+                icon: Trash2,
+                tone: 'danger',
+                onClick: o => {
+                  if (!canWrite) { blockWriteAction(); return; }
+                  if (confirm('Deseja excluir esta proposta de oferta?')) deleteOfertaPAA(o.id);
+                },
+              },
+            ]}
+          />
         </div>
       )}
 
@@ -4435,216 +4417,101 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
             </button>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 font-bold uppercase border-b border-slate-200">
-                  <th className="p-3">Nº Pedido</th>
-                  <th className="p-3">Programa / Fonte</th>
-                  <th className="p-3">Chamada / Escola Destino</th>
-                  <th className="p-3">Produtores & Produtos Vinculados</th>
-                  <th className="p-3">Prev. Coleta</th>
-                  <th className="p-3">Valor Total</th>
-                  <th className="p-3">Status</th>
-                  <th className="p-3 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredPedidos.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="p-8 text-center text-slate-400">
-                      Nenhum pedido de produto encontrado.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredPedidos.map(p => (
-                    <tr key={p.id} className="hover:bg-slate-50/80">
-                      <td className="p-3 font-extrabold text-slate-900">
-                        <div>{p.numeroPedido}</div>
-                        {programacoesEntrega.some(pe => pe.pedidoId === p.id || pe.pedidoNumero === p.numeroPedido) && (
-                          <span className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold text-[9px]">
-                            <Truck className="w-2.5 h-2.5" /> Entrega Agendada
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-3">
-                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-black text-[10px] mr-1.5">
-                          {p.programaNome || p.programa}
-                        </span>
-                        <div className="text-slate-600 text-[11px] font-medium">{p.fonteRecursos}</div>
-                      </td>
-                      <td className="p-3">
-                        <div className="text-[10px] text-slate-500 font-semibold mb-1">{p.chamadaPublicaEdital || 'Chamada Aberta'}</div>
-                        <div className="flex flex-wrap gap-1 max-w-xs">
-                          {(p.escolasNomes && p.escolasNomes.length > 0
-                            ? p.escolasNomes
-                            : (p.escolaNome ? p.escolaNome.split(', ') : ['Escolas Cadastradas'])
-                          ).map((nomeEsc, idx) => (
-                            <span key={idx} className="px-1.5 py-0.5 bg-blue-50 text-blue-900 border border-blue-200/60 rounded text-[10px] font-bold flex items-center gap-1">
-                              <Building2 className="w-3 h-3 text-blue-600 shrink-0" /> {nomeEsc}
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="p-3 font-medium text-slate-800">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1 text-slate-900 font-bold">
-                            <Users className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                            <span>{Array.from(new Set(p.itens?.map(i => i.produtorNome))).join(', ') || 'Vários Produtores'}</span>
-                          </div>
-                          <div className="flex items-center gap-1 text-[11px] text-emerald-800 font-semibold">
-                            <Sprout className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                            <span>{p.itens?.length || 0} produto(s): {p.itens?.slice(0, 2).map(i => `${i.produtoNome} (${i.quantidadePedida}${i.unidadeMedida})`).join(', ')}</span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="p-3 font-semibold text-slate-700">
-                        {p.qtdeEntregas && p.qtdeEntregas > 1 ? (
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1">
-                              <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-900 font-extrabold text-[10px] flex items-center gap-1 border border-indigo-200">
-                                <Truck className="w-2.5 h-2.5 text-indigo-600" />
-                                {p.qtdeEntregas}x Entregas Programadas
-                              </span>
-                            </div>
-                            <div className="flex flex-wrap gap-1 max-w-xs">
-                              {(p.cronogramaEntregas || []).map(cr => (
-                                <span
-                                  key={cr.numero}
-                                  className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-indigo-50 border border-slate-200 text-slate-700 hover:text-indigo-900 text-[9px] font-bold transition-colors cursor-pointer"
-                                  onClick={() => setViewingCronogramaPedido(p)}
-                                  title={`${cr.rotulo}: ${cr.dataPrevista} (${cr.quantidadeKg} KG - ${cr.percentual}%)`}
-                                >
-                                  {cr.numero}ª: {cr.dataPrevista?.split('-').reverse().slice(0, 2).join('/')} ({cr.quantidadeKg}kg)
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        ) : (
-                          <div>
-                            <div className="font-bold text-slate-900 flex items-center gap-1">
-                              <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                              <span>{formatarData(p.dataPrevistaEntrega)}</span>
-                            </div>
-                            <span className="text-[10px] text-slate-500">Entrega Única</span>
-                          </div>
-                        )}
-                      </td>
-                      <td className="p-3 font-extrabold text-emerald-700 text-sm">
-                        R$ {(p.valorTotalPedido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="p-3">
-                        <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-md font-bold text-[10px]">
-                          {p.status}
-                        </span>
-                      </td>
-                      <td className="p-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                          <button
-                            onClick={() => setViewingCronogramaPedido(p)}
-                            className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-[10px] flex items-center gap-1 transition-all shadow-xs cursor-pointer"
-                            title="Ver Cronograma Detalhado das Entregas Programadas e Datas"
-                          >
-                            <Calendar className="w-3 h-3" /> Cronograma ({p.qtdeEntregas || 1}x)
-                          </button>
-                          <button
-                            onClick={() => setViewingEnvioProdutoresPedido(p)}
-                            className="px-2 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg text-[10px] flex items-center gap-1 transition-all shadow-xs cursor-pointer"
-                            title="Relatório PDF e Envio de Pedidos aos Produtores via WhatsApp"
-                          >
-                            <FileText className="w-3 h-3" /> WhatsApp / PDF
-                          </button>
-                          
-                          <button
-                            onClick={() => handleRegistrarPagamentoProdutor(p)}
-                            disabled={!!p.pagamentoProdutorRealizado}
-                            className={`px-2 py-1 font-bold rounded-lg text-[10px] flex items-center gap-1 transition-all shadow-xs ${
-                              p.pagamentoProdutorRealizado
-                                ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
-                                : 'bg-teal-600 hover:bg-teal-700 text-white cursor-pointer'
-                            }`}
-                            title={p.pagamentoProdutorRealizado
-                              ? `Pagamento ao produtor registrado em ${new Date(p.dataPagamentoProdutor!).toLocaleDateString('pt-BR')}`
-                              : 'Registrar pagamento ao produtor (Gera Funrural e Taxa Adm no SisFin)'}
-                          >
-                            {p.pagamentoProdutorRealizado ? <CheckCircle2 className="w-3 h-3" /> : <DollarSign className="w-3 h-3" />}
-                            {p.pagamentoProdutorRealizado ? 'Produtor Pago' : 'Pagar Produtor'}
-                          </button>
-                          {(() => {
-                            const nfEntradaExistente = notasFiscais.find(nf => nf.pedidoId === p.id && nf.tipoOperacao === 'ENTRADA_PRODUTOR');
-                            const nfSaidaExistente = notasFiscais.find(nf => nf.pedidoId === p.id && nf.tipoOperacao === 'SAIDA_PNAE_PAA');
-                            return (
-                              <>
-                                <button
-                                  onClick={() => {
-                                    if (nfEntradaExistente) return;
-                                    handleOpenGerarNFe(p, 'ENTRADA_PRODUTOR');
-                                  }}
-                                  disabled={!!nfEntradaExistente}
-                                  className={`px-2 py-1 font-bold rounded-lg text-[10px] flex items-center gap-1 transition-all shadow-xs ${
-                                    nfEntradaExistente
-                                      ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
-                                      : 'bg-amber-600 hover:bg-amber-700 text-white cursor-pointer'
-                                  }`}
-                                  title={nfEntradaExistente
-                                    ? `NF-e de Entrada já emitida (Nº ${nfEntradaExistente.numeroNota}) — emissão permitida apenas uma vez por pedido`
-                                    : 'Gerar Nota Fiscal de Entrada por Produtor (Compra de Produção Rural c/ FUNRURAL e Reforma 2026)'}
-                                >
-                                  {nfEntradaExistente ? <CheckCircle2 className="w-3 h-3" /> : <Receipt className="w-3 h-3" />}
-                                  {nfEntradaExistente ? `NF-e Entrada Nº ${nfEntradaExistente.numeroNota}` : 'NF-e Entrada'}
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    if (nfSaidaExistente) return;
-                                    handleOpenGerarNFe(p, 'SAIDA_ESCOLA');
-                                  }}
-                                  disabled={!!nfSaidaExistente}
-                                  className={`px-2 py-1 font-bold rounded-lg text-[10px] flex items-center gap-1 transition-all shadow-xs ${
-                                    nfSaidaExistente
-                                      ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
-                                      : 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
-                                  }`}
-                                  title={nfSaidaExistente
-                                    ? `NF-e de Saída já emitida (Nº ${nfSaidaExistente.numeroNota}) — emissão permitida apenas uma vez por pedido`
-                                    : 'Gerar Nota Fiscal de Saída por Escola (Fornecimento Alimentação Escolar PNAE)'}
-                                >
-                                  {nfSaidaExistente ? <CheckCircle2 className="w-3 h-3" /> : <FileText className="w-3 h-3" />}
-                                  {nfSaidaExistente ? `NF-e Saída Nº ${nfSaidaExistente.numeroNota}` : 'NF-e Saída'}
-                                </button>
-                              </>
-                            );
-                          })()}
-                          <button
-                            onClick={() => {
-                              if (p.status === 'RECEBIDO') return;
-                              handleOpenPedido(p);
-                            }}
-                            disabled={p.status === 'RECEBIDO'}
-                            className={`p-1.5 rounded ${p.status === 'RECEBIDO' ? 'text-slate-300 cursor-not-allowed' : 'hover:bg-slate-100 text-slate-600 hover:text-emerald-700'}`}
-                            title={p.status === 'RECEBIDO' ? 'Pedido já entregue (concluído) — não pode mais ser editado' : 'Editar Pedido'}
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (p.status === 'RECEBIDO') return;
-                              if (!canWrite) { blockWriteAction(); return; }
-                              if (confirm(`Deseja excluir o pedido ${p.numeroPedido}?`)) { deletePedidoProdutorPAA(p.id); playActionCompleteSound(); }
-                            }}
-                            disabled={p.status === 'RECEBIDO'}
-                            className={`p-1.5 rounded ${p.status === 'RECEBIDO' ? 'text-slate-300 cursor-not-allowed' : 'hover:bg-rose-50 text-slate-400 hover:text-rose-600'}`}
-                            title={p.status === 'RECEBIDO' ? 'Pedido já entregue (concluído) — não pode mais ser excluído' : 'Excluir'}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+          <DataGrid
+            rows={filteredPedidos}
+            getRowId={p => p.id}
+            pageSize={20}
+            onRowDoubleClick={p => setViewingCronogramaPedido(p)}
+            panelTitle={p => `Pedido ${p.numeroPedido}`}
+            panelSubtitle={p => `${p.programaNome || p.programa || ''} · ${(p.valorTotalPedido || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`}
+            emptyMessage="Nenhum pedido de produto encontrado."
+            columns={[
+              {
+                key: 'status',
+                header: 'Status',
+                width: 130,
+                render: p => <GridStatus tone={p.status === 'RECEBIDO' ? 'success' : /CANCEL/i.test(String(p.status)) ? 'danger' : 'warning'} label={p.status} />,
+              },
+              { key: 'numeroPedido', header: 'Nº Pedido', width: 110 },
+              {
+                key: 'agendada',
+                header: 'Entrega',
+                width: 120,
+                value: p => (programacoesEntrega.some(pe => pe.pedidoId === p.id || pe.pedidoNumero === p.numeroPedido) ? 'Agendada' : 'Sem rota'),
+              },
+              { key: 'programa', header: 'Programa', width: 110, value: p => p.programaNome || p.programa },
+              { key: 'fonteRecursos', header: 'Fonte', width: 130 },
+              { key: 'chamada', header: 'Chamada', width: 160, value: p => p.chamadaPublicaEdital || 'Chamada Aberta' },
+              {
+                key: 'escolas',
+                header: 'Escolas Destino',
+                width: 240,
+                value: p => (p.escolasNomes && p.escolasNomes.length > 0 ? p.escolasNomes.join(', ') : p.escolaNome || 'Escolas Cadastradas'),
+              },
+              { key: 'produtores', header: 'Produtores', width: 220, value: p => Array.from(new Set(p.itens?.map(i => i.produtorNome))).join(', ') || 'Vários Produtores' },
+              {
+                key: 'produtos',
+                header: 'Produtos',
+                width: 260,
+                value: p => `${p.itens?.length || 0}: ${(p.itens || []).map(i => `${i.produtoNome} (${i.quantidadePedida}${i.unidadeMedida})`).join(', ')}`,
+              },
+              {
+                key: 'coleta',
+                header: 'Prev. Coleta',
+                width: 130,
+                value: p => (p.qtdeEntregas && p.qtdeEntregas > 1 ? `${p.qtdeEntregas} entregas` : p.dataPrevistaEntrega),
+                render: p => (p.qtdeEntregas && p.qtdeEntregas > 1 ? `${p.qtdeEntregas} entregas` : formatarData(p.dataPrevistaEntrega)),
+              },
+              {
+                key: 'pagamento',
+                header: 'Produtor',
+                width: 110,
+                value: p => (p.pagamentoProdutorRealizado ? 'Pago' : 'A pagar'),
+                render: p => <GridStatus tone={p.pagamentoProdutorRealizado ? 'success' : 'neutral'} label={p.pagamentoProdutorRealizado ? 'Pago' : 'A pagar'} />,
+              },
+              {
+                key: 'valorTotalPedido',
+                header: 'Valor Total',
+                width: 130,
+                align: 'right',
+                value: p => p.valorTotalPedido || 0,
+                render: p => (p.valorTotalPedido || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+              },
+            ]}
+            actions={[
+              { label: 'Cronograma de entregas', icon: Calendar, onClick: p => setViewingCronogramaPedido(p) },
+              { label: 'WhatsApp / PDF aos produtores', icon: FileText, onClick: p => setViewingEnvioProdutoresPedido(p) },
+              {
+                label: 'Pagar produtor',
+                icon: DollarSign,
+                hidden: p => !!p.pagamentoProdutorRealizado,
+                onClick: p => handleRegistrarPagamentoProdutor(p),
+              },
+              {
+                label: 'Gerar NF-e de Entrada',
+                icon: Receipt,
+                hidden: p => notasFiscais.some(nf => nf.pedidoId === p.id && nf.tipoOperacao === 'ENTRADA_PRODUTOR'),
+                onClick: p => handleOpenGerarNFe(p, 'ENTRADA_PRODUTOR'),
+              },
+              {
+                label: 'Gerar NF-e de Saída',
+                icon: FileText,
+                hidden: p => notasFiscais.some(nf => nf.pedidoId === p.id && nf.tipoOperacao === 'SAIDA_PNAE_PAA'),
+                onClick: p => handleOpenGerarNFe(p, 'SAIDA_ESCOLA'),
+              },
+              { label: 'Editar', icon: Pencil, divider: true, hidden: p => p.status === 'RECEBIDO', onClick: p => handleOpenPedido(p) },
+              {
+                label: 'Excluir',
+                icon: Trash2,
+                tone: 'danger',
+                hidden: p => p.status === 'RECEBIDO',
+                onClick: p => {
+                  if (!canWrite) { blockWriteAction(); return; }
+                  if (confirm(`Deseja excluir o pedido ${p.numeroPedido}?`)) { deletePedidoProdutorPAA(p.id); playActionCompleteSound(); }
+                },
+              },
+            ]}
+          />
         </div>
       )}
 
@@ -4724,188 +4591,92 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
 
           {/* Table of Deliveries */}
           <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-4">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="bg-slate-50 text-slate-500 font-bold uppercase border-b border-slate-200">
-                    <th className="p-3">Data / Horário</th>
-                    <th className="p-3">Programa / Pedido</th>
-                    <th className="p-3">Roteiro de Escolas do Pedido</th>
-                    <th className="p-3">Distância & Combustível</th>
-                    <th className="p-3">Despesas da Rota</th>
-                    <th className="p-3">Motorista & Veículo</th>
-                    <th className="p-3">Carga (Kg)</th>
-                    <th className="p-3">Status</th>
-                    <th className="p-3 text-right">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredEntregas.length === 0 ? (
-                    <tr>
-                      <td colSpan={9} className="p-8 text-center text-slate-400">
-                        Nenhuma programação de entrega cadastrada.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredEntregas.map(pe => {
-                      const paradas = pe.paradasEntrega && pe.paradasEntrega.length > 0
-                        ? pe.paradasEntrega
-                        : [{
-                            id: 'p-1',
-                            ordem: 1,
-                            escolaId: pe.escolaId || '',
-                            escolaNome: pe.escolaNome || pe.escolaOrgaoDestino || 'Escola Destino',
-                            endereco: pe.localEntrega || 'Sede da Unidade Escolar',
-                            distanciaKm: pe.distanciaTotalKm || 18,
-                            quantidadeKg: pe.quantidadeTotalKg || 500,
-                            statusEntrega: 'PENDENTE' as const
-                          }];
-                      const distTotal = pe.distanciaTotalKm ?? paradas.reduce((s, p) => s + (p.distanciaKm || 0), 0);
-                      const consumoL = pe.consumoCombustivelLitros ?? Number((distTotal / (pe.autonomiaKmL || 8.0)).toFixed(2));
-                      const precoL = pe.precoLitroCombustivel ?? 6.29;
-                      const despComb = pe.despesaCombustivel ?? Number((consumoL * precoL).toFixed(2));
-                      const totalDesp = pe.totalDespesasEntrega ?? Number((despComb + (pe.despesaDiariaMotorista || 80) + (pe.despesaManutencao || 25) + (pe.outrasDespesas || 15)).toFixed(2));
-
-                      return (
-                        <tr key={pe.id} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="p-3 font-bold text-slate-900">
-                            <div className="flex items-center gap-1.5">
-                              <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                              <span>{formatarData(pe.dataPrevista)}</span>
-                            </div>
-                            {pe.horarioSaidaPrevisto && (
-                              <div className="text-[10px] text-slate-500 font-normal flex items-center gap-1 mt-0.5">
-                                <Clock className="w-3 h-3 text-slate-400" /> Saída: {pe.horarioSaidaPrevisto}
-                              </div>
-                            )}
-                          </td>
-                          <td className="p-3">
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-bold text-slate-900">{pe.programaNome || 'PNAE/PAA'}</span>
-                              {pe.totalEntregas && pe.totalEntregas > 1 && (
-                                <span className="px-1.5 py-0.5 bg-purple-100 text-purple-900 border border-purple-200 rounded-full font-black text-[9px] flex items-center gap-0.5">
-                                  <Split className="w-2.5 h-2.5 text-purple-600" /> Remessa {pe.numeroEntrega}/{pe.totalEntregas}
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-[10px] font-mono text-emerald-800 font-bold">{pe.pedidoNumero || 'Pedido Vinculado'}</div>
-                            {pe.parcelaRotulo && (
-                              <div className="text-[10px] text-purple-700 font-semibold">{pe.parcelaRotulo}</div>
-                            )}
-                            {pe.chamadaPublicaEdital && (
-                              <div className="text-[10px] text-slate-400">{pe.chamadaPublicaEdital}</div>
-                            )}
-                          </td>
-                          <td className="p-3">
-                            <div className="space-y-1 max-w-sm">
-                              <div className="flex items-center gap-1 text-[11px] font-bold text-slate-700">
-                                <Building2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                                <span>{paradas.length} Escola(s) no Roteiro:</span>
-                              </div>
-                              <div className="flex flex-wrap gap-1">
-                                {paradas.map((parada, pIdx) => (
-                                  <span
-                                    key={pIdx}
-                                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-900 border border-blue-200/70 rounded-md text-[10px] font-semibold"
-                                    title={`${parada.endereco || ''} - Carga: ${parada.quantidadeKg || 0} kg`}
-                                  >
-                                    <span className="font-black text-blue-700">#{parada.ordem || pIdx + 1}</span>
-                                    <span>{parada.escolaNome}</span>
-                                    <span className="text-[9px] text-slate-500 font-mono">({parada.distanciaKm || 0} km)</span>
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="p-3">
-                            <div className="space-y-0.5">
-                              <div className="font-bold text-slate-900 flex items-center gap-1">
-                                <MapPin className="w-3.5 h-3.5 text-amber-600" />
-                                <span>{distTotal} km</span>
-                              </div>
-                              <div className="text-[11px] text-slate-600 flex items-center gap-1">
-                                <Fuel className="w-3 h-3 text-rose-600" />
-                                <span>{consumoL} L</span>
-                                <span className="text-[10px] text-slate-400">(@ R$ {precoL.toFixed(2)}/L)</span>
-                              </div>
-                              <div className="text-[10px] font-semibold text-rose-700">
-                                Comb: R$ {despComb.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="p-3">
-                            <div className="space-y-0.5">
-                              <div className="font-black text-emerald-800 text-sm">
-                                R$ {totalDesp.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                              </div>
-                              <div className="text-[9px] text-slate-500">
-                                Diária: R$ {pe.despesaDiariaMotorista || 80} | Outros: R$ {((pe.despesaManutencao || 25) + (pe.outrasDespesas || 15))}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="p-3 text-slate-700">
-                            <div className="font-semibold text-slate-900">{pe.motoristaNome || 'Motorista'}</div>
-                            <div className="text-[10px] font-mono text-slate-500">{pe.veiculoPlaca || 'PMN-4A92'}</div>
-                            {pe.veiculoModelo && (
-                              <div className="text-[10px] text-slate-400 truncate max-w-[120px]">{pe.veiculoModelo}</div>
-                            )}
-                          </td>
-                          <td className="p-3 font-extrabold text-emerald-700 text-sm">
-                            {pe.quantidadeTotalKg || paradas.reduce((s, p) => s + (p.quantidadeKg || 0), 0)} kg
-                          </td>
-                          <td className="p-3">
-                            <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
-                              pe.status === 'ENTREGUE'
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : pe.status === 'EM_TRANSITO'
-                                ? 'bg-blue-100 text-blue-800'
-                                : 'bg-amber-100 text-amber-800'
-                            }`}>
-                              {pe.status}
-                            </span>
-                          </td>
-                          <td className="p-3 text-right">
-                            <div className="flex items-center justify-end gap-1 flex-wrap">
-                              <button
-                                onClick={() => setViewingRomaneio(pe)}
-                                className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-[10px] flex items-center gap-1 transition-all shadow-xs border border-slate-200"
-                                title="Visualizar Romaneio / Ficha de Rota e Despesas"
-                              >
-                                <FileSpreadsheet className="w-3 h-3 text-emerald-600" /> Romaneio
-                              </button>
-                              <button
-                                onClick={() => handleOpenGerarNFe(pe, 'SAIDA_ESCOLA')}
-                                className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-[10px] flex items-center gap-1 transition-all shadow-xs"
-                                title="Gerar NF-e de Saída para as Escolas da Rota"
-                              >
-                                <FileText className="w-3 h-3" /> NF-e Saída
-                              </button>
-                              <button
-                                onClick={() => handleOpenEntrega(pe)}
-                                className="p-1.5 hover:bg-slate-100 rounded text-slate-600 hover:text-emerald-700"
-                                title="Editar Rota & Despesas"
-                              >
-                                <Pencil className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  if (!canWrite) { blockWriteAction(); return; }
-                                  if (confirm('Deseja excluir esta programação de entrega?')) deleteProgramacaoEntrega(pe.id);
-                                }}
-                                className="p-1.5 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600"
-                                title="Excluir Rota"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
+            {(() => {
+            const calcRota = (pe: (typeof filteredEntregas)[number]) => {
+              const paradas = pe.paradasEntrega && pe.paradasEntrega.length > 0
+                ? pe.paradasEntrega
+                : [{ ordem: 1, escolaNome: pe.escolaNome || pe.escolaOrgaoDestino || 'Escola Destino', distanciaKm: pe.distanciaTotalKm || 18, quantidadeKg: pe.quantidadeTotalKg || 500 }];
+              const distTotal = pe.distanciaTotalKm ?? paradas.reduce((s, p) => s + (p.distanciaKm || 0), 0);
+              const consumoL = pe.consumoCombustivelLitros ?? Number((distTotal / (pe.autonomiaKmL || 8.0)).toFixed(2));
+              const precoL = pe.precoLitroCombustivel ?? 6.29;
+              const despComb = pe.despesaCombustivel ?? Number((consumoL * precoL).toFixed(2));
+              const totalDesp = pe.totalDespesasEntrega ?? Number((despComb + (pe.despesaDiariaMotorista || 80) + (pe.despesaManutencao || 25) + (pe.outrasDespesas || 15)).toFixed(2));
+              const cargaKg = pe.quantidadeTotalKg || paradas.reduce((s, p) => s + (p.quantidadeKg || 0), 0);
+              return { paradas, distTotal, consumoL, despComb, totalDesp, cargaKg };
+            };
+            const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            return (
+              <DataGrid
+                rows={filteredEntregas}
+                getRowId={pe => pe.id}
+                pageSize={20}
+                onRowDoubleClick={pe => setViewingRomaneio(pe)}
+                panelTitle={pe => `Rota de ${formatarData(pe.dataPrevista)}`}
+                panelSubtitle={pe => pe.pedidoNumero || pe.programaNome || ''}
+                emptyMessage="Nenhuma programação de entrega cadastrada."
+                columns={[
+                  {
+                    key: 'status',
+                    header: 'Status',
+                    width: 130,
+                    value: pe => ({ ENTREGUE: 'Entregue', EM_TRANSITO: 'Em trânsito' } as Record<string, string>)[pe.status] || pe.status,
+                    render: pe => (
+                      <GridStatus
+                        tone={pe.status === 'ENTREGUE' ? 'success' : pe.status === 'EM_TRANSITO' ? 'warning' : 'neutral'}
+                        label={({ ENTREGUE: 'Entregue', EM_TRANSITO: 'Em trânsito' } as Record<string, string>)[pe.status] || pe.status}
+                      />
+                    ),
+                  },
+                  { key: 'dataPrevista', header: 'Data', width: 100, value: pe => pe.dataPrevista, render: pe => formatarData(pe.dataPrevista) },
+                  { key: 'horarioSaidaPrevisto', header: 'Saída', width: 80, align: 'center' },
+                  { key: 'programa', header: 'Programa', width: 110, value: pe => pe.programaNome || 'PNAE/PAA' },
+                  { key: 'pedidoNumero', header: 'Pedido', width: 110 },
+                  {
+                    key: 'remessa',
+                    header: 'Remessa',
+                    width: 100,
+                    align: 'center',
+                    value: pe => (pe.totalEntregas && pe.totalEntregas > 1 ? `${pe.numeroEntrega}/${pe.totalEntregas}` : null),
+                  },
+                  {
+                    key: 'escolas',
+                    header: 'Roteiro de Escolas',
+                    width: 280,
+                    value: pe => calcRota(pe).paradas.map((p, i) => `#${p.ordem || i + 1} ${p.escolaNome}`).join(', '),
+                  },
+                  { key: 'distancia', header: 'Distância (km)', width: 120, align: 'right', value: pe => calcRota(pe).distTotal },
+                  { key: 'consumo', header: 'Combustível (L)', width: 120, align: 'right', value: pe => calcRota(pe).consumoL },
+                  { key: 'despComb', header: 'Custo Comb.', width: 120, align: 'right', value: pe => calcRota(pe).despComb, render: pe => brl(calcRota(pe).despComb) },
+                  { key: 'totalDesp', header: 'Despesas da Rota', width: 140, align: 'right', value: pe => calcRota(pe).totalDesp, render: pe => <strong>{brl(calcRota(pe).totalDesp)}</strong> },
+                  { key: 'motoristaNome', header: 'Motorista', width: 160 },
+                  { key: 'veiculo', header: 'Veículo', width: 150, value: pe => [pe.veiculoPlaca, pe.veiculoModelo].filter(Boolean).join(' · ') },
+                  { key: 'carga', header: 'Carga (kg)', width: 110, align: 'right', value: pe => calcRota(pe).cargaKg, render: pe => calcRota(pe).cargaKg.toLocaleString('pt-BR') },
+                ]}
+                summary={
+                  <>
+                    <strong>{filteredEntregas.length} rota(s)</strong>
+                    <span>Distância: {filteredEntregas.reduce((s, pe) => s + calcRota(pe).distTotal, 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} km</span>
+                    <span>Combustível: {filteredEntregas.reduce((s, pe) => s + calcRota(pe).consumoL, 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} L</span>
+                    <strong>Despesas: {brl(filteredEntregas.reduce((s, pe) => s + calcRota(pe).totalDesp, 0))}</strong>
+                  </>
+                }
+                actions={[
+                  { label: 'Romaneio / Ficha da rota', icon: FileSpreadsheet, onClick: pe => setViewingRomaneio(pe) },
+                  { label: 'Gerar NF-e de Saída', icon: FileText, onClick: pe => handleOpenGerarNFe(pe, 'SAIDA_ESCOLA') },
+                  { label: 'Editar rota e despesas', icon: Pencil, divider: true, onClick: pe => handleOpenEntrega(pe) },
+                  {
+                    label: 'Excluir',
+                    icon: Trash2,
+                    tone: 'danger',
+                    onClick: pe => {
+                      if (!canWrite) { blockWriteAction(); return; }
+                      if (confirm('Deseja excluir esta programação de entrega?')) deleteProgramacaoEntrega(pe.id);
+                    },
+                  },
+                ]}
+              />
+            );
+          })()}
           </div>
         </div>
       )}
