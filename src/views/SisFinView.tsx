@@ -18,6 +18,8 @@ import {
   Printer
 } from 'lucide-react';
 import { ContaPagarReceber } from '../types';
+import { DataGrid, GridStatus } from '../components/ui/DataGrid';
+import { CheckCircle2 } from 'lucide-react';
 import { playActionCompleteSound } from '../utils/actionSound';
 import jsPDF from 'jspdf';
 import {
@@ -838,90 +840,68 @@ if (c) {
             <span className="font-bold text-slate-600">Conta bancária:</span>
             <SelectContaBancaria value={filtroBanco} onChange={setFiltroBanco} contas={contasBancarias} todasLabel="Todas as contas" className="p-2 border border-slate-200 rounded-xl" />
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 font-bold uppercase border-b border-slate-200">
-                  <th className="p-3">Tipo</th>
-                  <th className="p-3">Descrição</th>
-                  <th className="p-3">Pessoa / Favorecido</th>
-                  <th className="p-3">Vencimento</th>
-                  <th className="p-3">Conta Bancária</th>
-                  <th className="p-3">Valor</th>
-                  <th className="p-3">Status</th>
-                  <th className="p-3 text-right">Ação</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {contasPagarReceber.filter(c => filtroBanco === 'TODAS' || (c.contaBancariaId || '') === filtroBanco).map(c => (
-                  <tr key={c.id} className="hover:bg-slate-50/80">
-                    <td className="p-3">
-                      <span className={`px-2 py-0.5 rounded font-bold text-[10px] ${
-                        c.tipo === 'RECEBER' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                      }`}>
-                        {c.tipo}
-                      </span>
-                    </td>
-                    <td className="p-3 font-bold text-slate-900">
-                      {c.descricao}
-                      {c.subcategoria && (
-                        <div className="flex items-center gap-1.5 mt-1">
-                          <span className="text-[10px] font-normal text-slate-500">{c.categoria} — {c.subcategoria}</span>
-                          {c.classificacaoDespesa && (
-                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                              c.classificacaoDespesa === 'FIXA' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'
-                            }`}>
-                              {c.classificacaoDespesa === 'FIXA' ? 'FIXA' : 'VARIÁVEL'}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                    <td className="p-3 text-slate-700">{c.pessoaNome}</td>
-                    <td className="p-3 text-slate-600 font-mono">{formatarData(c.dataVencimento)}</td>
-                    <td className="p-3 text-slate-600 whitespace-nowrap">{nomeConta(c.contaBancariaId)}</td>
-                    <td className={`p-3 font-bold ${c.tipo === 'RECEBER' ? 'text-emerald-700' : 'text-slate-900'}`}>
-                      R$ {(c.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="p-3">
-                      <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] ${
-                        c.status === 'PAGO' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                      }`}>
-                        {c.status}
-                      </span>
-                    </td>
-                    <td className="p-3 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        {c.status === 'PENDENTE' && (
-                          <button
-                            onClick={() => { if (!canWrite) { blockWriteAction(); return; } pagarReceberConta(c.id); }}
-                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-lg mr-1"
-                          >
-                            Dar Baixa
-                          </button>
-                        )}
-                        <button
-                          onClick={() => handleOpenModal(c)}
-                          className="p-1.5 hover:bg-slate-100 rounded text-slate-600 hover:text-emerald-700"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (!canWrite) { blockWriteAction(); return; }
-                            if (confirm('Deseja excluir este lançamento financeiro?')) deleteContaPagarReceber(c.id);
-                          }}
-                          className="p-1.5 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataGrid
+              rows={contasPagarReceber.filter(c => filtroBanco === 'TODAS' || (c.contaBancariaId || '') === filtroBanco)}
+              getRowId={c => c.id}
+              pageSize={20}
+              onRowDoubleClick={c => handleOpenModal(c)}
+              panelTitle={c => c.descricao}
+              panelSubtitle={c => `${c.tipo === 'RECEBER' ? 'A receber' : 'A pagar'} · ${(c.valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`}
+              emptyMessage="Nenhum título financeiro encontrado."
+              columns={[
+                {
+                  key: 'status',
+                  header: 'Status',
+                  width: 110,
+                  render: c => <GridStatus tone={c.status === 'PAGO' ? 'success' : 'warning'} label={c.status === 'PAGO' ? 'Pago' : c.status === 'PENDENTE' ? 'Pendente' : c.status} />,
+                },
+                {
+                  key: 'tipo',
+                  header: 'Tipo',
+                  width: 100,
+                  value: c => (c.tipo === 'RECEBER' ? 'Receber' : 'Pagar'),
+                  render: c => <span className={c.tipo === 'RECEBER' ? 'text-green-700' : 'text-rose-700'}>{c.tipo === 'RECEBER' ? 'Receber' : 'Pagar'}</span>,
+                },
+                { key: 'descricao', header: 'Descrição', width: 240 },
+                { key: 'categoria', header: 'Categoria', width: 200, value: c => [c.categoria, c.subcategoria].filter(Boolean).join(' — ') },
+                {
+                  key: 'classificacaoDespesa',
+                  header: 'Classificação',
+                  width: 110,
+                  value: c => (c.classificacaoDespesa ? (c.classificacaoDespesa === 'FIXA' ? 'Fixa' : 'Variável') : null),
+                },
+                { key: 'pessoaNome', header: 'Pessoa / Favorecido', width: 200 },
+                { key: 'dataVencimento', header: 'Vencimento', width: 110, value: c => c.dataVencimento, render: c => formatarData(c.dataVencimento) },
+                { key: 'conta', header: 'Conta Bancária', width: 170, value: c => nomeConta(c.contaBancariaId) },
+                {
+                  key: 'valor',
+                  header: 'Valor',
+                  width: 130,
+                  align: 'right',
+                  value: c => c.valor || 0,
+                  render: c => (c.valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+                },
+              ]}
+              actions={[
+                {
+                  label: 'Dar baixa',
+                  icon: CheckCircle2,
+                  hidden: c => c.status !== 'PENDENTE',
+                  onClick: c => { if (!canWrite) { blockWriteAction(); return; } pagarReceberConta(c.id); },
+                },
+                { label: 'Editar', icon: Pencil, onClick: c => handleOpenModal(c) },
+                {
+                  label: 'Excluir',
+                  icon: Trash2,
+                  tone: 'danger',
+                  divider: true,
+                  onClick: c => {
+                    if (!canWrite) { blockWriteAction(); return; }
+                    if (confirm('Deseja excluir este lançamento financeiro?')) deleteContaPagarReceber(c.id);
+                  },
+                },
+              ]}
+            />
         </div>
       )}
 
@@ -937,38 +917,37 @@ if (c) {
             <span className="font-bold text-slate-600">Conta bancária:</span>
             <SelectContaBancaria value={filtroBanco} onChange={setFiltroBanco} contas={contasBancarias} todasLabel="Todas as contas" className="p-2 border border-slate-200 rounded-xl" />
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 font-bold uppercase border-b border-slate-200">
-                  <th className="p-3">Data</th>
-                  <th className="p-3">Histórico / Lançamento</th>
-                  <th className="p-3">Conta Bancária</th>
-                  <th className="p-3">Tipo</th>
-                  <th className="p-3 text-right">Valor</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {(extratoBancario?.lancamentos || []).filter(l => filtroBanco === 'TODAS' || (l as any).contaBancariaId === filtroBanco).map(l => (
-                  <tr key={l.id} className="hover:bg-slate-50/80">
-                    <td className="p-3 text-slate-600 font-mono">{formatarData(l.data)}</td>
-                    <td className="p-3 font-bold text-slate-900">{l.historico}</td>
-                    <td className="p-3 text-slate-600 whitespace-nowrap">{nomeConta((l as any).contaBancariaId)}</td>
-                    <td className="p-3">
-                      <span className={`px-2 py-0.5 rounded font-bold text-[10px] ${
-                        l.tipo === 'CREDITO' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                      }`}>
-                        {l.tipo}
-                      </span>
-                    </td>
-                    <td className={`p-3 text-right font-bold ${l.tipo === 'CREDITO' ? 'text-emerald-700' : 'text-rose-700'}`}>
-                      {l.tipo === 'CREDITO' ? '+' : '-'} R$ {(l.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataGrid
+              rows={(extratoBancario?.lancamentos || []).filter(l => filtroBanco === 'TODAS' || (l as any).contaBancariaId === filtroBanco)}
+              getRowId={l => l.id}
+              pageSize={25}
+              emptyMessage="Nenhum lançamento no extrato."
+              columns={[
+                {
+                  key: 'tipo',
+                  header: 'Tipo',
+                  width: 110,
+                  value: l => (l.tipo === 'CREDITO' ? 'Crédito' : 'Débito'),
+                  render: l => <GridStatus tone={l.tipo === 'CREDITO' ? 'success' : 'danger'} label={l.tipo === 'CREDITO' ? 'Crédito' : 'Débito'} />,
+                },
+                { key: 'data', header: 'Data', width: 110, value: l => l.data, render: l => formatarData(l.data) },
+                { key: 'historico', header: 'Histórico / Lançamento', width: 320 },
+                { key: 'conta', header: 'Conta Bancária', width: 180, value: l => nomeConta((l as any).contaBancariaId) },
+                {
+                  key: 'valor',
+                  header: 'Valor',
+                  width: 140,
+                  align: 'right',
+                  value: l => (l.tipo === 'CREDITO' ? 1 : -1) * (l.valor || 0),
+                  render: l => (
+                    <span className={l.tipo === 'CREDITO' ? 'text-green-700' : 'text-rose-700'}>
+                      {l.tipo === 'CREDITO' ? '+ ' : '- '}
+                      {(l.valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </span>
+                  ),
+                },
+              ]}
+            />
         </div>
       )}
 
