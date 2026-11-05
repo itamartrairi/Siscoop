@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useCoop } from '../context/CoopContext';
+import { DataGrid, GridStatus } from '../components/ui/DataGrid';
 import {
   Tractor,
   Plus,
@@ -204,74 +205,48 @@ export const AluguelMaquinasView: React.FC = () => {
               <Plus className="w-4 h-4" /> Cadastrar Máquina
             </button>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-slate-600">
-              <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 uppercase text-xs font-semibold">
-                <tr>
-                  <th className="px-6 py-4">Máquina/Equipamento</th>
-                  <th className="px-6 py-4">Tipo</th>
-                  <th className="px-6 py-4">Placa/Chassi</th>
-                  <th className="px-6 py-4">Valor (Hora / Diária)</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {maquinas.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
-                      Nenhuma máquina cadastrada no sistema.
-                    </td>
-                  </tr>
-                ) : (
-                  maquinas.map(maq => (
-                    <tr key={maq.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-6 py-4 font-medium text-slate-800">{maq.nome}</td>
-                      <td className="px-6 py-4">{maq.tipo}</td>
-                      <td className="px-6 py-4 font-mono text-xs">{maq.placaOuChassi || '-'}</td>
-                      <td className="px-6 py-4 text-emerald-700 font-medium">
-                        {formatCurrency(maq.valorHora)} <span className="text-slate-400 text-xs font-normal">/h</span>
-                        <br />
-                        {formatCurrency(maq.valorDiaria)} <span className="text-slate-400 text-xs font-normal">/dia</span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-md ${
-                          maq.status === 'DISPONIVEL' ? 'bg-emerald-100 text-emerald-800' :
-                          maq.status === 'ALUGADA' ? 'bg-amber-100 text-amber-800' :
-                          'bg-rose-100 text-rose-800'
-                        }`}>
-                          {maq.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => openEditMaquina(maq)}
-                            className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
-                            title="Editar Máquina"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (confirm('Deseja excluir esta máquina?')) {
-                                if (!canWrite) return blockWriteAction();
-                                deleteMaquina(maq.id);
-                              }
-                            }}
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
-                            title="Excluir Máquina"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+          <DataGrid
+            rows={maquinas}
+            getRowId={maq => maq.id}
+            onRowDoubleClick={maq => openEditMaquina(maq)}
+            panelTitle={maq => maq.nome}
+            panelSubtitle={maq => maq.tipo}
+            emptyMessage="Nenhuma máquina cadastrada no sistema."
+            columns={[
+              {
+                key: 'status',
+                header: 'Status',
+                width: 130,
+                value: maq => ({ DISPONIVEL: 'Disponível', ALUGADA: 'Alugada', MANUTENCAO: 'Manutenção' } as Record<string, string>)[maq.status] || maq.status,
+                render: maq => (
+                  <GridStatus
+                    tone={maq.status === 'DISPONIVEL' ? 'success' : maq.status === 'ALUGADA' ? 'warning' : 'danger'}
+                    label={({ DISPONIVEL: 'Disponível', ALUGADA: 'Alugada', MANUTENCAO: 'Manutenção' } as Record<string, string>)[maq.status] || maq.status}
+                  />
+                ),
+              },
+              { key: 'nome', header: 'Máquina / Equipamento', width: 240 },
+              { key: 'tipo', header: 'Tipo', width: 150 },
+              { key: 'placaOuChassi', header: 'Placa / Chassi', width: 150 },
+              { key: 'valorHora', header: 'Valor Hora', width: 120, align: 'right', value: maq => maq.valorHora || 0, render: maq => formatCurrency(maq.valorHora) },
+              { key: 'valorDiaria', header: 'Valor Diária', width: 120, align: 'right', value: maq => maq.valorDiaria || 0, render: maq => formatCurrency(maq.valorDiaria) },
+            ]}
+            actions={[
+              { label: 'Editar', icon: Pencil, onClick: maq => openEditMaquina(maq) },
+              {
+                label: 'Excluir',
+                icon: Trash2,
+                tone: 'danger',
+                divider: true,
+                onClick: maq => {
+                  if (confirm('Deseja excluir esta máquina?')) {
+                    if (!canWrite) return blockWriteAction();
+                    deleteMaquina(maq.id);
+                  }
+                },
+              },
+            ]}
+          />
         </div>
       )}
 
@@ -286,97 +261,58 @@ export const AluguelMaquinasView: React.FC = () => {
               <Plus className="w-4 h-4" /> Nova Locação
             </button>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-slate-600">
-              <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 uppercase text-xs font-semibold">
-                <tr>
-                  <th className="px-6 py-4">Data Início/Fim</th>
-                  <th className="px-6 py-4">Máquina</th>
-                  <th className="px-6 py-4">Cooperado</th>
-                  <th className="px-6 py-4">Duração</th>
-                  <th className="px-6 py-4">Valor Total</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {locacoesMaquinas.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-6 py-8 text-center text-slate-500">
-                      Nenhuma locação cadastrada no sistema.
-                    </td>
-                  </tr>
-                ) : (
-                  locacoesMaquinas.map(loc => {
-                    const maq = maquinas.find(m => m.id === loc.maquinaId);
-                    const coop = cooperados.find(c => c.id === loc.cooperadoId);
-                    return (
-                      <tr key={loc.id} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-1.5 font-medium text-slate-700">
-                            <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                            {loc.dataInicio.split('-').reverse().join('/')}
-                          </div>
-                          <div className="flex items-center gap-1.5 text-slate-500 text-xs mt-1">
-                            até {loc.dataFim.split('-').reverse().join('/')}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 font-medium text-slate-800">{maq?.nome || 'Excluída'}</td>
-                        <td className="px-6 py-4">{coop?.nome || 'Excluído'}</td>
-                        <td className="px-6 py-4">
-                          {loc.quantidadeCobranca} {loc.tipoCobranca.toLowerCase()}(s)
-                        </td>
-                        <td className="px-6 py-4 text-emerald-700 font-medium">
-                          {formatCurrency(loc.valorTotal)}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`px-2 py-1 text-xs font-medium rounded-md flex w-max items-center gap-1 ${
-                            loc.status === 'ATIVA' ? 'bg-indigo-100 text-indigo-800' :
-                            loc.status === 'CONCLUIDA' ? 'bg-emerald-100 text-emerald-800' :
-                            'bg-rose-100 text-rose-800'
-                          }`}>
-                            {loc.status === 'ATIVA' && <Clock className="w-3 h-3" />}
-                            {loc.status === 'CONCLUIDA' && <CheckCircle className="w-3 h-3" />}
-                            {loc.status === 'CANCELADA' && <Ban className="w-3 h-3" />}
-                            {loc.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            {loc.status === 'ATIVA' && (
-                              <button
-                                onClick={() => {
-                                  if (confirm('Concluir locação e gerar Conta a Receber no Financeiro?')) {
-                                    if (!canWrite) return blockWriteAction();
-                                    concluirLocacao(loc.id);
-                                  }
-                                }}
-                                className="px-2 py-1 text-xs font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded border border-emerald-200 transition-colors"
-                              >
-                                Concluir & Faturar
-                              </button>
-                            )}
-                            <button
-                              onClick={() => {
-                                if (confirm('Deseja excluir/cancelar esta locação?')) {
-                                  if (!canWrite) return blockWriteAction();
-                                  deleteLocacaoMaquina(loc.id);
-                                }
-                              }}
-                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
-                              title="Cancelar/Excluir"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+          <DataGrid
+            rows={locacoesMaquinas}
+            getRowId={loc => loc.id}
+            panelTitle={loc => maquinas.find(m => m.id === loc.maquinaId)?.nome || 'Máquina excluída'}
+            panelSubtitle={loc => cooperados.find(c => c.id === loc.cooperadoId)?.nome || ''}
+            emptyMessage="Nenhuma locação cadastrada no sistema."
+            columns={[
+              {
+                key: 'status',
+                header: 'Status',
+                width: 120,
+                value: loc => ({ ATIVA: 'Ativa', CONCLUIDA: 'Concluída', CANCELADA: 'Cancelada' } as Record<string, string>)[loc.status] || loc.status,
+                render: loc => (
+                  <GridStatus
+                    tone={loc.status === 'ATIVA' ? 'warning' : loc.status === 'CONCLUIDA' ? 'success' : 'danger'}
+                    label={({ ATIVA: 'Ativa', CONCLUIDA: 'Concluída', CANCELADA: 'Cancelada' } as Record<string, string>)[loc.status] || loc.status}
+                  />
+                ),
+              },
+              { key: 'dataInicio', header: 'Início', width: 110, value: loc => loc.dataInicio, render: loc => loc.dataInicio.split('-').reverse().join('/') },
+              { key: 'dataFim', header: 'Fim', width: 110, value: loc => loc.dataFim, render: loc => loc.dataFim.split('-').reverse().join('/') },
+              { key: 'maquina', header: 'Máquina', width: 200, value: loc => maquinas.find(m => m.id === loc.maquinaId)?.nome || 'Excluída' },
+              { key: 'cooperado', header: 'Cooperado', width: 220, value: loc => cooperados.find(c => c.id === loc.cooperadoId)?.nome || 'Excluído' },
+              { key: 'duracao', header: 'Duração', width: 120, value: loc => `${loc.quantidadeCobranca} ${loc.tipoCobranca.toLowerCase()}(s)` },
+              { key: 'valorTotal', header: 'Valor Total', width: 130, align: 'right', value: loc => loc.valorTotal || 0, render: loc => formatCurrency(loc.valorTotal) },
+            ]}
+            actions={[
+              {
+                label: 'Concluir e faturar',
+                icon: CheckCircle,
+                hidden: loc => loc.status !== 'ATIVA',
+                onClick: loc => {
+                  if (confirm('Concluir locação e gerar Conta a Receber no Financeiro?')) {
+                    if (!canWrite) return blockWriteAction();
+                    concluirLocacao(loc.id);
+                  }
+                },
+              },
+              {
+                label: 'Cancelar / Excluir',
+                icon: Trash2,
+                tone: 'danger',
+                divider: true,
+                onClick: loc => {
+                  if (confirm('Deseja excluir/cancelar esta locação?')) {
+                    if (!canWrite) return blockWriteAction();
+                    deleteLocacaoMaquina(loc.id);
+                  }
+                },
+              },
+            ]}
+          />
         </div>
       )}
 
