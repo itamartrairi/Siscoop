@@ -50,6 +50,8 @@ interface DataGridProps<T> {
   onRowDoubleClick?: (row: T) => void;
   pageSize?: number;
   emptyMessage?: string;
+  /** Linha de totais/resumo exibida acima da paginação */
+  summary?: React.ReactNode;
 }
 
 const EMPTY = '<não informado>';
@@ -102,6 +104,7 @@ export function DataGrid<T>({
   onRowDoubleClick,
   pageSize = 15,
   emptyMessage = 'Nenhum registro encontrado.',
+  summary,
 }: DataGridProps<T>) {
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null);
@@ -271,7 +274,13 @@ export function DataGrid<T>({
           </table>
         </div>
 
-        {/* Rodapé / paginação */}
+{summary && (
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 px-3 py-2 border-t border-zinc-300 bg-zinc-50 text-xs text-zinc-700">
+            {summary}
+          </div>
+        )}
+
+                {/* Rodapé / paginação */}
         <div className="flex items-center justify-between gap-3 px-3 py-2 border-t border-zinc-200 text-xs text-zinc-600 bg-white">
           <span>
             {from} - {to} de {filtered.length} registros
