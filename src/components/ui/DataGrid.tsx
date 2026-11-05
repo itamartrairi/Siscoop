@@ -63,14 +63,31 @@ export function GridEmpty() {
   return <span className="ui-empty">{EMPTY}</span>;
 }
 
-export function GridStatus({ active, label }: { active: boolean; label?: string }) {
+type StatusTone = 'success' | 'warning' | 'danger' | 'neutral';
+const TONE_DOT: Record<StatusTone, string> = {
+  success: 'bg-green-600',
+  warning: 'bg-amber-500',
+  danger: 'bg-rose-600',
+  neutral: 'bg-zinc-400',
+};
+
+export function GridStatus({
+  active,
+  label,
+  tone,
+  hint,
+}: {
+  active?: boolean;
+  label?: React.ReactNode;
+  tone?: StatusTone;
+  hint?: React.ReactNode;
+}) {
+  const t: StatusTone = tone ?? (active ? 'success' : 'neutral');
   return (
-    <span className="inline-flex items-center gap-1.5">
-      <span
-        className={`inline-block w-2.5 h-2.5 rounded-full ${active ? 'bg-green-600' : 'bg-zinc-400'}`}
-        aria-hidden
-      />
-      <span className={active ? 'text-zinc-800' : 'text-zinc-500'}>{label ?? (active ? 'Ativo' : 'Inativo')}</span>
+    <span className="inline-flex items-center gap-1.5" title={typeof hint === 'string' ? hint : undefined}>
+      <span className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 ${TONE_DOT[t]}`} aria-hidden />
+      <span className={t === 'neutral' ? 'text-zinc-500' : 'text-zinc-800'}>{label ?? (active ? 'Ativo' : 'Inativo')}</span>
+      {hint && <span className="text-zinc-400 text-xs">{hint}</span>}
     </span>
   );
 }
