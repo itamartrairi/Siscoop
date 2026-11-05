@@ -200,3 +200,48 @@ main table tfoot td {
 
 /* Etiqueta usada nas grades para campos vazios */
 .ui-empty { color: #a1a1aa; font-style: italic; }
+
+/* ==========================================================================
+   Modo escuro desligado + painéis claros
+   O Tailwind v4 aplica "dark:" pelo modo escuro do sistema operacional, e o
+   app começa com themeMode 'dark'. Como o layout limpo é só claro, as
+   variantes "dark:" passam a depender de uma classe que o app não usa, então
+   nunca entram. Para reativar o modo escuro: troque a classe abaixo por .dark
+   ========================================================================== */
+@custom-variant dark (&:where(.tema-escuro-desativado, .tema-escuro-desativado *));
+
+:root { color-scheme: light; }
+html.dark, html.dark body { background-color: var(--ui-bg); color: var(--ui-text); }
+
+/* Painéis com fundo escuro fixo (busca global, instalar app, importar CSV,
+   assembleias, licença, app do motorista...). Botões escuros e o fundo
+   translúcido dos modais (bg-slate-900/60 etc.) continuam como estão. */
+:is(div, section, aside, header, footer, form, nav, ul, li, span, kbd, p, input, select, textarea):is(
+    .bg-slate-800, .bg-slate-900, .bg-slate-950,
+    .bg-slate-800\/80, .bg-slate-900\/95,
+    .bg-slate-950\/60, .bg-slate-950\/70, .bg-slate-950\/80
+  ) {
+    background-color: var(--ui-surface) !important;
+    color: var(--ui-text) !important;
+    border-color: var(--ui-border) !important;
+}
+
+/* Textos claros dentro desses painéis ficam escuros e legíveis
+   (exceto dentro de botões e etiquetas coloridas). */
+:is(.bg-slate-800, .bg-slate-900, .bg-slate-950, .bg-slate-900\/95, .bg-slate-950\/60, .bg-slate-950\/70, .bg-slate-950\/80)
+  :is(.text-white, .text-slate-100, .text-slate-200, .text-slate-300):not(button, button *, [class*="bg-"]) {
+      color: var(--ui-text) !important;
+  }
+:is(.bg-slate-800, .bg-slate-900, .bg-slate-950, .bg-slate-900\/95, .bg-slate-950\/60, .bg-slate-950\/70, .bg-slate-950\/80)
+  :is(.text-slate-400, .text-slate-500):not(button, button *) {
+      color: var(--ui-muted) !important;
+  }
+:is(.bg-slate-800, .bg-slate-900, .bg-slate-950, .bg-slate-900\/95, .bg-slate-950\/60, .bg-slate-950\/70, .bg-slate-950\/80)
+  :is(.border-slate-600, .border-slate-700, .border-slate-800) {
+      border-color: var(--ui-border) !important;
+  }
+:is(.bg-slate-800, .bg-slate-900, .bg-slate-950, .bg-slate-900\/95, .bg-slate-950\/60, .bg-slate-950\/70, .bg-slate-950\/80)
+  [class*="hover:bg-slate-8"]:hover {
+      background-color: var(--ui-row-hover) !important;
+      color: var(--ui-text) !important;
+  }
