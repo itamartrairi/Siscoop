@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useCoop } from '../context/CoopContext';
 import { MembroDiretoria, CargoDiretoria } from '../types';
+import { DataGrid, GridStatus } from '../components/ui/DataGrid';
 import {
   Award,
   Plus,
@@ -204,40 +205,19 @@ export const DiretoriaView: React.FC = () => {
               Quadro de Dirigentes e Eleição
             </div>
 
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="text-slate-400 text-[11px] font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
-                  <th className="p-4">Cargo na Diretoria</th>
-                  <th className="p-4">Dirigente Efeito</th>
-                  <th className="p-4">Data Posse</th>
-                  <th className="p-4">Término do Mandato</th>
-                  <th className="p-4">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50 text-xs">
-                {activeMandato.membros.map(m => (
-                  <tr key={m.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition-colors">
-                    <td className="p-4 font-bold text-amber-600 dark:text-amber-400">
-                      {cargoLabels[m.cargo]}
-                    </td>
-                    <td className="p-4 font-semibold text-slate-900 dark:text-white">
-                      {m.cooperadoNome} ({m.cooperadoCpf})
-                    </td>
-                    <td className="p-4 font-mono text-slate-600 dark:text-slate-300">
-                      {m.dataPosse}
-                    </td>
-                    <td className="p-4 font-mono font-bold text-slate-900 dark:text-white">
-                      {m.dataFimMandato}
-                    </td>
-                    <td className="p-4">
-                      <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-bold text-[10px]">
-                        {m.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <DataGrid
+            rows={activeMandato.membros}
+            getRowId={m => m.id}
+            emptyMessage="Nenhum dirigente neste mandato."
+            columns={[
+              { key: 'status', header: 'Status', width: 120, render: m => <GridStatus tone={/ATIV|EXERC/i.test(String(m.status)) ? 'success' : 'neutral'} label={m.status} /> },
+              { key: 'cargo', header: 'Cargo na Diretoria', width: 200, value: m => cargoLabels[m.cargo] || m.cargo },
+              { key: 'cooperadoNome', header: 'Dirigente', width: 240 },
+              { key: 'cooperadoCpf', header: 'CPF', width: 140 },
+              { key: 'dataPosse', header: 'Data Posse', width: 120 },
+              { key: 'dataFimMandato', header: 'Término do Mandato', width: 150 },
+            ]}
+          />
           </div>
         </div>
       )}
