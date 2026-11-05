@@ -1398,86 +1398,58 @@ export const CadastrosView: React.FC = () => {
                 />
               </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="bg-slate-50 text-slate-500 font-bold uppercase border-b border-slate-200">
-                    <th className="p-3">Nome</th>
-                    <th className="p-3">Telefone</th>
-                    <th className="p-3">E-mail</th>
-                    <th className="p-3">Veículo Padrão</th>
-                    <th className="p-3 text-center">Status</th>
-                    <th className="p-3 text-center">Entregas Vinculadas</th>
-                    <th className="p-3 text-right">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {motoristas.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="p-8 text-center text-slate-400">
-                        Nenhum motorista cadastrado. Clique em "Novo Motorista" ou compartilhe o link do App do Motorista acima para que ele se cadastre.
-                      </td>
-                    </tr>
-                  ) : motoristas.filter(m => m.nome.toLowerCase().includes(searchTerm.toLowerCase())).map(m => {
+            <DataGrid
+              rows={motoristas.filter(m => m.nome.toLowerCase().includes(searchTerm.toLowerCase()))}
+              getRowId={m => m.id}
+              onRowDoubleClick={m => handleOpenMotorista(m)}
+              panelTitle={m => m.nome}
+              panelSubtitle={m => m.veiculoPadrao || m.telefone || ''}
+              emptyMessage={motoristas.length === 0 ? 'Nenhum motorista cadastrado. Clique em "Novo Motorista" para incluir.' : 'Nenhum motorista encontrado.'}
+              columns={[
+                {
+                  key: 'ativo',
+                  header: 'Situação',
+                  width: 110,
+                  value: m => (m.ativo === false ? 'Inativo' : 'Ativo'),
+                  render: m => <GridStatus active={m.ativo !== false} />,
+                },
+                { key: 'nome', header: 'Nome', width: 240 },
+                { key: 'telefone', header: 'Telefone', width: 150 },
+                { key: 'email', header: 'E-mail', width: 220 },
+                { key: 'veiculoPadrao', header: 'Veículo Padrão', width: 170 },
+                {
+                  key: 'entregas',
+                  header: 'Entregas Vinculadas',
+                  width: 150,
+                  align: 'right',
+                  value: m => getEntregasDoMotorista(m).length,
+                },
+              ]}
+              actions={[
+                { label: 'Editar', icon: Pencil, onClick: m => handleOpenMotorista(m) },
+                {
+                  label: 'Ver entregas',
+                  icon: PackageCheck,
+                  hidden: m => getEntregasDoMotorista(m).length === 0,
+                  onClick: m => setShowEntregasMotoristaId(m.id),
+                },
+                {
+                  label: 'Excluir',
+                  icon: Trash2,
+                  tone: 'danger',
+                  divider: true,
+                  onClick: m => {
+                    if (!canWrite) { blockWriteAction(); return; }
                     const entregas = getEntregasDoMotorista(m);
-                    return (
-                      <tr key={m.id} className="hover:bg-slate-50/80">
-                        <td className="p-3 font-bold text-slate-900">{m.nome}</td>
-                        <td className="p-3 text-slate-700">
-                          {m.telefone ? (
-                            <span className="inline-flex items-center gap-1.5"><Phone className="w-3 h-3 text-slate-400" /> {m.telefone}</span>
-                          ) : <span className="text-slate-300">—</span>}
-                        </td>
-                        <td className="p-3 text-slate-700">
-                          <span className="inline-flex items-center gap-1.5"><Mail className="w-3 h-3 text-slate-400" /> {m.email}</span>
-                        </td>
-                        <td className="p-3 text-slate-600">{m.veiculoPadrao || <span className="text-slate-300">—</span>}</td>
-                        <td className="p-3 text-center">
-                          <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
-                            m.ativo === false ? 'bg-slate-100 text-slate-500' : 'bg-emerald-100 text-emerald-800'
-                          }`}>
-                            {m.ativo === false ? 'Inativo' : 'Ativo'}
-                          </span>
-                        </td>
-                        <td className="p-3 text-center">
-                          <button
-                            onClick={() => setShowEntregasMotoristaId(m.id)}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-800 rounded-lg font-bold text-[11px] border border-purple-200 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                            disabled={entregas.length === 0}
-                            title={entregas.length === 0 ? 'Nenhuma entrega vinculada ainda' : 'Ver romaneios/entregas deste motorista'}
-                          >
-                            <PackageCheck className="w-3.5 h-3.5" /> {entregas.length}
-                          </button>
-                        </td>
-                        <td className="p-3 text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={() => handleOpenMotorista(m)}
-                              className="p-1.5 hover:bg-slate-100 rounded text-slate-600 hover:text-emerald-700"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => {
-                                if (!canWrite) { blockWriteAction(); return; }
-                                if (entregas.length > 0) {
-                                  alert(`Não é possível excluir: existem ${entregas.length} entrega(s)/romaneio(s) vinculados a este motorista.`);
-                                  return;
-                                }
-                                if (confirm(`Deseja excluir o motorista ${m.nome}?`)) deleteMotorista(m.id);
-                              }}
-                              className="p-1.5 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                    if (entregas.length > 0) {
+                      alert(`Não é possível excluir: existem ${entregas.length} entrega(s)/romaneio(s) vinculados a este motorista.`);
+                      return;
+                    }
+                    if (confirm(`Deseja excluir o motorista ${m.nome}?`)) deleteMotorista(m.id);
+                  },
+                },
+              ]}
+            />
           </div>
         </div>
       )}
