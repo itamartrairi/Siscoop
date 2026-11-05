@@ -50,6 +50,7 @@ import { GeoLocationPicker } from '../components/GeoLocationPicker';
 import { buscarCodigosFiscais } from '../utils/produtoCodigosFiscais';
 import { POLOS_PADRAO } from '../utils/poloHelpers';
 import { PortalShareBanner } from '../components/PortalShareBanner';
+import { DataGrid } from '../components/ui/DataGrid';
 import {
   baixarModeloPlanilhaProdutos,
   parsePlanilhaProdutos,
@@ -1225,78 +1226,66 @@ export const CadastrosView: React.FC = () => {
 
       {/* Tab 2: Produtos Agropecuários */}
       {activeTab === 'produtos' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 space-y-4 shadow-xs">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-4">
-            <div className="relative flex-1 w-full">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-              <input
-                type="text"
-                placeholder="Buscar por produto ou categoria..."
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {produtos.filter(p => p.nome.toLowerCase().includes(searchTerm.toLowerCase()) || p.categoria.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
-              <div key={p.id} className="p-4 rounded-xl border border-slate-200/80 bg-slate-50/50 space-y-2 relative group">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-md">
-                    {p.categoria}
-                  </span>
-                  <div className="flex items-center gap-1">
-                    <span className="text-[11px] text-slate-500 font-medium mr-1">Un: {p.unidadeMedida}</span>
-                    <button
-                      onClick={() => handleOpenProduto(p)}
-                      title="Editar Produto"
-                      className="p-1 hover:bg-white rounded text-slate-600 hover:text-emerald-700"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (!canWrite) { blockWriteAction(); return; }
-                        if (confirm(`Excluir o produto ${p.nome}?`)) deleteProduto(p.id);
-                      }}
-                      title="Excluir Produto"
-                      className="p-1 hover:bg-white rounded text-slate-400 hover:text-rose-600"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-                <h3 className="font-extrabold text-slate-900 text-sm">{p.nome}</h3>
-                <div className="text-xs text-slate-600 flex justify-between pt-2 border-t border-slate-200">
-                  <span>Preço PAA Ref:</span>
-                  <span className="font-bold text-emerald-700">R$ {((p.precoReferencia ?? (p as any).precoReferenciaPaa) || 0).toFixed(2)}</span>
-                </div>
-                {!!p.pesoUnitario && (
-                  <div className="text-xs text-slate-600 flex justify-between">
-                    <span>Peso Unit.:</span>
-                    <span className="font-bold text-slate-800">{p.pesoUnitario} KG</span>
-                  </div>
-                )}
-                <div className="text-[11px] text-slate-500">Sazonalidade: {p.descricao || 'Ano todo'}</div>
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${p.tipoProcessamento === 'BENEFICIADO' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
-                    {p.tipoProcessamento === 'BENEFICIADO' ? 'Beneficiado' : 'In Natura'}
-                  </span>
-                  {p.codigoNcm && (
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 bg-sky-50 text-sky-700 border border-sky-200 rounded">
-                      NCM: {p.codigoNcm}
-                    </span>
-                  )}
-                  {p.codigoConab && (
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded">
-                      CONAB: {p.codigoConab}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <DataGrid<ProdutoAgro>
+          rows={produtos}
+          getRowId={p => p.id}
+          onRowDoubleClick={p => handleOpenProduto(p)}
+          panelTitle={p => p.nome}
+          panelSubtitle={p => p.codigo}
+          emptyMessage="Nenhum produto cadastrado."
+          columns={[
+            { key: 'nome', header: 'Descrição', width: 280 },
+            { key: 'codigo', header: 'Código', width: 110 },
+            {
+              key: 'categoria',
+              header: 'Categoria',
+              width: 130,
+              value: p => ({ HORTIFRUTI: 'Hortifrúti', GRAOS: 'Grãos', LATICINIOS: 'Laticínios', PROCESSADOS: 'Processados', CARNES: 'Carnes', OUTROS: 'Outros' } as Record<string, string>)[p.categoria] ?? p.categoria,
+            },
+            { key: 'unidadeMedida', header: 'Unidade', width: 90, align: 'center' },
+            { key: 'codigoNcm', header: 'Código NCM', width: 120, align: 'center' },
+            { key: 'codigoConab', header: 'Código CONAB', width: 120, align: 'center' },
+            {
+              key: 'tipoProcessamento',
+              header: 'Processamento',
+              width: 130,
+              value: p => ((p as any).tipoProcessamento === 'BENEFICIADO' ? 'Beneficiado' : 'In natura'),
+            },
+            {
+              key: 'pesoUnitario',
+              header: 'Peso Unit. (KG)',
+              width: 120,
+              align: 'right',
+              value: p => p.pesoUnitario || null,
+              render: p => (p.pesoUnitario ? p.pesoUnitario.toLocaleString('pt-BR') : null),
+            },
+            {
+              key: 'precoReferencia',
+              header: 'Preço PAA Ref.',
+              width: 130,
+              align: 'right',
+              value: p => p.precoReferencia ?? (p as any).precoReferenciaPaa ?? 0,
+              render: p =>
+                ((p.precoReferencia ?? (p as any).precoReferenciaPaa) || 0).toLocaleString('pt-BR', {
+                  style: 'currency',
+                  currency: 'BRL',
+                }),
+            },
+          ]}
+          actions={[
+            { label: 'Editar', icon: Pencil, onClick: p => handleOpenProduto(p) },
+            {
+              label: 'Excluir',
+              icon: Trash2,
+              tone: 'danger',
+              divider: true,
+              onClick: p => {
+                if (!canWrite) { blockWriteAction(); return; }
+                if (confirm(`Excluir o produto ${p.nome}?`)) deleteProduto(p.id);
+              },
+            },
+          ]}
+        />
       )}
 
       {/* Tab 4: Programas Governamentais */}
