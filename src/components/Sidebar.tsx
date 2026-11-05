@@ -140,15 +140,25 @@ export const Sidebar: React.FC<Props> = ({
       title: 'Gestão da Produção & Agro',
       shortLabel: 'Produção',
       icon: Sprout,
-      subtitle: 'Do recebimento da produção à contabilidade, tudo integrado.',
-      tip: 'Notas fiscais emitidas alimentam automaticamente o financeiro e a contabilidade.',
+      subtitle: 'Da comercialização ao estoque, toda a operação agrícola em um só lugar.',
+      tip: 'Registre as entregas e compras para manter estoque e comercialização sempre em dia.',
       items: [
         { id: 'sisgepa', label: 'Comercialização Agrícola (PAA/PNAE)', description: 'Gerencie projetos de venda, contratos e entregas do PAA e PNAE.', action: 'Abrir Comercialização', icon: Landmark },
-        { id: 'fiscal', label: 'Notas Fiscais (NF-e / SEFAZ)', description: 'Emita e consulte NF-e com integração à SEFAZ.', action: 'Abrir Notas Fiscais', icon: FileText },
         { id: 'estoque', label: 'Galpão & Estoque Agrícola', description: 'Consulte e movimente o estoque, evitando perdas e faltas.', action: 'Consultar Estoque', icon: Boxes },
         { id: 'compras', label: 'Compras & Insumos Agrícolas', description: 'Registre compras de insumos e acompanhe pedidos a receber.', action: 'Abrir Compras', icon: ShoppingCart },
-        { id: 'aluguel-maquinas', label: 'Aluguel de Máquinas', description: 'Agende e controle o aluguel de máquinas aos cooperados.', action: 'Abrir Aluguel', icon: Tractor },
+        { id: 'aluguel-maquinas', label: 'Aluguel de Máquinas', description: 'Agende e controle o aluguel de máquinas aos cooperados.', action: 'Abrir Aluguel', icon: Tractor }
+      ]
+    },
+    {
+      key: 'financas',
+      title: 'Finanças & Contabilidade',
+      shortLabel: 'Finanças',
+      icon: CircleDollarSign,
+      subtitle: 'Financeiro, notas fiscais, contabilidade, folha e indicadores da cooperativa.',
+      tip: 'Mantenha as contas conciliadas: assim a contabilidade e os indicadores ficam sempre em dia.',
+      items: [
         { id: 'sisfin', label: 'Financeiro & Contas da Cooperativa', description: 'Contas a pagar e receber, caixa e conciliação bancária.', action: 'Abrir Financeiro', icon: CircleDollarSign },
+        { id: 'fiscal', label: 'Notas Fiscais (NF-e / SEFAZ)', description: 'Emita e consulte NF-e com integração à SEFAZ.', action: 'Abrir Notas Fiscais', icon: FileText },
         { id: 'siscont', label: 'Contabilidade & Livro Diário', description: 'Lançamentos, livro diário e demonstrações contábeis.', action: 'Abrir Contabilidade', icon: Calculator },
         { id: 'rh', label: 'Colaboradores & Folha', description: 'Cadastro de colaboradores e controle da folha de pagamento.', action: 'Abrir RH', icon: UserCheck },
         { id: 'bi', label: 'Indicadores de Desempenho (BI)', description: 'Gráficos e indicadores para apoiar as decisões da diretoria.', action: 'Abrir Indicadores', icon: PieChart }
