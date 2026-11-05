@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&family=Source+Sans+3:wght@400;600;700&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -55,3 +56,147 @@
   button { transition: transform 160ms ease-out, background-color 160ms ease-out, color 160ms ease-out, box-shadow 160ms ease-out; }
   button:active { transform: scale(.97); }
 }
+
+/* Paleta principal do layout limpo: o "emerald" usado em todo o app passa a
+   ser um bronze sóbrio, como na referência. Para voltar ao verde, basta
+   remover este bloco. Status de sucesso nas grades usam "green-*". */
+@theme {
+  --color-emerald-50: #fdf8f0;
+  --color-emerald-100: #fbeedb;
+  --color-emerald-200: #f5dbb5;
+  --color-emerald-300: #ecc185;
+  --color-emerald-400: #dfa052;
+  --color-emerald-500: #b8771f;
+  --color-emerald-600: #9a6118;
+  --color-emerald-700: #8a5414;
+  --color-emerald-800: #6e4313;
+  --color-emerald-900: #5a3812;
+  --color-emerald-950: #331e08;
+}
+
+/* ==========================================================================
+   Tema "Layout limpo" — visual profissional inspirado em ERPs corporativos
+   (cabeçalho de página em bronze, grades com divisórias finas, linha
+   selecionada em tom pêssego, painel lateral de ações).
+   As regras abaixo ficam fora de @layer de propósito: assim prevalecem
+   sobre as utilidades do Tailwind e padronizam todas as telas existentes
+   sem precisar reescrever cada view.
+   ========================================================================== */
+
+:root {
+  --ui-font: "Source Sans 3", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --ui-font-title: "Poppins", var(--ui-font);
+  --ui-bg: #f4f4f5;
+  --ui-surface: #ffffff;
+  --ui-border: #e4e4e7;
+  --ui-border-strong: #d4d4d8;
+  --ui-text: #27272a;
+  --ui-muted: #71717a;
+  --ui-accent: #8a5414;
+  --ui-accent-hover: #6e4313;
+  --ui-row-hover: #fbf6ef;
+  --ui-row-selected: #fde8cf;
+  --ui-header-bg: #f7f7f8;
+  --ui-radius: 8px;
+}
+
+html, body {
+  font-family: var(--ui-font);
+  font-size: 14px;
+  color: var(--ui-text);
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--ui-font-title);
+  letter-spacing: -0.01em;
+}
+
+/* ---- Área de conteúdo ------------------------------------------------- */
+main {
+  background-color: var(--ui-bg) !important;
+}
+
+/* Pesos de fonte mais leves: menos "gritado", mais profissional */
+main .font-black,
+main .font-extrabold { font-weight: 600 !important; }
+
+/* Cantos e sombras discretos */
+main .rounded-2xl,
+main .rounded-3xl { border-radius: var(--ui-radius) !important; }
+main .rounded-xl { border-radius: 6px !important; }
+main .shadow-lg,
+main .shadow-xl,
+main .shadow-2xl { box-shadow: 0 1px 3px rgba(0, 0, 0, .06), 0 1px 2px rgba(0, 0, 0, .04) !important; }
+
+/* Títulos de página no tom bronze, como em "Produtos" na referência */
+main h1,
+main h2 {
+  font-family: var(--ui-font-title);
+  font-weight: 500 !important;
+  color: var(--ui-accent);
+}
+
+/* Campos de formulário */
+main input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+main select,
+main textarea {
+  border-color: var(--ui-border-strong);
+  border-radius: 4px !important;
+  background-color: #fff;
+  font-size: 13px;
+}
+main input:focus,
+main select:focus,
+main textarea:focus {
+  outline: none;
+  border-color: var(--ui-accent) !important;
+  box-shadow: 0 0 0 3px rgba(138, 84, 20, .12) !important;
+}
+
+/* ---- Grades / tabelas (todas as listagens) ---------------------------- */
+main table {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13.5px;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+}
+main table thead,
+main table thead tr {
+  background: var(--ui-header-bg) !important;
+}
+main table thead tr,
+main table thead th {
+  text-transform: none !important;
+  letter-spacing: normal !important;
+}
+main table thead th {
+  font-weight: 600 !important;
+  color: #3f3f46 !important;
+  font-size: 13px;
+  padding: 9px 10px !important;
+  border-bottom: 1px solid var(--ui-border-strong);
+  border-right: 1px solid var(--ui-border);
+  white-space: nowrap;
+}
+main table thead th:last-child { border-right: 0; }
+main table tbody td {
+  padding: 8px 10px !important;
+  border-bottom: 1px solid #ededf0;
+  border-right: 1px solid #f1f1f3;
+  vertical-align: middle;
+}
+main table tbody td:last-child { border-right: 0; }
+main table tbody tr { transition: background-color 120ms ease-out; }
+main table tbody tr:hover { background-color: var(--ui-row-hover) !important; }
+main table tbody tr[aria-selected="true"],
+main table tbody tr.is-selected { background-color: var(--ui-row-selected) !important; }
+main table tfoot td {
+  background: var(--ui-header-bg);
+  font-weight: 600;
+  padding: 8px 10px !important;
+  border-top: 1px solid var(--ui-border-strong);
+}
+
+/* Etiqueta usada nas grades para campos vazios */
+.ui-empty { color: #a1a1aa; font-style: italic; }
