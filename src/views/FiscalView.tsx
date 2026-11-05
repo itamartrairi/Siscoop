@@ -38,6 +38,7 @@ import { useCoop } from '../context/CoopContext';
 import { NotaFiscal, NotaFiscalItem, SefazCeConfig, SistemaTributarioNFe } from '../types';
 import { CRONOGRAMA_REFORMA_TRIBUTARIA, ALERTA_CRONOGRAMA_TEXTO, calcularImpostosItem } from '../utils/tributacaoReforma';
 import { FortesExportModal } from '../components/FortesExportModal';
+import { DataGrid, GridStatus } from '../components/ui/DataGrid';
 
 export const FiscalView: React.FC = () => {
   const {
@@ -612,143 +613,82 @@ export const FiscalView: React.FC = () => {
           </div>
 
           {/* Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-sm">
-              <thead>
-                <tr className="bg-slate-50 text-slate-600 border-b border-slate-200 text-xs font-bold uppercase tracking-wider">
-                  <th className="p-3">Nº / Serie</th>
-                  <th className="p-3">Modelo</th>
-                  <th className="p-3">Destinatário</th>
-                  <th className="p-3">Emissão</th>
-                  <th className="p-3">Valor Total</th>
-                  <th className="p-3">Status SEFAZ-CE</th>
-                  <th className="p-3 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredNotas.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="p-8 text-center text-slate-400">
-                      Nenhuma Nota Fiscal encontrada com os critérios selecionados.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredNotas.map(nf => (
-                    <tr key={nf.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="p-3 font-mono font-bold text-slate-900">
-                        Nº {nf.numeroNota} <span className="text-xs text-slate-400 font-normal">(Série {nf.serie})</span>
-                      </td>
-                      <td className="p-3">
-                        {nf.modelo === 'NFE_55' && (
-                          <span className="px-2 py-0.5 bg-blue-50 text-blue-700 font-bold text-[11px] rounded border border-blue-200">
-                            NF-e (55)
-                          </span>
-                        )}
-                        {nf.modelo === 'NFAE_AVULSA' && (
-                          <span className="px-2 py-0.5 bg-purple-50 text-purple-700 font-bold text-[11px] rounded border border-purple-200">
-                            NFA-e Avulsa CE
-                          </span>
-                        )}
-                        {nf.modelo === 'NFCE_65' && (
-                          <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 font-bold text-[11px] rounded border border-indigo-200">
-                            NFC-e (65)
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-3 max-w-xs truncate">
-                        <div className="font-semibold text-slate-800 truncate">{nf.destinatarioNome}</div>
-                        <div className="text-xs text-slate-400 font-mono">{nf.destinatarioCnpjCpf}</div>
-                      </td>
-                      <td className="p-3 text-slate-600 text-xs font-mono">
-                        {new Date(nf.dataEmissao + 'T12:00:00').toLocaleDateString('pt-BR')}
-                      </td>
-                      <td className="p-3 font-bold text-slate-900 font-mono">
-                        R$ {nf.valorTotalNota.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="p-3">
-                        {nf.statusSefaz === 'AUTORIZADA' && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-200">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Autorizada
-                          </span>
-                        )}
-                        {nf.statusSefaz === 'RASCUNHO' && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-bold border border-amber-200">
-                            <FileCode className="w-3.5 h-3.5 text-amber-600" /> Rascunho
-                          </span>
-                        )}
-                        {nf.statusSefaz === 'TRANSMITINDO' && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-bold border border-blue-200 animate-pulse">
-                            <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-600" /> Transmitindo...
-                          </span>
-                        )}
-                        {nf.statusSefaz === 'CANCELADA' && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-bold border border-slate-200">
-                            <XCircle className="w-3.5 h-3.5 text-slate-500" /> Cancelada
-                          </span>
-                        )}
-                        {nf.statusSefaz === 'REJEITADA' && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 text-xs font-bold border border-rose-200">
-                            <AlertTriangle className="w-3.5 h-3.5 text-rose-600" /> Rejeitada
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-3 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          {/* Transmitir se Rascunho */}
-                          {nf.statusSefaz === 'RASCUNHO' && (
-                            <button
-                              onClick={() => handleTransmitirSefaz(nf.id)}
-                              disabled={transmittingId === nf.id}
-                              className="p-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors text-xs font-medium flex items-center gap-1 px-2 shadow-xs"
-                              title="Transmitir à SEFAZ-CE"
-                            >
-                              <Send className="w-3.5 h-3.5" /> Transmitir
-                            </button>
-                          )}
-
-                          {/* Visualizar DANFE / Espelho */}
-                          <button
-                            onClick={() => setSelectedNfForView(nf)}
-                            className="p-1.5 text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
-                            title="Visualizar DANFE & XML"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-
-                          {/* Cancelar Nota Autorizada */}
-                          {nf.statusSefaz === 'AUTORIZADA' && (
-                            <button
-                              onClick={() => setNfToCancel(nf)}
-                              className="p-1.5 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-lg transition-colors"
-                              title="Cancelar Nota na SEFAZ-CE"
-                            >
-                              <XCircle className="w-4 h-4" />
-                            </button>
-                          )}
-
-                          {/* Excluir Rascunho */}
-                          {nf.statusSefaz === 'RASCUNHO' && (
-                            <button
-                              onClick={() => {
-                                if (!canWrite) { blockWriteAction(); return; }
-                                if (confirm(`Deseja excluir o rascunho da Nota Fiscal Nº ${nf.numeroNota}?`)) {
-                                  deleteNotaFiscal(nf.id);
-                                }
-                              }}
-                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                              title="Excluir Rascunho"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+          <DataGrid
+            rows={filteredNotas}
+            getRowId={nf => nf.id}
+            pageSize={20}
+            onRowDoubleClick={nf => setSelectedNfForView(nf)}
+            panelTitle={nf => `Nota Nº ${nf.numeroNota} · Série ${nf.serie}`}
+            panelSubtitle={nf => nf.destinatarioNome}
+            emptyMessage="Nenhuma Nota Fiscal encontrada com os critérios selecionados."
+            columns={[
+              {
+                key: 'statusSefaz',
+                header: 'Status SEFAZ-CE',
+                width: 150,
+                value: nf => ({ AUTORIZADA: 'Autorizada', RASCUNHO: 'Rascunho', TRANSMITINDO: 'Transmitindo', CANCELADA: 'Cancelada', REJEITADA: 'Rejeitada' } as Record<string, string>)[nf.statusSefaz] || nf.statusSefaz,
+                render: nf => (
+                  <GridStatus
+                    tone={nf.statusSefaz === 'AUTORIZADA' ? 'success' : nf.statusSefaz === 'REJEITADA' ? 'danger' : nf.statusSefaz === 'CANCELADA' ? 'neutral' : 'warning'}
+                    label={({ AUTORIZADA: 'Autorizada', RASCUNHO: 'Rascunho', TRANSMITINDO: 'Transmitindo...', CANCELADA: 'Cancelada', REJEITADA: 'Rejeitada' } as Record<string, string>)[nf.statusSefaz] || nf.statusSefaz}
+                  />
+                ),
+              },
+              { key: 'numeroNota', header: 'Número', width: 100, value: nf => Number(nf.numeroNota) || nf.numeroNota },
+              { key: 'serie', header: 'Série', width: 70, align: 'center' },
+              {
+                key: 'modelo',
+                header: 'Modelo',
+                width: 140,
+                value: nf => ({ NFE_55: 'NF-e (55)', NFAE_AVULSA: 'NFA-e Avulsa CE', NFCE_65: 'NFC-e (65)' } as Record<string, string>)[nf.modelo] || nf.modelo,
+              },
+              { key: 'destinatarioNome', header: 'Destinatário', width: 240 },
+              { key: 'destinatarioCnpjCpf', header: 'CPF / CNPJ', width: 160 },
+              {
+                key: 'dataEmissao',
+                header: 'Emissão',
+                width: 110,
+                value: nf => nf.dataEmissao,
+                render: nf => new Date(nf.dataEmissao + 'T12:00:00').toLocaleDateString('pt-BR'),
+              },
+              {
+                key: 'valorTotalNota',
+                header: 'Valor Total',
+                width: 130,
+                align: 'right',
+                value: nf => nf.valorTotalNota || 0,
+                render: nf => (nf.valorTotalNota || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+              },
+            ]}
+            actions={[
+              {
+                label: 'Transmitir à SEFAZ',
+                icon: Send,
+                hidden: nf => nf.statusSefaz !== 'RASCUNHO' || transmittingId === nf.id,
+                onClick: nf => handleTransmitirSefaz(nf.id),
+              },
+              { label: 'Visualizar DANFE e XML', icon: Eye, onClick: nf => setSelectedNfForView(nf) },
+              {
+                label: 'Cancelar nota',
+                icon: XCircle,
+                tone: 'danger',
+                divider: true,
+                hidden: nf => nf.statusSefaz !== 'AUTORIZADA',
+                onClick: nf => setNfToCancel(nf),
+              },
+              {
+                label: 'Excluir rascunho',
+                icon: Trash2,
+                tone: 'danger',
+                divider: true,
+                hidden: nf => nf.statusSefaz !== 'RASCUNHO',
+                onClick: nf => {
+                  if (!canWrite) { blockWriteAction(); return; }
+                  if (confirm(`Deseja excluir o rascunho da Nota Fiscal Nº ${nf.numeroNota}?`)) deleteNotaFiscal(nf.id);
+                },
+              },
+            ]}
+          />
         </div>
       )}
 
