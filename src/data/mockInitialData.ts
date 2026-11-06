@@ -35,9 +35,46 @@ import {
   OrdemCompra 
 } from '../types';
 
+/**
+ * Código (tenantId) da cooperativa criada neste navegador.
+ *
+ * Antes o código era fixo ('coop-principal') para todas as instalações: a
+ * primeira conta que entrava se registrava como dona desse código no
+ * Firestore (tenantOwners) e as contas de qualquer outra instalação passavam
+ * a receber "permission-denied". Agora cada instalação nova gera um código
+ * único, guardado no navegador. Instalações que já têm dados salvos mantêm o
+ * código antigo, para não desligar os registros existentes.
+ */
+export const TENANT_ID_LEGADO = 'coop-principal';
+const CHAVE_TENANT_ID_INICIAL = 'siscoop:tenant-id-inicial';
+const CHAVE_BANCO_LOCAL = 'siscoop_system_db_v2';
+
+export function gerarIdCooperativa(): string {
+  const aleatorio =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID().replace(/-/g, '').slice(0, 12)
+      : Math.random().toString(36).slice(2, 14);
+  return `coop-${Date.now().toString(36)}-${aleatorio}`;
+}
+
+function obterIdCooperativaInicial(): string {
+  try {
+    const salvo = localStorage.getItem(CHAVE_TENANT_ID_INICIAL);
+    if (salvo) return salvo;
+    // Instalação antiga, com dados já gravados sob o código legado.
+    const id = localStorage.getItem(CHAVE_BANCO_LOCAL) ? TENANT_ID_LEGADO : gerarIdCooperativa();
+    localStorage.setItem(CHAVE_TENANT_ID_INICIAL, id);
+    return id;
+  } catch {
+    return gerarIdCooperativa();
+  }
+}
+
+export const ID_COOPERATIVA_INICIAL = obterIdCooperativaInicial();
+
 export const INITIAL_TENANTS: CooperativeTenant[] = [
   {
-    id: 'coop-principal',
+    id: ID_COOPERATIVA_INICIAL,
     name: 'Minha Cooperativa',
     razaoSocial: 'Minha Cooperativa',
     cnpj: '',
@@ -62,7 +99,7 @@ export const INITIAL_USERS: User[] = [
     email: 'admin@sicoop.com.br',
     role: 'ADMIN',
     avatar: '',
-    tenantId: 'coop-principal',
+    tenantId: ID_COOPERATIVA_INICIAL,
     active: true,
     lastLogin: '',
   }
@@ -295,7 +332,7 @@ export const INITIAL_CONTAS_PAGAR_RECEBER: ContaPagarReceber[] = [];
 
 export const INITIAL_EXTRATO_BANCARIO: ExtratoBancario = {
   id: 'ext-principal',
-  tenantId: 'coop-principal',
+  tenantId: ID_COOPERATIVA_INICIAL,
   bancoNome: 'Banco Principal',
   agenciaConta: '0001 / 00000-0',
   saldoInicial: 0,
