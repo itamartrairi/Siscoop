@@ -56,6 +56,8 @@ export interface User {
   departamento?: string;
   bio?: string;
   password?: string;
+  /** UID da conta de login no Firebase Authentication (e-mail/senha ou Google). */
+  authUid?: string;
   customPermissions?: Partial<Record<SystemToolModule, PermissionLevel>>;
 }
 
