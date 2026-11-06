@@ -24,6 +24,9 @@ import firebaseConfig from '../../firebase-applet-config.json';
 import { GooglePickerButton } from '../components/GooglePickerButton';
 import { PickedGoogleFile } from '../services/googlePickerService';
 import { FortesExportModal } from '../components/FortesExportModal';
+import { useCargosDepartamentos } from '../hooks/useCargosDepartamentos';
+import { CargoSelect, DepartamentoSelect } from '../components/CargoDepartamentoSelect';
+import { criarContaFirebaseAuth } from '../services/firebase';
 import {
   Settings,
   Users,
@@ -185,6 +188,10 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
   // — a página só verificava se o menu estava visível, nunca se a ação de
   // escrita era permitida.
   const canWrite = canWriteModule('configuracoes');
+  // Listas de Cargos e Departamentos (Firestore) para os campos de seleção.
+  const { cargos: cadastroCargos, departamentos: cadastroDepartamentos } = useCargosDepartamentos();
+  const { recoverPassword } = useCoop();
+  const [isSavingUser, setIsSavingUser] = useState(false);
   const blockWriteAction = () => {
     alert('Seu perfil de acesso tem permissão apenas de leitura neste módulo. Fale com um administrador para solicitar permissão de edição.');
   };
@@ -323,12 +330,12 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
       name: '',
       email: '',
       role: 'SECRETARIA',
-      cargo: 'Atendente da Secretaria',
-      departamento: 'Atendimento e Sócios',
+      cargo: '',
+      departamento: '',
       phone: '',
       cpf: '',
       active: true,
-      password: '123',
+      password: '',
       avatar: PRESET_AVATARS[Math.floor(Math.random() * PRESET_AVATARS.length)],
       customPermissions: {}
     });
@@ -347,50 +354,89 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
       phone: u.phone || '',
       cpf: u.cpf || '',
       active: u.active ?? true,
-      password: u.password || '',
+      // Em branco = manter a senha atual (ela fica no Firebase Authentication).
+      password: '',
       avatar: u.avatar || PRESET_AVATARS[0],
       customPermissions: u.customPermissions || {}
     });
     setIsUserModalOpen(true);
   };
 
-  const handleSaveUserModal = (e: React.FormEvent) => {
+  const handleSaveUserModal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canWrite) { blockWriteAction(); return; }
-    if (!userForm.name.trim() || !userForm.email.trim()) {
+    if (isSavingUser) return;
+    const nome = userForm.name.trim();
+    const email = userForm.email.trim().toLowerCase();
+    if (!nome || !email) {
       alert('Nome e E-mail são campos obrigatórios.');
       return;
     }
-    if (editingUser) {
-      updateUser(editingUser.id, {
-        name: userForm.name,
-        email: userForm.email,
-        role: userForm.role,
-        cargo: userForm.cargo,
-        departamento: userForm.departamento,
-        phone: userForm.phone,
-        cpf: userForm.cpf,
-        active: userForm.active,
-        password: userForm.password,
-        avatar: userForm.avatar,
-        customPermissions: userForm.customPermissions
-      });
-    } else {
-      addUser({
-        name: userForm.name,
-        email: userForm.email,
-        role: userForm.role,
-        cargo: userForm.cargo,
-        departamento: userForm.departamento,
-        phone: userForm.phone,
-        cpf: userForm.cpf,
-        active: userForm.active,
-        password: userForm.password || '123456',
-        avatar: userForm.avatar,
-        customPermissions: userForm.customPermissions
-      });
+    const emailDuplicado = users.find(u => (u.email || '').toLowerCase().trim() === email && u.id !== editingUser?.id);
+    if (emailDuplicado) {
+      alert(`Já existe um usuário cadastrado com o e-mail ${email} (${emailDuplicado.name}).`);
+      setUserModalTab('dados');
+      return;
     }
-    setIsUserModalOpen(false);
+
+    // Senha preenchida = criar o acesso por e-mail/senha no Firebase
+    // Authentication. Em branco na edição = manter a senha atual.
+    const senha = userForm.password;
+    if (senha && senha.length < 6) {
+      alert('A senha precisa ter pelo menos 6 caracteres (exigência do Firebase Authentication).');
+      setUserModalTab('dados');
+      return;
+    }
+
+    setIsSavingUser(true);
+    let authUid: string | undefined = editingUser?.authUid;
+    let senhaLocal: string | undefined = editingUser?.password;
+    const avisos: string[] = [];
+    try {
+      if (senha) {
+        const r = await criarContaFirebaseAuth(email, senha, nome);
+        if (r.ok) {
+          authUid = r.uid;
+          senhaLocal = undefined; // a senha fica só no Firebase Authentication
+          avisos.push(`Acesso criado no Firebase Authentication: ${email} já pode entrar com e-mail e senha (ou com a conta Google desse e-mail).`);
+        } else if (r.code === 'auth/email-already-in-use') {
+          senhaLocal = undefined;
+          avisos.push(`O e-mail ${email} já tem conta no Firebase Authentication, então a senha não foi alterada. Ele pode entrar com a senha que já usa, com o Google, ou usar "Esqueci minha senha" na tela de login.`);
+        } else if (r.code === 'auth/operation-not-allowed') {
+          senhaLocal = senha;
+          avisos.push('O login por e-mail/senha está desativado no Firebase (Authentication → Sign-in method → E-mail/senha). O usuário foi salvo, mas só conseguirá entrar com Google até esse método ser ativado.');
+        } else {
+          alert(`Não foi possível criar o acesso no Firebase Authentication: ${r.message}`);
+          return;
+        }
+      } else if (!editingUser) {
+        avisos.push('Usuário salvo sem senha: ele entra com a conta Google deste e-mail. Para liberar também o login por e-mail e senha, edite o usuário e defina uma senha.');
+      }
+
+      const dados = {
+        name: nome,
+        email,
+        role: userForm.role,
+        cargo: userForm.cargo,
+        departamento: userForm.departamento,
+        phone: userForm.phone,
+        cpf: userForm.cpf,
+        active: userForm.active,
+        password: senhaLocal,
+        authUid,
+        avatar: userForm.avatar,
+        customPermissions: userForm.customPermissions
+      };
+      if (editingUser) {
+        updateUser(editingUser.id, dados);
+      } else {
+        addUser(dados);
+      }
+      setIsUserModalOpen(false);
+      if (avisos.length) alert(avisos.join('\n\n'));
+    } finally {
+      setIsSavingUser(false);
+    }
   };
 
   const filteredUsersList = users.filter(u => {
@@ -977,23 +1023,23 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
                   </div>
 
                   <div>
-                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Cargo / Função Técnica</label>
-                    <input
-                      type="text"
-                      value={profileForm.cargo}
-                      onChange={e => setProfileForm(p => ({ ...p, cargo: e.target.value }))}
-                      placeholder="Ex: Gerente Operacional / Diretor"
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Departamento / Setor</label>
+                    <DepartamentoSelect
+                      value={profileForm.departamento}
+                      onChange={v => setProfileForm(p => ({ ...p, departamento: v }))}
+                      departamentos={cadastroDepartamentos}
                       className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none"
                     />
-                  </div>
+                    </div>
 
-                  <div>
-                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Departamento / Setor</label>
-                    <input
-                      type="text"
-                      value={profileForm.departamento}
-                      onChange={e => setProfileForm(p => ({ ...p, departamento: e.target.value }))}
-                      placeholder="Ex: Diretoria / Atendimento"
+                    <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Cargo / Função Técnica</label>
+                    <CargoSelect
+                      value={profileForm.cargo}
+                      onChange={v => setProfileForm(p => ({ ...p, cargo: v }))}
+                      cargos={cadastroCargos}
+                      departamentos={cadastroDepartamentos}
+                      departamentoSelecionado={profileForm.departamento}
                       className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none"
                     />
                   </div>
@@ -1590,34 +1636,50 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
                     </div>
 
                     <div>
-                      <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Senha de Acesso</label>
+                      <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Senha de Acesso (login por e-mail)</label>
                       <input
-                        type="text"
+                        type="password"
+                        autoComplete="new-password"
                         value={userForm.password}
                         onChange={e => setUserForm(p => ({ ...p, password: e.target.value }))}
-                        placeholder="Definir ou redefinir senha"
+                        placeholder={editingUser ? 'Em branco = manter a senha atual' : 'Mínimo 6 caracteres (opcional)'}
                         className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
                       />
-                    </div>
-
-                    <div>
-                      <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Cargo / Função</label>
-                      <input
-                        type="text"
-                        value={userForm.cargo}
-                        onChange={e => setUserForm(p => ({ ...p, cargo: e.target.value }))}
-                        placeholder="Ex: Atendente / Técnico"
-                        className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                      />
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Ao salvar, a conta é criada no Firebase Authentication. O usuário também pode entrar com a conta Google do mesmo e-mail.
+                      </p>
+                      {editingUser && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const r = await recoverPassword(userForm.email.trim());
+                            alert(r.message);
+                          }}
+                          className="mt-1 text-[10px] font-bold text-blue-600 hover:underline"
+                        >
+                          Enviar e-mail de redefinição de senha
+                        </button>
+                      )}
                     </div>
 
                     <div>
                       <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Departamento / Setor</label>
-                      <input
-                        type="text"
+                      <DepartamentoSelect
                         value={userForm.departamento}
-                        onChange={e => setUserForm(p => ({ ...p, departamento: e.target.value }))}
-                        placeholder="Ex: Financeiro / Recepção"
+                        onChange={v => setUserForm(p => ({ ...p, departamento: v }))}
+                        departamentos={cadastroDepartamentos}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                      </div>
+
+                      <div>
+                      <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Cargo / Função</label>
+                      <CargoSelect
+                        value={userForm.cargo}
+                        onChange={v => setUserForm(p => ({ ...p, cargo: v }))}
+                        cargos={cadastroCargos}
+                        departamentos={cadastroDepartamentos}
+                        departamentoSelecionado={userForm.departamento}
                         className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
                       />
                     </div>
@@ -1758,7 +1820,7 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
                   type="submit"
                   className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-xs flex items-center gap-1.5"
                 >
-                  <Save className="w-4 h-4" /> Salvar Usuário
+                  <Save className="w-4 h-4" /> {isSavingUser ? 'Salvando…' : 'Salvar Usuário'}
                 </button>
               </div>
             </form>
@@ -1870,7 +1932,7 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
               </div>
 
               {firestoreStatus && (
-                <div className={`p-3 rounded-xl text-xs font-medium border ${firestoreStatus.connected ? 'bg-emerald-950/80 border-emerald-600/60 text-emerald-300' : 'bg-rose-950/80 border-rose-600/60 text-rose-300'}`}>
+                <div className={`p-3 rounded-xl text-xs font-medium border ${firestoreStatus.connected && firestoreStatus.writeOk !== false ? 'bg-emerald-950/80 border-emerald-600/60 text-emerald-300' : 'bg-rose-950/80 border-rose-600/60 text-rose-300'}`}>
                   <div className="font-bold">{firestoreStatus.message}</div>
                   {firestoreStatus.collectionsStatus.length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-emerald-800/40">

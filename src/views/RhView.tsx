@@ -16,6 +16,8 @@ import { DataGrid, GridStatus } from '../components/ui/DataGrid';
 import { playActionCompleteSound } from '../utils/actionSound';
 import { calcularDescontosFolha } from '../utils/folhaPagamentoHelpers';
 import jsPDF from 'jspdf';
+import { useCargosDepartamentos } from '../hooks/useCargosDepartamentos';
+import { CargoSelect, DepartamentoSelect } from '../components/CargoDepartamentoSelect';
 
 export const RhView: React.FC = () => {
   const {
@@ -32,6 +34,8 @@ export const RhView: React.FC = () => {
   } = useCoop();
 
   const canWrite = canWriteModule('rh');
+  // Listas de Cargos e Departamentos (Firestore) para o cadastro do colaborador.
+  const { cargos: cadastroCargos, departamentos: cadastroDepartamentos } = useCargosDepartamentos();
   const blockWriteAction = () => {
     alert('Seu perfil de acesso tem permissão apenas de leitura neste módulo. Fale com um administrador para solicitar permissão de edição.');
   };
@@ -107,10 +111,10 @@ export const RhView: React.FC = () => {
     } else {
       setEditingFunc(null);
       setFuncForm({
-        nome: '',
-        cpf: '',
-        cargo: 'Técnico Agrícola',
-        departamento: 'TECNICO',
+      nome: '',
+      cpf: '',
+      cargo: '',
+      departamento: '',
         salarioBase: 3800.00,
         dataAdmissao: new Date().toISOString().split('T')[0],
         status: 'ATIVO'
@@ -881,14 +885,28 @@ export const RhView: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-700 font-bold mb-1">Cargo</label>
-                  <input
-                    type="text"
-                    value={funcForm.cargo}
-                    onChange={e => setFuncForm({ ...funcForm, cargo: e.target.value })}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl"
+                  <label className="block text-slate-700 font-bold mb-1">Departamento / Setor</label>
+                  <DepartamentoSelect
+                    value={funcForm.departamento}
+                    onChange={v => setFuncForm({ ...funcForm, departamento: v })}
+                    departamentos={cadastroDepartamentos}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl bg-white"
                   />
                 </div>
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">Cargo / Função</label>
+                  <CargoSelect
+                    value={funcForm.cargo}
+                    onChange={v => setFuncForm({ ...funcForm, cargo: v })}
+                    cargos={cadastroCargos}
+                    departamentos={cadastroDepartamentos}
+                    departamentoSelecionado={funcForm.departamento}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-700 font-bold mb-1">Salário Base (R$)</label>
                   <input
