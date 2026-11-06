@@ -43,3 +43,23 @@ O `firebase.json` está configurado para o banco padrão:
 2. **Sem login / usuário anônimo** → recebe `PERMISSION_DENIED` caso tente burlar as coleções protegidas.
 
 Se algo passar a acusar permissão negada, o motivo mais comum é o documento `users/{uid}` ainda não ter sido criado — ele é gravado automaticamente pelo app no primeiro login (função `saveUserTenantMappingToFirestore` em `src/context/CoopContext.tsx`). Basta deslogar e logar novamente uma vez.
+
+## Atualização: equipe, Cargos/Departamentos e diagnóstico
+
+As regras agora também cobrem:
+
+- `tenantMembers/{email}` — vínculo de cada usuário cadastrado em
+  **Configurações → Usuários** com a cooperativa. O dono (ou um membro com
+  perfil ADMIN/PRESIDENTE/DIRETOR_FINANCEIRO) grava; o próprio usuário lê o
+  seu. É o que permite a pessoa entrar com **Google** ou com **e-mail e senha**
+  em qualquer computador e ser vinculada à cooperativa (`users/{uid}`).
+- `departamentos` e `cargos` — cadastros da tela **Cargos & Departamentos**,
+  isolados por `tenantId` como `cooperados`.
+- `diagnostico/{uid}` — documento usado pelo teste de conexão para provar que
+  o app consegue **gravar** e ler de volta no Firestore.
+
+Depois de publicar (`firebase deploy --only firestore:rules`), confira no
+console do Firebase em **Authentication → Sign-in method** que os provedores
+**Google** e **E-mail/senha** estão ativados, e que o domínio do app está em
+**Authentication → Settings → Authorized domains**.
+

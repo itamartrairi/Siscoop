@@ -204,9 +204,72 @@ export const LoginView: React.FC<Props> = ({ onLoginSuccess, onOpenCooperativeSe
                   <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                 </svg>
                 {isLoading ? 'Autenticando...' : 'Continuar com o Google'}
-              </button>
-            </div>
-          )}
+                </button>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '4px 0', fontSize: '11px', color: '#94a3b8', fontWeight: 600 }}>
+                  <span style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
+                  ou entre com e-mail e senha
+                  <span style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
+                </div>
+
+                <form onSubmit={handleEmailLogin} className="login-form">
+                  <div className="login-field-group">
+                    <label className="login-label">E-mail</label>
+                    <div className="login-input-wrap">
+                      <Mail className="login-input-icon" />
+                      <input
+                        type="email"
+                        required
+                        autoComplete="username"
+                        value={loginEmail}
+                        onChange={e => setLoginEmail(e.target.value)}
+                        placeholder="seu.email@cooperativa.com.br"
+                        className="login-input"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="login-field-group">
+                    <label className="login-label">Senha</label>
+                    <div className="login-input-wrap">
+                      <Lock className="login-input-icon" />
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        required
+                        autoComplete="current-password"
+                        value={loginPassword}
+                        onChange={e => setLoginPassword(e.target.value)}
+                        placeholder="Sua senha"
+                        className="login-input"
+                      />
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#64748b', marginTop: 6, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={showPassword} onChange={e => setShowPassword(e.target.checked)} />
+                      Mostrar senha
+                    </label>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="login-submit-btn"
+                  >
+                    <span>{isLoading ? 'Entrando...' : 'Entrar com e-mail e senha'}</span>
+                    <ArrowRight size={16} />
+                  </button>
+
+                  <div className="login-back-link">
+                    <button
+                      type="button"
+                      onClick={() => { setActiveTab('forgot'); setRecoveryEmail(loginEmail); setErrorMessage(null); setSuccessMessage(null); }}
+                      className="login-back-btn"
+                    >
+                      Esqueci minha senha
+                    </button>
+                  </div>
+                </form>
+                </div>
+                )}
 
           {activeTab === 'forgot' && (
             <form onSubmit={handleRecoverPassword} className="login-form">

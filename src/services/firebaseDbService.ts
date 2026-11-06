@@ -6,6 +6,7 @@ import {
   deleteDoc,
   writeBatch,
   getDoc,
+  getDocFromServer,
   onSnapshot,
   query,
   where,
@@ -20,6 +21,10 @@ export interface FirestoreStatusResult {
   message: string;
   projectId: string;
   databaseId: string;
+  /** Há sessão no Firebase Auth (sem ela as regras recusam leitura e gravação). */
+  authenticated?: boolean;
+  /** Resultado do teste real de gravação + leitura em diagnostico/{uid}. */
+  writeOk?: boolean;
   collectionsStatus: {
     name: string;
     count: number;
@@ -32,53 +37,88 @@ export interface FirestoreStatusResult {
 export async function checkFirestoreDatabaseConnection(): Promise<FirestoreStatusResult> {
   const projectId = firebaseConfig.projectId;
   const databaseId = firebaseConfig.firestoreDatabaseId || '(default)';
+  const usuario = auth.currentUser;
+  const base = { projectId, databaseId, authenticated: !!usuario };
 
+  // 1) O servidor responde? Lê um documento fixo direto do servidor (sem
+  // cache local). "permission-denied" também prova que o banco respondeu.
+  // Antes, qualquer falha era engolida e o teste sempre dizia "conectado".
   try {
-    // Fetch counts from key collections
-    const collectionsToCheck = [
-      'cooperados',
-      'transacoesCapital',
-      'contasFinanceiras',
-      'assembleias',
-      'backups'
-    ];
-
-    // Test read access to confirm connection (according to firestore rules, test/connection is readable)
-    try {
-      const testDoc = doc(db, 'test', 'connection');
-      await getDoc(testDoc);
-    } catch (e) {
-      console.warn('Test document read failed, but continuing:', e);
+    await getDocFromServer(doc(db, 'test', 'connection'));
+  } catch (e: any) {
+    if (e?.code !== 'permission-denied') {
+      console.error('Erro na conexão com Firestore:', e);
+      return {
+        ...base,
+        connected: false,
+        message: `Sem conexão com o Firebase Firestore: ${e?.message || 'falha de rede'}`,
+        collectionsStatus: []
+      };
     }
+  }
 
-    const collectionsStatus: { name: string; count: number }[] = [];
+  if (!usuario) {
+    return {
+      ...base,
+      connected: true,
+      writeOk: false,
+      message: `O Firestore (${databaseId}) respondeu, mas não há sessão no Firebase Auth: entre com Google ou com e-mail/senha para ler e gravar os dados da cooperativa.`,
+      collectionsStatus: []
+    };
+  }
 
+  // 2) Gravação real: escreve e lê de volta diagnostico/{uid}.
+  let writeOk = false;
+  let erroGravacao = '';
+  try {
+    const ref = doc(db, 'diagnostico', usuario.uid);
+    const marca = new Date().toISOString();
+    await setDoc(ref, { ultimoTeste: marca, email: usuario.email || null });
+    const lido = await getDocFromServer(ref);
+    writeOk = lido.data()?.ultimoTeste === marca;
+    if (!writeOk) erroGravacao = 'o documento gravado não voltou igual na leitura';
+  } catch (e: any) {
+    erroGravacao = e?.code === 'permission-denied'
+      ? 'as regras do Firestore recusaram a gravação de teste (publique o firestore.rules deste repositório: firebase deploy --only firestore:rules)'
+      : (e?.message || 'falha desconhecida');
+  }
+
+  // 3) Contagem por coleção, só da cooperativa do usuário — as regras negam
+  // consultas sem o filtro de tenantId (antes todas voltavam 0).
+  let tenantId: string | undefined;
+  try {
+    const vinculo = await getDoc(doc(db, 'users', usuario.uid));
+    tenantId = vinculo.data()?.tenantId || undefined;
+  } catch {
+    tenantId = undefined;
+  }
+
+  const collectionsToCheck = ['cooperados', 'transacoesCapital', 'contasFinanceiras', 'assembleias', 'backups', 'departamentos', 'cargos'];
+  const collectionsStatus: { name: string; count: number }[] = [];
+  if (tenantId) {
     for (const colName of collectionsToCheck) {
       try {
-        const snap = await getDocs(collection(db, colName));
+        const snap = await getDocs(query(collection(db, colName), where('tenantId', '==', tenantId)));
         collectionsStatus.push({ name: colName, count: snap.size });
       } catch {
         collectionsStatus.push({ name: colName, count: 0 });
       }
     }
-
-    return {
-      connected: true,
-      message: `Conectado com sucesso ao Google Cloud Firestore (Database: ${databaseId})!`,
-      projectId,
-      databaseId,
-      collectionsStatus
-    };
-  } catch (err: any) {
-    console.error('Erro na conexão com Firestore:', err);
-    return {
-      connected: false,
-      message: `Erro ao conectar ao Firebase Firestore: ${err?.message || 'Falha de rede'}`,
-      projectId,
-      databaseId,
-      collectionsStatus: []
-    };
   }
+
+  const partes = [
+    `Conectado ao Google Cloud Firestore (Database: ${databaseId}).`,
+    writeOk ? 'Teste de gravação OK.' : `Falha no teste de gravação: ${erroGravacao}.`,
+    tenantId ? '' : 'Este usuário ainda não está vinculado a uma cooperativa no Firestore (users/{uid}).'
+  ].filter(Boolean);
+
+  return {
+    ...base,
+    connected: true,
+    writeOk,
+    message: partes.join(' '),
+    collectionsStatus
+  };
 }
 
 /**
@@ -97,7 +137,9 @@ export async function saveUserTenantMappingToFirestore(uid: string, tenantId: st
     // deixam alguém se vincular a uma cooperativa se for o dono registrado.
     const donoRef = doc(db, 'tenantOwners', tenantId);
     const dono = await getDoc(donoRef);
-    if (!dono.exists()) {
+    // Quem entra como membro da equipe (tenantMembers) nunca vira dono.
+    const membro = email ? await getTenantMemberFromFirestore(email) : null;
+    if (!dono.exists() && membro?.tenantId !== tenantId) {
       await setDoc(donoRef, { ownerUid: uid, email: email || null, criadoEm: new Date().toISOString() });
     }
 
@@ -492,7 +534,8 @@ export async function saveTenantToFirestore(tenant: Tenant): Promise<void> {
   try {
     const docRef = doc(db, 'tenants', tenant.id);
     await setDoc(docRef, {
-      ...tenant,
+      // JSON remove campos undefined, que o Firestore recusa.
+      ...JSON.parse(JSON.stringify(tenant)),
       updatedAt: new Date().toISOString()
     }, { merge: true });
   } catch (error) {
@@ -561,3 +604,91 @@ export async function syncEntireDatabaseToFirestore({
     };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Equipe da cooperativa (tenantMembers)
+// ---------------------------------------------------------------------------
+
+/**
+ * tenantMembers/{email}: vínculo de cada usuário cadastrado em
+ * Configurações → Usuários com a cooperativa. É o que permite que esse
+ * usuário, ao entrar com Google ou com e-mail/senha (em qualquer
+ * computador), seja reconhecido: as regras do Firestore deixam ele gravar o
+ * próprio users/{uid} com o tenantId que consta aqui.
+ */
+export interface TenantMember {
+  email: string;
+  tenantId: string;
+  name: string;
+  role: string;
+  active: boolean;
+  cargo?: string;
+  departamento?: string;
+  phone?: string;
+  authUid?: string;
+  updatedAt?: string;
+}
+
+export const chaveMembro = (email: string) => (email || '').trim().toLowerCase();
+
+export async function saveTenantMemberToFirestore(member: TenantMember): Promise<{ ok: boolean; error?: string }> {
+  const id = chaveMembro(member.email);
+  if (!id || !member.tenantId || !auth.currentUser) return { ok: false, error: 'Sem sessão no Firebase Auth.' };
+  try {
+    const dados = Object.fromEntries(
+      Object.entries({ ...member, email: id, updatedAt: new Date().toISOString() }).filter(([, v]) => v !== undefined)
+    );
+    await setDoc(doc(db, 'tenantMembers', id), dados, { merge: true });
+    return { ok: true };
+  } catch (error: any) {
+    console.warn('Erro ao gravar tenantMembers no Firestore:', error);
+    return {
+      ok: false,
+      error: error?.code === 'permission-denied'
+        ? 'O Firestore recusou a gravação do usuário (permission-denied). Publique o firestore.rules atualizado.'
+        : (error?.message || 'Falha ao gravar no Firestore.')
+    };
+  }
+}
+
+export async function deleteTenantMemberFromFirestore(email: string): Promise<void> {
+  const id = chaveMembro(email);
+  if (!id || !auth.currentUser) return;
+  try {
+    await deleteDoc(doc(db, 'tenantMembers', id));
+  } catch (error) {
+    console.warn('Erro ao remover tenantMembers no Firestore:', error);
+  }
+}
+
+export async function getTenantMemberFromFirestore(email: string): Promise<TenantMember | null> {
+  const id = chaveMembro(email);
+  if (!id || !auth.currentUser) return null;
+  try {
+    const snap = await getDoc(doc(db, 'tenantMembers', id));
+    return snap.exists() ? (snap.data() as TenantMember) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function subscribeTenantMembers(tenantId: string, onChange: (members: TenantMember[]) => void): Unsubscribe {
+  const alvo = query(collection(db, 'tenantMembers'), where('tenantId', '==', tenantId));
+  return onSnapshot(
+    alvo,
+    snap => onChange(snap.docs.map(d => d.data() as TenantMember)),
+    error => console.warn('Erro ao ouvir tenantMembers no Firestore:', error)
+  );
+}
+
+export async function fetchTenantFromFirestore(tenantId: string): Promise<Record<string, any> | null> {
+  if (!tenantId || !auth.currentUser) return null;
+  try {
+    const snap = await getDoc(doc(db, 'tenants', tenantId));
+    return snap.exists() ? { ...snap.data(), id: tenantId } : null;
+  } catch (error) {
+    console.warn('Erro ao carregar a cooperativa do Firestore:', error);
+    return null;
+  }
+}
+

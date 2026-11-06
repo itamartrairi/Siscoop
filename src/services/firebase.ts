@@ -26,6 +26,8 @@ export const db = firebaseConfig.firestoreDatabaseId
 
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+// Sempre deixa escolher a conta Google (útil em computadores compartilhados).
+googleProvider.setCustomParameters({ prompt: 'select_account' });
 export {
   updatePassword,
   reauthenticateWithCredential,
@@ -86,6 +88,11 @@ export async function testFirestoreConnection(): Promise<boolean> {
     console.log('Firebase Firestore conectado com sucesso.');
     return true;
   } catch (error) {
+    // permission-denied = o servidor respondeu (as regras exigem login para
+    // ler test/connection), então a conexão com o Firestore está OK.
+    if ((error as { code?: string })?.code === 'permission-denied') {
+      return true;
+    }
     if (error instanceof Error && error.message.includes('the client is offline')) {
       console.warn('Verifique a conexão do Firebase Firestore.');
     }
@@ -108,3 +115,74 @@ export {
   signInWithPopup
 };
 export type { FirebaseUser };
+
+/**
+ * Mensagens em português para os códigos de erro do Firebase Authentication.
+ */
+export function traduzirErroAuth(err: unknown): string {
+  const code = (err as { code?: string })?.code || '';
+  switch (code) {
+    case 'auth/invalid-email':
+      return 'E-mail inválido.';
+    case 'auth/missing-password':
+      return 'Informe a senha.';
+    case 'auth/weak-password':
+      return 'A senha precisa ter pelo menos 6 caracteres.';
+    case 'auth/email-already-in-use':
+      return 'Este e-mail já tem uma conta no Firebase Authentication.';
+    case 'auth/invalid-credential':
+    case 'auth/invalid-login-credentials':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+      return 'E-mail ou senha incorretos.';
+    case 'auth/user-disabled':
+      return 'Esta conta foi desativada no Firebase Authentication.';
+    case 'auth/too-many-requests':
+      return 'Muitas tentativas seguidas. Aguarde alguns minutos e tente de novo.';
+    case 'auth/operation-not-allowed':
+      return 'O login por e-mail e senha está desativado no Firebase. Ative em Authentication → Sign-in method → E-mail/senha.';
+    case 'auth/network-request-failed':
+      return 'Sem conexão com o Firebase. Verifique a internet.';
+    case 'auth/popup-closed-by-user':
+    case 'auth/cancelled-popup-request':
+      return 'A janela do Google foi fechada antes de concluir o login.';
+    case 'auth/popup-blocked':
+      return 'O navegador bloqueou a janela do Google. Libere pop-ups para este site.';
+    case 'auth/unauthorized-domain':
+      return 'Este domínio não está autorizado no Firebase (Authentication → Settings → Authorized domains).';
+    case 'auth/account-exists-with-different-credential':
+      return 'Já existe uma conta com este e-mail usando outro método de login. Entre com e-mail e senha.';
+    default:
+      return (err as Error)?.message || 'Falha na autenticação.';
+  }
+}
+
+/**
+ * Cria a conta de login (e-mail/senha) de OUTRO usuário no Firebase
+ * Authentication sem derrubar a sessão de quem está cadastrando.
+ *
+ * createUserWithEmailAndPassword sempre deixa logada a conta recém-criada
+ * na instância de Auth usada. Por isso o cadastro usa uma instância
+ * secundária do app Firebase, cuja sessão é encerrada logo em seguida — o
+ * administrador continua logado na instância principal.
+ */
+export async function criarContaFirebaseAuth(
+  email: string,
+  senha: string,
+  nome?: string
+): Promise<{ ok: boolean; uid?: string; code?: string; message?: string }> {
+  const NOME_APP = 'siscoop-cadastro-usuarios';
+  const appSecundario = getApps().find(a => a.name === NOME_APP) || initializeApp(firebaseConfig, NOME_APP);
+  const authSecundario = getAuth(appSecundario);
+  try {
+    const cred = await createUserWithEmailAndPassword(authSecundario, email.trim(), senha);
+    if (nome) {
+      await updateProfile(cred.user, { displayName: nome }).catch(() => undefined);
+    }
+    return { ok: true, uid: cred.user.uid };
+  } catch (err) {
+    return { ok: false, code: (err as { code?: string })?.code || 'desconhecido', message: traduzirErroAuth(err) };
+  } finally {
+    await signOut(authSecundario).catch(() => undefined);
+  }
+}

@@ -30,8 +30,9 @@ import {
   Tractor,
   X,
   ArrowRight,
-  Lightbulb
-} from 'lucide-react';
+  Lightbulb,
+  Briefcase
+  } from 'lucide-react';
 import { useCoop } from '../context/CoopContext';
 import { SharePortalsModal } from './SharePortalsModal';
 
@@ -95,6 +96,7 @@ export const Sidebar: React.FC<Props> = ({
     'compras': 'compras',
     'estoque': 'estoque',
     'rh': 'rh',
+    'cargos-departamentos': 'rh',
     'bi': 'bi',
     'aluguel-maquinas': 'aluguel-maquinas',
     'portal-cooperado': 'portal-cooperado',
@@ -161,6 +163,7 @@ export const Sidebar: React.FC<Props> = ({
         { id: 'fiscal', label: 'Notas Fiscais (NF-e / SEFAZ)', description: 'Emita e consulte NF-e com integração à SEFAZ.', action: 'Abrir Notas Fiscais', icon: FileText },
         { id: 'siscont', label: 'Contabilidade & Livro Diário', description: 'Lançamentos, livro diário e demonstrações contábeis.', action: 'Abrir Contabilidade', icon: Calculator },
         { id: 'rh', label: 'Colaboradores & Folha', description: 'Cadastro de colaboradores e controle da folha de pagamento.', action: 'Abrir RH', icon: UserCheck },
+        { id: 'cargos-departamentos', label: 'Cargos & Departamentos', description: 'Cadastre os setores e as funções usados nos usuários e colaboradores.', action: 'Abrir Cadastro', icon: Briefcase },
         { id: 'bi', label: 'Indicadores de Desempenho (BI)', description: 'Gráficos e indicadores para apoiar as decisões da diretoria.', action: 'Abrir Indicadores', icon: PieChart }
       ]
     },
