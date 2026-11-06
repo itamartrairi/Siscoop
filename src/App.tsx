@@ -44,6 +44,7 @@ const ComprasView = carregar(() => import('./views/ComprasView'), 'ComprasView')
 const AluguelMaquinasView = carregar(() => import('./views/AluguelMaquinasView'), 'AluguelMaquinasView');
 const EstoqueView = carregar(() => import('./views/EstoqueView'), 'EstoqueView');
 const RhView = carregar(() => import('./views/RhView'), 'RhView');
+const CargosDepartamentosView = carregar(() => import('./views/CargosDepartamentosView'), 'CargosDepartamentosView');
 const BiView = carregar(() => import('./views/BiView'), 'BiView');
 const PortalCooperadoView = carregar(() => import('./views/PortalCooperadoView'), 'PortalCooperadoView');
 const PortalEscolaView = carregar(() => import('./views/PortalEscolaView'), 'PortalEscolaView');
@@ -91,8 +92,9 @@ const MainAppContent: React.FC = () => {
     setIsPendingCooperativeSetup,
     isTrialExpired,
     currentUser,
-    currentTenant
-  } = useCoop();
+    currentTenant,
+    authReady
+    } = useCoop();
 
   // Detect direct portal sharing from URL query parameters or hash
   useEffect(() => {
@@ -159,6 +161,15 @@ const MainAppContent: React.FC = () => {
             {standalonePortal === 'app-motorista' && <AppMotoristaView />}
           </Suspense>
         </main>
+      </div>
+    );
+  }
+
+  // Enquanto o Firebase Auth verifica se há uma sessão salva, evita piscar a tela de login.
+  if (!isAuthenticated && !authReady) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <CarregandoModulo />
       </div>
     );
   }
@@ -250,6 +261,7 @@ const MainAppContent: React.FC = () => {
               {activeModule === 'aluguel-maquinas' && <AluguelMaquinasView />}
               {activeModule === 'estoque' && <EstoqueView />}
               {activeModule === 'rh' && <RhView />}
+              {activeModule === 'cargos-departamentos' && <CargosDepartamentosView />}
               {activeModule === 'bi' && <BiView />}
 
               {/* Portals and Apps */}
