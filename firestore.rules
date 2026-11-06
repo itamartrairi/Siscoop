@@ -45,9 +45,41 @@ service cloud.firestore {
     function semTenant(data) {
       return !('tenantId' in data) || data.tenantId == null || data.tenantId == '';
     }
+    function donoDoTenant(tenantId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/tenantOwners/$(tenantId)) &&
+        get(/databases/$(database)/documents/tenantOwners/$(tenantId)).data.ownerUid == request.auth.uid;
+    }
+
+    // Equipe: tenantMembers/{email} é gravado pelo dono (ou gestor) da
+    // cooperativa em Configurações → Usuários. Quem entra com Google ou com
+    // e-mail/senha usando esse e-mail pode se vincular à cooperativa.
+    // Exige e-mail verificado (Google) OU que a conta seja exatamente a criada
+    // pelo administrador (authUid), para ninguém "reservar" o e-mail de outro.
+    function emailDoLogin() {
+      return request.auth.token.email.lower();
+    }
+    function vinculoEquipe() {
+      return get(/databases/$(database)/documents/tenantMembers/$(emailDoLogin())).data;
+    }
+    function membroDoTenant(tenantId) {
+      return isSignedIn() &&
+        ('email' in request.auth.token) &&
+        exists(/databases/$(database)/documents/tenantMembers/$(emailDoLogin())) &&
+        vinculoEquipe().tenantId == tenantId &&
+        vinculoEquipe().active != false &&
+        (request.auth.token.email_verified == true || vinculoEquipe().get('authUid', '') == request.auth.uid);
+    }
+    // Pode gerenciar a equipe: dono ou membro com perfil de gestão.
+    function gestorDoTenant(tenantId) {
+      return donoDoTenant(tenantId) ||
+        (membroDoTenant(tenantId) && vinculoEquipe().role in ['ADMIN', 'PRESIDENTE', 'DIRETOR_FINANCEIRO']);
+    }
     function tenantLiberado(data) {
-      return semTenant(data) ||
-             get(/databases/$(database)/documents/tenantOwners/$(data.tenantId)).data.ownerUid == request.auth.uid;
+      return semTenant(data) || donoDoTenant(data.tenantId) || membroDoTenant(data.tenantId);
+    }
+    function cadastroRHValido(data) {
+      return data.nome is string && data.nome.size() > 0 && data.nome.size() <= 120;
     }
 
 
@@ -164,6 +196,46 @@ service cloud.firestore {
                     (isCurrentUser(userId) && request.resource.data.tenantId == resource.data.tenantId) ||
                     (isCurrentUser(userId) && semTenant(resource.data) && tenantLiberado(request.resource.data));
       allow delete: if isAdmin();
+    }
+
+    // Equipe da cooperativa: vínculo e-mail → cooperativa (Configurações → Usuários).
+    match /tenantMembers/{email} {
+      allow read: if (isSignedIn() && ('email' in request.auth.token) && emailDoLogin() == email) ||
+        isAdmin() || belongsToTenant(resource.data.tenantId) || donoDoTenant(resource.data.tenantId);
+      allow create: if isAdmin() ||
+        (email == request.resource.data.email && gestorDoTenant(request.resource.data.tenantId));
+      allow update: if isAdmin() ||
+        (email == request.resource.data.email &&
+         request.resource.data.tenantId == resource.data.tenantId &&
+         gestorDoTenant(resource.data.tenantId));
+      allow delete: if isAdmin() || gestorDoTenant(resource.data.tenantId);
+    }
+
+    // Cadastros de RH: Departamentos e Cargos, isolados por cooperativa.
+    match /departamentos/{departamentoId} {
+      allow read, delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
+      allow create: if isAdmin() ||
+        (belongsToTenant(request.resource.data.tenantId) && cadastroRHValido(request.resource.data));
+      allow update: if isAdmin() ||
+        (belongsToTenant(resource.data.tenantId) &&
+         request.resource.data.tenantId == resource.data.tenantId &&
+         cadastroRHValido(request.resource.data));
+    }
+
+    match /cargos/{cargoId} {
+      allow read, delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
+      allow create: if isAdmin() ||
+        (belongsToTenant(request.resource.data.tenantId) && cadastroRHValido(request.resource.data));
+      allow update: if isAdmin() ||
+        (belongsToTenant(resource.data.tenantId) &&
+         request.resource.data.tenantId == resource.data.tenantId &&
+         cadastroRHValido(request.resource.data));
+    }
+
+    // Diagnóstico de conexão (Configurações → Integrações → testar Firestore):
+    // cada usuário grava e lê só o próprio documento.
+    match /diagnostico/{userId} {
+      allow read, write: if isCurrentUser(userId);
     }
 
     // Cooperados collection — isolado por cooperativa (tenantId)
