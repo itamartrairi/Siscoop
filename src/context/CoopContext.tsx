@@ -108,16 +108,24 @@ import {
   googleProvider,
   updatePassword,
   reauthenticateWithCredential,
-  EmailAuthProvider
-} from '../services/firebase';
+  EmailAuthProvider,
+  traduzirErroAuth
+  } from '../services/firebase';
+  import type { FirebaseUser } from '../services/firebase';
 import { checkAndRunWeeklyBackupIfNeeded } from '../services/firebaseBackupService';
 import {
   syncCooperadosToFirestore,
   syncContasFinanceirasToFirestore,
   syncTransacoesCapitalToFirestore,
   syncAssembleiasToFirestore,
-  saveUserTenantMappingToFirestore
-} from '../services/firebaseDbService';
+  saveUserTenantMappingToFirestore,
+  saveTenantToFirestore,
+  saveTenantMemberToFirestore,
+  deleteTenantMemberFromFirestore,
+  getTenantMemberFromFirestore,
+  subscribeTenantMembers,
+  fetchTenantFromFirestore
+  } from '../services/firebaseDbService';
 import { PLANO_CONTAS_COOPERATIVA, migrarLancamentosContabeis, CODIGO_BANCO_PADRAO } from '../data/planoContasCooperativa';
 import { publicarPortalEscolas, ouvirComprovantesPortal } from '../services/portalEscolaRemoto';
 import { publicarPortalMotoristas, ouvirAtualizacoesMotoristas, mesclarParadas } from '../services/portalMotoristaRemoto';
@@ -508,6 +516,8 @@ interface CoopContextType {
   recoverPassword: (email: string) => Promise<{ success: boolean; message: string }>;
   changeUserPassword: (newPassword: string, currentPassword?: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void> | void;
+  /** false até o Firebase Auth informar se existe uma sessão salva no navegador. */
+  authReady: boolean;
 
   // Data Collections
   cooperados: Cooperado[];
@@ -1036,7 +1046,12 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return DEFAULT_ROLE_PERMISSIONS;
   });
 
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
+  // Em produção a sessão só existe com login real no Firebase Auth (Google ou
+  // e-mail/senha): o app começa deslogado e o onAuthStateChanged restaura a
+  // sessão salva no navegador. Em desenvolvimento (npm run dev) mantém o
+  // acesso direto de demonstração.
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => !!(import.meta as any).env?.DEV);
+  const [authReady, setAuthReady] = useState<boolean>(false);
   const [isPendingCooperativeSetup, setIsPendingCooperativeSetup] = useState<boolean>(false);
 
   const [cooperados, setCooperados] = useState<Cooperado[]>(() => {
@@ -1551,9 +1566,56 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // ignorando o app).
   useEffect(() => {
     if (isAuthenticated && currentUser?.id && currentTenant?.id) {
-      saveUserTenantMappingToFirestore(currentUser.id, currentTenant.id, currentUser.email);
+      saveUserTenantMappingToFirestore(currentUser.id, currentTenant.id, currentUser.email).then(() => {
+        // Publica o cadastro da cooperativa para que a equipe consiga
+        // carregá-lo ao entrar de outro computador (ver montarSessaoFirebase).
+        if (auth.currentUser && currentUser.role === 'ADMIN') {
+          saveTenantToFirestore(currentTenant as any);
+        }
+      });
     }
   }, [isAuthenticated, currentUser?.id, currentTenant?.id, currentUser?.email]);
+
+  // Equipe da cooperativa gravada no Firestore (tenantMembers) → lista de
+  // usuários de Configurações. Assim um usuário cadastrado em um computador
+  // aparece nos demais.
+  useEffect(() => {
+    const tenantId = currentTenant?.id;
+    if (!isAuthenticated || !tenantId || !auth.currentUser) return;
+    return subscribeTenantMembers(tenantId, membros => {
+      setUsers(prev => {
+        let mudou = false;
+        const proxima = [...prev];
+        membros.forEach(m => {
+          const email = (m.email || '').toLowerCase().trim();
+          if (!email) return;
+          const idx = proxima.findIndex(u => (u.email || '').toLowerCase().trim() === email);
+          const dados: Partial<User> = {
+            name: m.name,
+            role: m.role as UserRole,
+            active: m.active !== false,
+            cargo: m.cargo,
+            departamento: m.departamento,
+            phone: m.phone,
+            authUid: m.authUid,
+            tenantId
+          };
+          if (idx < 0) {
+            proxima.push({ ...dados, id: m.authUid || `usr-${email}`, email, lastLogin: 'Nunca acessou' } as User);
+            mudou = true;
+          } else {
+            const atual = proxima[idx];
+            const diferente = (Object.keys(dados) as (keyof User)[]).some(k => (dados[k] ?? undefined) !== (atual[k] ?? undefined));
+            if (diferente) {
+              proxima[idx] = { ...atual, ...dados };
+              mudou = true;
+            }
+          }
+        });
+        return mudou ? proxima : prev;
+      });
+    });
+  }, [isAuthenticated, currentTenant?.id, currentUser?.id]);
 
   // Automatic Weekly Firebase CSV Backup Check
   useEffect(() => {
@@ -1703,40 +1765,129 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return result;
   };
 
-  // Listen to active Firebase Auth state and user changes
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
-      if (fbUser) {
-        const loggedInUser: User = {
-          id: fbUser.uid,
-          name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Administrador Firebase',
-          email: fbUser.email || '',
-          role: papelDoUsuario(fbUser.email),
-          avatar: fbUser.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100',
-          tenantId: currentTenant?.id || '',
-          active: true,
-          lastLogin: new Date().toISOString()
-        };
-        setCurrentUser(loggedInUser);
-        setIsAuthenticated(true);
+  // Refs para os callbacks de autenticação (o listener do Firebase é
+  // registrado uma única vez) enxergarem sempre as listas atuais.
+  const usersRef = useRef(users);
+  usersRef.current = users;
+  const tenantsRef = useRef(tenants);
+  tenantsRef.current = tenants;
+  const currentTenantRef = useRef(currentTenant);
+  currentTenantRef.current = currentTenant;
+
+  /**
+   * Monta a sessão de quem entrou pelo Firebase Auth — com Google OU com
+   * e-mail/senha, o tratamento é o mesmo. Usa o cadastro do usuário em
+   * Configurações → Usuários (perfil, cargo, departamento, permissões) e, se
+   * este navegador ainda não conhece o usuário, o vínculo
+   * tenantMembers/{email} gravado no Firestore pelo administrador.
+   * Sem cadastro, é o dono da conta (quem criou a cooperativa) e fica como
+   * ADMIN da própria cooperativa. Escolas e motoristas usam sessões
+   * separadas e não passam por aqui.
+   */
+  const montarSessaoFirebase = async (
+    fbUser: FirebaseUser,
+    origem: 'Google' | 'e-mail/senha' | 'sessão salva'
+  ): Promise<{ success: boolean; requiresCooperativeSetup: boolean; error?: string }> => {
+    const email = (fbUser.email || '').toLowerCase().trim();
+    const cadastro = email ? usersRef.current.find(u => (u.email || '').toLowerCase().trim() === email) : undefined;
+    const membro = email ? await getTenantMemberFromFirestore(email) : null;
+
+    if (cadastro?.active === false || membro?.active === false) {
+      try {
+        await signOut(auth);
+      } catch {
+        // ignora
       }
+      setIsAuthenticated(false);
+      return { success: false, requiresCooperativeSetup: false, error: 'Este usuário está desativado. Fale com o administrador da cooperativa.' };
+    }
+
+    const tenantIdDoCadastro = cadastro?.tenantId || membro?.tenantId || '';
+    let tenant: CooperativeTenant | undefined =
+      (tenantIdDoCadastro ? tenantsRef.current.find(t => t.id === tenantIdDoCadastro) : undefined) ||
+      tenantsRef.current.find(t => (t as any).ownerUid === fbUser.uid);
+
+    // Usuário da equipe entrando num navegador que ainda não tem a
+    // cooperativa: vincula users/{uid} ao tenant (as regras permitem por causa
+    // do tenantMembers) e baixa o cadastro da cooperativa do Firestore.
+    if (!tenant && membro?.tenantId) {
+      await saveUserTenantMappingToFirestore(fbUser.uid, membro.tenantId, email);
+      const remoto = await fetchTenantFromFirestore(membro.tenantId);
+      if (remoto) {
+        const novo = { ...currentTenantRef.current, ...remoto, id: membro.tenantId } as CooperativeTenant;
+        tenant = novo;
+        setTenants(prev => (prev.some(t => t.id === novo.id) ? prev : [...prev, novo]));
+      }
+    }
+
+    // Sem cadastro nem vínculo: comportamento anterior (cooperativa deste navegador).
+    const usouCooperativaDoNavegador = !tenant && !membro;
+    if (usouCooperativaDoNavegador) tenant = currentTenantRef.current;
+
+    const sessao: User = {
+      ...(cadastro || {}),
+      id: fbUser.uid,
+      authUid: fbUser.uid,
+      name: cadastro?.name || membro?.name || fbUser.displayName || email.split('@')[0] || 'Usuário',
+      email: fbUser.email || cadastro?.email || '',
+      role: cadastro?.role || (membro?.role as UserRole | undefined) || 'ADMIN',
+      cargo: cadastro?.cargo || membro?.cargo,
+      departamento: cadastro?.departamento || membro?.departamento,
+      avatar: fbUser.photoURL || cadastro?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100',
+      tenantId: tenant?.id || tenantIdDoCadastro,
+      active: true,
+      lastLogin: new Date().toISOString()
+    };
+    delete (sessao as Partial<User>).password;
+
+    // O cadastro local passa a usar o UID do Firebase como id, para que
+    // edições de perfil e permissões fiquem ligadas à conta de login.
+    setUsers(prev => {
+      const idx = prev.findIndex(u => (u.email || '').toLowerCase().trim() === email);
+      if (idx < 0) return prev;
+      const copia = [...prev];
+      copia[idx] = { ...copia[idx], id: fbUser.uid, authUid: fbUser.uid, lastLogin: sessao.lastLogin };
+      return copia;
     });
 
-    return () => {
-      unsubscribe();
-    };
-  }, [currentTenant]);
+    setCurrentUser(sessao);
+    setIsAuthenticated(true);
 
-  // Papel de quem entra pelo Firebase: o definido em Configurações → Usuários
-  // para aquele e-mail. Sem cadastro, é o dono da conta (quem criou a
-  // cooperativa) e fica como ADMIN da própria cooperativa. As escolas e os
-  // motoristas usam sessões separadas e não passam por aqui.
-  const papelDoUsuario = (email?: string | null): User['role'] => {
-    const alvo = (email || '').toLowerCase().trim();
-    const cadastrado = alvo ? users.find(u => (u.email || '').toLowerCase().trim() === alvo) : undefined;
-    if (cadastrado && cadastrado.active === false) return 'CONSULTA';
-    return cadastrado?.role || 'ADMIN';
+    // Ao restaurar a sessão salva, não mexe no fluxo de cadastro inicial da
+    // cooperativa quando o usuário não tem vínculo (ex.: acabou de se cadastrar).
+    if (!(origem === 'sessão salva' && usouCooperativaDoNavegador)) {
+      if (tenant) {
+        if (tenant.id !== currentTenantRef.current?.id) setCurrentTenant(tenant);
+        setIsPendingCooperativeSetup(false);
+      } else {
+        setIsPendingCooperativeSetup(true);
+      }
+    }
+
+    if (origem !== 'sessão salva') {
+      addAuditLog('AUTH', 'LOGIN', `Usuário ${sessao.name} realizou login via ${origem} (${sessao.email})`);
+    }
+    return { success: true, requiresCooperativeSetup: !tenant };
   };
+
+  // Restaura a sessão salva pelo Firebase Auth ao abrir o app.
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      try {
+        if (fbUser) {
+          await montarSessaoFirebase(fbUser, 'sessão salva');
+        } else if (!(import.meta as any).env?.DEV) {
+          setIsAuthenticated(false);
+        }
+      } catch (e) {
+        console.warn('Falha ao restaurar a sessão do Firebase Auth:', e);
+      } finally {
+        setAuthReady(true);
+      }
+    });
+    return () => unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Portal da Escola: publica no Firestore o resumo de cada escola (para ela
   // acessar o portal do próprio computador) e importa os comprovantes que as
@@ -1838,37 +1989,22 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [isAuthenticated, currentTenant?.id]);
 
   const loginWithEmail = async (email: string, pass: string) => {
+    let erroFirebase: unknown = null;
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+      const userCredential = await signInWithEmailAndPassword(auth, email.trim(), pass);
       if (userCredential?.user) {
-        const fbUser = userCredential.user;
-        const loggedInUser: User = {
-          id: fbUser.uid,
-          name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Usuário Firebase',
-          email: fbUser.email || email,
-          role: papelDoUsuario(fbUser.email || email),
-          avatar: fbUser.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100',
-          tenantId: currentTenant?.id || '',
-          active: true,
-          lastLogin: new Date().toISOString()
-        };
-
-        setCurrentUser(loggedInUser);
-        setIsAuthenticated(true);
-        setIsPendingCooperativeSetup(false);
-
-        addAuditLog('AUTH', 'LOGIN', `Usuário ${loggedInUser.name} realizou login via Firebase Auth (${loggedInUser.email})`);
-        return { success: true, requiresCooperativeSetup: false };
+        return await montarSessaoFirebase(userCredential.user, 'e-mail/senha');
       }
     } catch (error: any) {
-      console.warn('Tentativa de login Firebase Auth:', error?.message);
+      erroFirebase = error;
+      console.warn('Tentativa de login Firebase Auth:', error?.code || error?.message);
     }
 
     // Os logins de demonstração (usuários de exemplo e "qualquer e-mail com
     // senha de 4 caracteres") só existem em desenvolvimento. Em produção,
     // sem uma conta válida no Firebase, o acesso é negado.
     if (!(import.meta as any).env?.DEV) {
-      return { success: false, requiresCooperativeSetup: false, error: 'E-mail ou senha incorretos.' };
+      return { success: false, requiresCooperativeSetup: false, error: erroFirebase ? traduzirErroAuth(erroFirebase) : 'E-mail ou senha incorretos.' };
     }
 
     // Check existing users / demo users fallback
@@ -1916,34 +2052,11 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const userCredential = await signInWithPopup(auth, googleProvider);
       if (userCredential?.user) {
-        const fbUser = userCredential.user;
-        const loggedInUser: User = {
-          id: fbUser.uid,
-          name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Administrador Google',
-          email: fbUser.email || '',
-          role: papelDoUsuario(fbUser.email),
-          avatar: fbUser.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100',
-          tenantId: currentTenant?.id || '',
-          active: true,
-          lastLogin: new Date().toISOString()
-        };
-        setCurrentUser(loggedInUser);
-        setIsAuthenticated(true);
-
-        const userTenant = tenants.find(t => t.id === loggedInUser.tenantId) || tenants.find(t => t.ownerUid === loggedInUser.id);
-        if (userTenant) {
-          setCurrentTenant(userTenant);
-          setIsPendingCooperativeSetup(false);
-        } else {
-          setIsPendingCooperativeSetup(true);
-        }
-
-        addAuditLog('AUTH', 'LOGIN', `Usuário ${loggedInUser.name} realizou login via Google Auth (${loggedInUser.email})`);
-        return { success: true, requiresCooperativeSetup: !userTenant };
+        return await montarSessaoFirebase(userCredential.user, 'Google');
       }
     } catch (error: any) {
-      console.warn('Tentativa de login Google Firebase Auth:', error?.message);
-      return { success: false, requiresCooperativeSetup: false, error: 'Login via Google cancelado ou falhou.' };
+      console.warn('Tentativa de login Google Firebase Auth:', error?.code || error?.message);
+      return { success: false, requiresCooperativeSetup: false, error: traduzirErroAuth(error) };
     }
     return { success: false, requiresCooperativeSetup: false, error: 'O login via Google não retornou usuário.' };
   };
@@ -2088,24 +2201,54 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addAuditLog('AUTH', 'LOGOUT', `Usuário ${currentUser?.name || 'Sistema'} encerrou a sessão`);
   };
 
+  // Grava no Firestore o vínculo do usuário com a cooperativa
+  // (tenantMembers/{email}), para ele conseguir entrar com Google ou com
+  // e-mail/senha em qualquer computador. Só funciona com sessão no Firebase.
+  const sincronizarMembroNoFirestore = (u: User) => {
+    const tenantId = u.tenantId || currentTenant?.id;
+    if (!auth.currentUser || !u.email || !tenantId) return;
+    saveTenantMemberToFirestore({
+      email: u.email,
+      tenantId,
+      name: u.name,
+      role: u.role,
+      active: u.active !== false,
+      cargo: u.cargo || undefined,
+      departamento: u.departamento || undefined,
+      phone: u.phone || undefined,
+      authUid: u.authUid || undefined
+    }).then(r => {
+      if (!r.ok) console.warn('tenantMembers:', r.error);
+    });
+  };
+
   // User Management & Access Permissions CRUD
-  const addUser = (userData: Omit<User, 'id' | 'tenantId'>): User => {
+  const addUser = (userData: Omit<User, 'id' | 'tenantId'> & { id?: string }): User => {
     const newUser: User = {
       ...userData,
-      id: `usr-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
+      id: userData.id || `usr-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
       tenantId: currentTenant.id,
       active: userData.active ?? true,
       lastLogin: 'Nunca acessou'
     };
     setUsers(prev => [newUser, ...prev]);
+    sincronizarMembroNoFirestore(newUser);
     addAuditLog('CONFIGURACOES', 'INCLUSAO', `Novo usuário cadastrado: ${newUser.name} (${newUser.email}) - Perfil: ${newUser.role}`);
     return newUser;
   };
 
   const updateUser = (id: string, userData: Partial<User>) => {
+    const anterior = users.find(u => u.id === id);
     setUsers(prev => prev.map(u => u.id === id ? { ...u, ...userData } : u));
     if (currentUser.id === id) {
       setCurrentUser(prev => ({ ...prev, ...userData }));
+    }
+    if (anterior) {
+      const atualizado = { ...anterior, ...userData };
+      if (anterior.email && atualizado.email && anterior.email.toLowerCase().trim() !== atualizado.email.toLowerCase().trim()) {
+        deleteTenantMemberFromFirestore(anterior.email);
+      }
+      sincronizarMembroNoFirestore(atualizado);
     }
     addAuditLog('CONFIGURACOES', 'ALTERACAO', `Cadastro/Permissões do usuário ID ${id} atualizados`);
   };
@@ -2115,7 +2258,9 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       alert('Não é possível excluir o próprio usuário logado na sessão ativa.');
       return;
     }
+    const removido = users.find(u => u.id === id);
     setUsers(prev => prev.filter(u => u.id !== id));
+    if (removido?.email) deleteTenantMemberFromFirestore(removido.email);
     addAuditLog('CONFIGURACOES', 'EXCLUSAO', `Usuário ID ${id} foi removido do sistema`);
   };
 
@@ -5202,6 +5347,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         recoverPassword,
         changeUserPassword,
         logout,
+        authReady,
         cooperados: tenantCooperados,
         transacoesCapital: tenantTransacoesCapital,
         assembleias: tenantAssembleias,
