@@ -1,5 +1,5 @@
 import { formatarData } from '../utils/dateHelpers';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useCoop } from '../context/CoopContext';
 import {
   ShoppingCart,
@@ -11,10 +11,18 @@ import {
   Filter,
   RotateCcw,
   Search,
-  ExternalLink
+  ExternalLink,
+  MessageCircle,
+  Users,
+  Store
 } from 'lucide-react';
 import { SolicitacaoCompra, Fornecedor, ItemEstoque } from '../types';
 import { DataGrid, GridStatus } from '../components/ui/DataGrid';
+import { ClientesTab } from '../components/ClientesTab';
+import { RevendasTab } from '../components/RevendasTab';
+import { abrirLinkExterno, montarLinkWhatsApp, montarLinkWhatsAppGenerico, getTelefoneContato } from '../utils/whatsappHelpers';
+import { mensagemOrdemCompra } from '../utils/mensagensWhatsApp';
+import { FORMAS_PAGAMENTO_COMERCIAL, type FormaPagamentoComercial, gerarParcelas, somarDias, hojeISO, dataBR, formatarMoeda, rotuloFormaPagamento } from '../utils/parcelamento';
 import { consultarCnpjReceita, cnpjValido } from '../services/cnpjService';
 import type { DadosCnpjReceita } from '../services/cnpjService';
 
@@ -56,6 +64,16 @@ const formatarDocumento = (valor: string, tipo: 'PF' | 'PJ'): string => {
 
 const tipoPessoaDoDocumento = (doc: string): 'PF' | 'PJ' => (somenteDigitos(doc).length === 11 ? 'PF' : 'PJ');
 
+// Tipo de compra e condições de pagamento da Ordem de Compra
+type TipoCompraOC = 'INSUMOS' | 'REVENDA';
+const OC_PAGTO_PADRAO = () => ({
+  tipoCompra: 'INSUMOS' as TipoCompraOC,
+  formaPagamento: 'PIX' as FormaPagamentoComercial,
+  numeroParcelas: 1,
+  intervaloDias: 30,
+  primeiroVencimento: somarDias(hojeISO(), 30)
+});
+
 const MESES_LABEL = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
@@ -76,6 +94,7 @@ export const ComprasView: React.FC = () => {
     updateFornecedor,
     deleteFornecedor,
     estoque,
+    currentTenant,
     canWriteModule
   } = useCoop();
 
@@ -84,7 +103,7 @@ export const ComprasView: React.FC = () => {
     alert('Seu perfil de acesso tem permissão apenas de leitura neste módulo. Fale com um administrador para solicitar permissão de edição.');
   };
 
-  const [activeTab, setActiveTab] = useState<'solicitacoes' | 'ordens' | 'fornecedores'>('solicitacoes');
+  const [activeTab, setActiveTab] = useState<'solicitacoes' | 'ordens' | 'fornecedores' | 'revendas' | 'clientes'>('solicitacoes');
 
   // Editing state
   const [editingSolicitacao, setEditingSolicitacao] = useState<SolicitacaoCompra | null>(null);
@@ -172,6 +191,7 @@ export const ComprasView: React.FC = () => {
   });
 
   const [ordemForm, setOrdemForm] = useState({
+    ...OC_PAGTO_PADRAO(),
     numeroOrdem: `OC-${Date.now().toString().slice(-5)}`,
     solicitacaoId: '',
     fornecedorId: '',
@@ -312,7 +332,13 @@ if (o) {
       setEditingOrdem(o);
       const firstItem = (o.itens && o.itens.length > 0) ? o.itens[0] : null;
       setOrdemForm({
+        ...OC_PAGTO_PADRAO(),
         numeroOrdem: o.numeroOrdem,
+        tipoCompra: o.tipoCompra || 'INSUMOS',
+        formaPagamento: o.formaPagamento || 'PIX',
+        numeroParcelas: o.numeroParcelas || 1,
+        intervaloDias: o.intervaloDias || 30,
+        primeiroVencimento: o.primeiroVencimento || o.dataPrevisaoEntrega || o.dataEmissao,
         solicitacaoId: o.solicitacaoId || '',
         fornecedorId: o.fornecedorId,
         fornecedorNome: o.fornecedorNome,
@@ -330,6 +356,7 @@ if (o) {
       setEditingOrdem(null);
       const fPadrao = fornecedores[0];
       setOrdemForm({
+        ...OC_PAGTO_PADRAO(),
         numeroOrdem: `OC-${Date.now().toString().slice(-5)}`,
         solicitacaoId: '',
         fornecedorId: fPadrao?.id || 'f-1',
@@ -353,6 +380,7 @@ if (o) {
 const fPadrao = fornecedores[0];
     setEditingOrdem(null);
     setOrdemForm({
+      ...OC_PAGTO_PADRAO(),
       numeroOrdem: `OC-${Date.now().toString().slice(-5)}`,
       solicitacaoId: s.id,
       fornecedorId: fPadrao?.id || 'f-1',
@@ -370,6 +398,37 @@ const fPadrao = fornecedores[0];
     updateSolicitacaoCompra(s.id, { status: 'EM_COTACAO' });
     setShowOrdemModal(true);
   };
+  // Envia a ordem de compra ao fornecedor pelo WhatsApp (mensagem pronta).
+  const enviarWhatsAposSalvar = useRef(false);
+  const enviarOrdemWhatsApp = (o: any) => {
+    const forn = fornecedores.find(f => f.id === o.fornecedorId) || fornecedores.find(f => f.razaoSocial === o.fornecedorNome);
+    const texto = mensagemOrdemCompra({
+      cooperativa: currentTenant?.name || currentTenant?.razaoSocial || 'Cooperativa',
+      numeroOrdem: o.numeroOrdem,
+      fornecedor: o.fornecedorNome,
+      dataEmissao: o.dataEmissao,
+      dataPrevisaoEntrega: o.dataPrevisaoEntrega,
+      itens: (o.itens || []).map((i: any) => ({
+        descricao: i.descricao,
+        quantidade: Number(i.quantidade) || 0,
+        unidade: i.unidade || 'UN',
+        precoUnitario: Number(i.precoUnitario) || 0,
+        subtotal: Number(i.subtotal) || (Number(i.quantidade) || 0) * (Number(i.precoUnitario) || 0)
+      })),
+      valorTotal: Number(o.valorTotal) || 0,
+      formaPagamento: o.formaPagamento,
+      numeroParcelas: o.numeroParcelas,
+      intervaloDias: o.intervaloDias,
+      primeiroVencimento: o.primeiroVencimento,
+      observacoes: o.observacoes
+    });
+    const tel = getTelefoneContato(forn);
+    if (!tel && !confirm('Este fornecedor não tem telefone cadastrado. Abrir o WhatsApp para escolher o contato manualmente?')) return;
+    abrirLinkExterno(tel ? montarLinkWhatsApp(tel, texto) : montarLinkWhatsAppGenerico(texto));
+  };
+
+  const descricaoPagamentoOC = (f: { formaPagamento?: string; numeroParcelas?: number; condicoesPagamento?: string }) =>
+    `${rotuloFormaPagamento(f.formaPagamento)} ${(f.numeroParcelas || 1) > 1 ? `${f.numeroParcelas}x` : 'à vista'}${f.condicoesPagamento ? ` — ${f.condicoesPagamento}` : ''}`;
 
   const handleSaveOrdem = (e: React.FormEvent) => {
     e.preventDefault();
@@ -386,11 +445,14 @@ const fPadrao = fornecedores[0];
     } else {
       addOrdemCompra({
         ...ordemForm,
-        condicaoPagamento: ordemForm.condicoesPagamento,
+        valorTotal,
+        condicaoPagamento: descricaoPagamentoOC(ordemForm),
         status: 'APROVADA',
         itens
       });
     }
+    if (enviarWhatsAposSalvar.current) enviarOrdemWhatsApp({ ...ordemForm, valorTotal, itens });
+    enviarWhatsAposSalvar.current = false;
     setShowOrdemModal(false);
   };
 
@@ -526,6 +588,26 @@ if (f) {
         >
           <Truck className="w-4 h-4" /> Fornecedores Homologados ({fornecedores.length})
         </button>
+          <button
+            onClick={() => setActiveTab('revendas')}
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
+              activeTab === 'revendas'
+                ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
+                : 'border-transparent text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            <Store className="w-4 h-4" /> Revendas de Produtos
+          </button>
+          <button
+            onClick={() => setActiveTab('clientes')}
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
+              activeTab === 'clientes'
+                ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
+                : 'border-transparent text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            <Users className="w-4 h-4" /> Clientes
+          </button>
       </div>
 
       {/* Tab Solicitacoes */}
@@ -693,11 +775,12 @@ if (f) {
                 },
                 { key: 'numeroOrdem', header: 'Nº Ordem', width: 110 },
                 { key: 'fornecedorNome', header: 'Fornecedor', width: 220 },
+              { key: 'tipoCompra', header: 'Tipo', width: 100, value: o => (o.tipoCompra === 'REVENDA' ? 'Revenda' : 'Insumos') },
                 { key: 'itens', header: 'Itens', width: 80, align: 'right', value: o => o.itens?.length || 0 },
                 { key: 'origem', header: 'Origem', width: 150, value: o => (o.solicitacaoId ? 'Solicitação' : 'Compra avulsa') },
                 { key: 'dataEmissao', header: 'Emissão', width: 110, value: o => o.dataEmissao, render: o => formatarData(o.dataEmissao) },
                 { key: 'dataPrevisaoEntrega', header: 'Prev. Entrega', width: 120, value: o => o.dataPrevisaoEntrega, render: o => (o.dataPrevisaoEntrega ? formatarData(o.dataPrevisaoEntrega) : null) },
-                { key: 'condicoesPagamento', header: 'Condições Pagto.', width: 150 },
+                { key: 'condicoesPagamento', header: 'Pagamento', width: 170, value: o => (o.formaPagamento ? descricaoPagamentoOC({ formaPagamento: o.formaPagamento, numeroParcelas: o.numeroParcelas }) : ((o as any).condicoesPagamento || o.condicaoPagamento || '')) },
                 {
                   key: 'valorTotal',
                   header: 'Valor Total',
@@ -709,6 +792,7 @@ if (f) {
               ]}
               actions={[
                 { label: 'Editar', icon: Pencil, onClick: o => handleOpenOrdem(o) },
+                { label: 'Enviar ao fornecedor (WhatsApp)', icon: MessageCircle, onClick: o => enviarOrdemWhatsApp(o) },
                 {
                   label: 'Excluir',
                   icon: Trash2,
@@ -724,7 +808,14 @@ if (f) {
         </div>
       )}
 
-      {/* Tab Fornecedores */}
+      {/* Tab Revendas de Produtos */}
+      {activeTab === 'revendas' && <RevendasTab canWrite={canWrite} onBlocked={blockWriteAction} />}
+
+      {/* Tab Clientes */}
+      {activeTab === 'clientes' && <ClientesTab canWrite={canWrite} onBlocked={blockWriteAction} />}
+
+      
+{/* Tab Fornecedores */}
       {activeTab === 'fornecedores' && (
         <DataGrid
           rows={fornecedores}
@@ -848,7 +939,7 @@ if (f) {
                   <label className="block text-slate-700 font-bold mb-1">Fornecedor *</label>
                   <select
                     value={ordemForm.fornecedorNome}
-                    onChange={e => setOrdemForm({ ...ordemForm, fornecedorNome: e.target.value })}
+                    onChange={e => { const fSel = fornecedores.find(x => x.razaoSocial === e.target.value); setOrdemForm({ ...ordemForm, fornecedorNome: e.target.value, fornecedorId: fSel?.id || ordemForm.fornecedorId }); }}
                     className="w-full p-2.5 border border-slate-200 rounded-xl font-bold"
                   >
                     {fornecedores.map(f => (
@@ -921,7 +1012,57 @@ if (f) {
                 </div>
               </div>
 
-              <div>
+              <div className="bg-white p-4 rounded-2xl border border-slate-200/80 space-y-3">
+                <div className="text-xs font-extrabold text-slate-800">Tipo de compra e pagamento</div>
+                <div className="flex gap-2">
+                  {([['INSUMOS', 'Insumos / uso próprio'], ['REVENDA', 'Produtos para revenda']] as const).map(([valor, rotulo]) => (
+                    <button
+                      key={valor}
+                      type="button"
+                      onClick={() => setOrdemForm({ ...ordemForm, tipoCompra: valor })}
+                      className={`flex-1 p-2.5 rounded-xl border font-bold transition-all ${ordemForm.tipoCompra === valor ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                    >
+                      {rotulo}
+                    </button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">Forma de pagamento *</label>
+                    <select value={ordemForm.formaPagamento} onChange={e => setOrdemForm({ ...ordemForm, formaPagamento: e.target.value as FormaPagamentoComercial })} className="w-full p-2.5 border border-slate-200 rounded-xl bg-white font-bold">
+                      {FORMAS_PAGAMENTO_COMERCIAL.map(f => <option key={f.valor} value={f.valor}>{f.rotulo}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">Parcelamento</label>
+                    <select value={ordemForm.numeroParcelas} onChange={e => setOrdemForm({ ...ordemForm, numeroParcelas: Number(e.target.value) || 1 })} className="w-full p-2.5 border border-slate-200 rounded-xl bg-white">
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n === 1 ? 'À vista (1x)' : `${n}x`}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">{ordemForm.numeroParcelas > 1 ? '1º vencimento' : 'Vencimento'}</label>
+                    <input type="date" value={ordemForm.primeiroVencimento} onChange={e => setOrdemForm({ ...ordemForm, primeiroVencimento: e.target.value })} className="w-full p-2.5 border border-slate-200 rounded-xl" />
+                  </div>
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">Intervalo (dias)</label>
+                    <input type="number" min="0" disabled={ordemForm.numeroParcelas === 1} value={ordemForm.intervaloDias} onChange={e => setOrdemForm({ ...ordemForm, intervaloDias: Number(e.target.value) || 0 })} className="w-full p-2.5 border border-slate-200 rounded-xl disabled:bg-slate-100" />
+                  </div>
+                </div>
+                <div className="text-[11px] text-slate-600 space-y-0.5">
+                  {gerarParcelas(ordemItens.reduce((sum, i) => sum + i.quantidade * i.precoUnitario, 0), ordemForm.numeroParcelas, ordemForm.primeiroVencimento, ordemForm.intervaloDias).map((p, _i, todas) => (
+                    <div key={p.numero} className="flex justify-between border-t border-slate-100 pt-0.5">
+                      <span>{todas.length > 1 ? `Parcela ${p.numero}/${todas.length}` : 'Parcela única'} — venc. {dataBR(p.vencimento)}</span>
+                      <span className="font-bold">{formatarMoeda(p.valor)}</span>
+                    </div>
+                  ))}
+                </div>
+                {editingOrdem && (
+                  <div className="text-[11px] text-amber-700">As parcelas do Contas a Pagar são geradas na emissão da ordem; alterar o pagamento aqui não refaz as parcelas já lançadas.</div>
+                )}
+              </div>
+
+              
+<div>
                 <label className="block text-slate-700 font-bold mb-1">Observações de Logística / Destino</label>
                 <input
                   type="text"
@@ -936,7 +1077,7 @@ if (f) {
                 <div>✨ <strong>Integração Automática SisEstoque & SisFin:</strong></div>
                 <ul className="list-disc list-inside text-emerald-700 space-y-0.5">
                   <li><strong>SisEstoque:</strong> Credita automaticamente <strong>{ordemForm.quantidade} {ordemForm.unidadeMedida}</strong> do item <i>"{ordemForm.itemDescricao}"</i> com registro de movimentação de entrada.</li>
-                  <li><strong>SisFin (Financeiro):</strong> Gera uma conta a pagar de <strong>R$ {ordemForm.valorTotal.toFixed(2)}</strong> para o fornecedor <i>{ordemForm.fornecedorNome}</i>.</li>
+                  <li><strong>SisFin (Financeiro):</strong> Gera {ordemForm.numeroParcelas > 1 ? `${ordemForm.numeroParcelas} parcelas` : 'uma conta'} a pagar de <strong>{formatarMoeda(ordemItens.reduce((sum, i) => sum + i.quantidade * i.precoUnitario, 0))}</strong> ({rotuloFormaPagamento(ordemForm.formaPagamento)}{ordemForm.tipoCompra === 'REVENDA' ? ', mercadorias para revenda' : ''}) para o fornecedor <i>{ordemForm.fornecedorNome}</i>.</li>
                 </ul>
               </div>
 
@@ -950,6 +1091,14 @@ if (f) {
                 </button>
                 <button
                   type="submit"
+                  onClick={() => { enviarWhatsAposSalvar.current = true; }}
+                  className="px-4 py-2 bg-green-700 text-white rounded-xl font-bold hover:bg-green-800 shadow-sm flex items-center gap-1.5"
+                >
+                  <MessageCircle className="w-4 h-4" /> Salvar e enviar ao fornecedor (WhatsApp)
+                </button>
+                <button
+                  type="submit"
+                  onClick={() => { enviarWhatsAposSalvar.current = false; }}
                   className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 shadow-sm"
                 >
                   Emitir e Enviar ao Financeiro
