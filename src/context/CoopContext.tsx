@@ -63,6 +63,7 @@ import {
 import { calcularImpostosItem, ALERTA_CRONOGRAMA_TEXTO } from '../utils/tributacaoReforma';
 import { gerarParcelas } from '../utils/parcelamento';
 import { iniciarSincronizacaoFirestore, agendarSincronizacaoFirestore, aplicarMudancaRemota } from '../services/firestoreSync';
+import type { Atividade } from '../types/agenda';
 import { IndicadorSincronizacao } from '../components/IndicadorSincronizacao';
 import { transmitirParaNuvemFiscal } from '../services/nuvemFiscalService';
 import {
@@ -751,6 +752,11 @@ interface CoopContextType {
   addVendaRevenda: (v: Omit<VendaRevenda, 'id' | 'tenantId' | 'status' | 'contasReceberIds'> & { quitarPrimeiraParcela?: boolean }) => string;
   cancelarVendaRevenda: (id: string) => void;
   deleteVendaRevenda: (id: string) => void;
+  // Agenda & Atividades
+  atividades: Atividade[];
+  addAtividade: (a: Omit<Atividade, 'id' | 'tenantId' | 'criadoEm'>) => string;
+  updateAtividade: (id: string, a: Partial<Atividade>) => void;
+  deleteAtividade: (id: string) => void;
   // Lançamentos integrais/parcelados no Contas a Pagar e Receber
   lancarParcelasFinanceiras: (p: ParcelamentoLancamento) => string[];
   lancarChamadaPublicaNoReceber: (chamadaId: string, p: Omit<ParcelamentoLancamento, 'tipo' | 'descricaoBase' | 'pessoaNome' | 'categoria'>) => string[];
@@ -1189,6 +1195,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [locacoesMaquinas, setLocacoesMaquinas] = useState<LocacaoMaquina[]>(() => loadPersistedList('locacoesMaquinas', []));
   const [clientes, setClientes] = useState<Cliente[]>(() => loadPersistedList('clientes', []));
   const [vendasRevenda, setVendasRevenda] = useState<VendaRevenda[]>(() => loadPersistedList('vendasRevenda', []));
+  const [atividades, setAtividades] = useState<Atividade[]>(() => loadPersistedList('atividades', []));
   // Conta contábil do banco (Financeiro → Contas Bancárias); sem definição, usa a padrão.
   const codigoBancoContabil = (contaBancariaId?: string) => {
     const doTenant = contasBancarias.filter(b => pertenceAoTenant(b, currentTenant?.id));
@@ -1563,6 +1570,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         locacoesMaquinas,
         clientes,
         vendasRevenda,
+        atividades,
         entregasEscola,
         romaneiosMotorista,
         lastSavedAt: new Date().toISOString()
@@ -1580,7 +1588,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     lancamentosContabeis, patrimonio, contasPagarReceber, extratoBancario, solicitacoesCompra,
     fornecedores, estoque, movimentacoesEstoque, funcionariosRH, folhaPagamento, escolasPnae,
     entregasEscola, romaneiosMotorista, motoristas, contasBancarias, maquinas, locacoesMaquinas,
-    clientes, vendasRevenda
+    clientes, vendasRevenda, atividades
   ]);
   // ---------------------------------------------------------------------------
   // Firestore: todos os dados da cooperativa são salvos automaticamente na
@@ -1598,7 +1606,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     solicitacoesCompra: setSolicitacoesCompra, fornecedores: setFornecedores, estoque: setEstoque,
     movimentacoesEstoque: setMovimentacoesEstoque, funcionariosRH: setFuncionariosRH, folhaPagamento: setFolhaPagamento,
     escolasPnae: setEscolasPnae, motoristas: setMotoristas, contasBancarias: setContasBancarias, maquinas: setMaquinas,
-    locacoesMaquinas: setLocacoesMaquinas, clientes: setClientes, vendasRevenda: setVendasRevenda,
+    locacoesMaquinas: setLocacoesMaquinas, clientes: setClientes, vendasRevenda: setVendasRevenda, atividades: setAtividades,
     entregasEscola: setEntregasEscola, romaneiosMotorista: setRomaneiosMotorista,
     config: setConfig, extratoBancario: setExtratoBancario, sefazCeConfig: setSefazCeConfig, rolePermissions: setRolePermissions
   };
@@ -3468,6 +3476,43 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const tenantLocacoesMaquinas = (locacoesMaquinas || []).filter(l => pertenceAoTenant(l, activeTenantId));
   const tenantClientes = (clientes || []).filter(cl => pertenceAoTenant(cl, activeTenantId)).sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { sensitivity: 'base' }));
   const tenantVendasRevenda = (vendasRevenda || []).filter(v => pertenceAoTenant(v, activeTenantId));
+  const tenantAtividades = (atividades || []).filter(a => pertenceAoTenant(a, activeTenantId));
+  // Agenda & Atividades: tarefas da equipe com status e responsável.
+  const addAtividade = (dados: Omit<Atividade, 'id' | 'tenantId' | 'criadoEm'>): string => {
+    const id = `atv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const agora = new Date().toISOString();
+    const nova: Atividade = {
+      ...dados,
+      id,
+      tenantId: currentTenant.id,
+      criadoEm: agora,
+      criadoPor: currentUser?.name,
+      concluidoEm: dados.status === 'CONCLUIDA' ? agora : undefined
+    };
+    setAtividades(prev => [nova, ...prev]);
+    addAuditLog('CONFIGURACOES', 'INCLUSAO', `Cadastrou atividade: ${dados.titulo} (responsável: ${dados.responsavelNome})`);
+    return id;
+  };
+  const updateAtividade = (id: string, dados: Partial<Atividade>) => {
+    const alvo = atividades.find(a => a.id === id);
+    const agora = new Date().toISOString();
+    setAtividades(prev => prev.map(a => {
+      if (a.id !== id) return a;
+      const novoStatus = dados.status || a.status;
+      return {
+        ...a,
+        ...dados,
+        atualizadoEm: agora,
+        concluidoEm: novoStatus === 'CONCLUIDA' ? (a.status === 'CONCLUIDA' ? a.concluidoEm : agora) : undefined
+      };
+    }));
+    addAuditLog('CONFIGURACOES', 'ALTERACAO', `Atualizou atividade: ${alvo?.titulo || id}${dados.status && alvo && dados.status !== alvo.status ? ` (status: ${dados.status})` : ''}`);
+  };
+  const deleteAtividade = (id: string) => {
+    const alvo = atividades.find(a => a.id === id);
+    setAtividades(prev => prev.filter(a => a.id !== id));
+    addAuditLog('CONFIGURACOES', 'EXCLUSAO', `Excluiu atividade: ${alvo?.titulo || id}`);
+  };
   const tenantEntregasEscola = entregasEscola.filter(e => pertenceAoTenant(e, activeTenantId));
   const tenantRomaneiosMotorista = romaneiosMotorista.filter(r => pertenceAoTenant(r, activeTenantId));
   const tenantNotasFiscais = notasFiscais.filter(n => pertenceAoTenant(n, activeTenantId));
@@ -5945,6 +5990,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         locacoesMaquinas: tenantLocacoesMaquinas, addLocacaoMaquina, updateLocacaoMaquina, deleteLocacaoMaquina, concluirLocacao,
     clientes: tenantClientes, addCliente, updateCliente, deleteCliente,
     vendasRevenda: tenantVendasRevenda, addVendaRevenda, cancelarVendaRevenda, deleteVendaRevenda,
+    atividades: tenantAtividades, addAtividade, updateAtividade, deleteAtividade,
     lancarParcelasFinanceiras, lancarChamadaPublicaNoReceber,
         updateContaBancaria,
         deleteContaBancaria,
