@@ -62,6 +62,8 @@ import {
 } from '../types';
 import { calcularImpostosItem, ALERTA_CRONOGRAMA_TEXTO } from '../utils/tributacaoReforma';
 import { gerarParcelas } from '../utils/parcelamento';
+import { iniciarSincronizacaoFirestore, agendarSincronizacaoFirestore, aplicarMudancaRemota } from '../services/firestoreSync';
+import { IndicadorSincronizacao } from '../components/IndicadorSincronizacao';
 import { transmitirParaNuvemFiscal } from '../services/nuvemFiscalService';
 import {
   INITIAL_TENANTS,
@@ -1566,6 +1568,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         lastSavedAt: new Date().toISOString()
       };
       agendarGravacao(payload);
+      agendarSincronizacaoFirestore(payload);
     } catch (e) {
       console.error('Falha ao preparar o snapshot local:', e);
     }
@@ -1579,6 +1582,38 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     entregasEscola, romaneiosMotorista, motoristas, contasBancarias, maquinas, locacoesMaquinas,
     clientes, vendasRevenda
   ]);
+  // ---------------------------------------------------------------------------
+  // Firestore: todos os dados da cooperativa são salvos automaticamente na
+  // coleção dadosCooperativa (ver src/services/firestoreSync.ts). Alterações
+  // feitas em outro computador chegam em tempo real e são aplicadas aqui.
+  // ---------------------------------------------------------------------------
+  const settersSincronizados: Record<string, (acao: (atual: any) => any) => void> = {
+    cooperados: setCooperados, transacoesCapital: setTransacoesCapital, assembleias: setAssembleias,
+    mandatos: setMandatos, auditoriaLogs: setAuditoriaLogs, webhooks: setWebhooks, notasFiscais: setNotasFiscais,
+    produtores: setProdutores, produtos: setProdutos, registrosProducao: setRegistrosProducao, programas: setProgramas,
+    chamadasPublicas: setChamadasPublicas, rateiosChamadas: setRateiosChamadas, ofertasPAA: setOfertasPAA,
+    programacoesEntrega: setProgramacoesEntrega, prestacoesContas: setPrestacoesContas,
+    pedidosProdutorPAA: setPedidosProdutorPAA, ordensCompra: setOrdensCompra, planoContas: setPlanoContas,
+    lancamentosContabeis: setLancamentosContabeis, patrimonio: setPatrimonio, contasPagarReceber: setContasPagarReceber,
+    solicitacoesCompra: setSolicitacoesCompra, fornecedores: setFornecedores, estoque: setEstoque,
+    movimentacoesEstoque: setMovimentacoesEstoque, funcionariosRH: setFuncionariosRH, folhaPagamento: setFolhaPagamento,
+    escolasPnae: setEscolasPnae, motoristas: setMotoristas, contasBancarias: setContasBancarias, maquinas: setMaquinas,
+    locacoesMaquinas: setLocacoesMaquinas, clientes: setClientes, vendasRevenda: setVendasRevenda,
+    entregasEscola: setEntregasEscola, romaneiosMotorista: setRomaneiosMotorista,
+    config: setConfig, extratoBancario: setExtratoBancario, sefazCeConfig: setSefazCeConfig, rolePermissions: setRolePermissions
+  };
+  const settersSincronizadosRef = useRef(settersSincronizados);
+  settersSincronizadosRef.current = settersSincronizados;
+
+  useEffect(() => {
+    const tenantId = currentTenant?.id;
+    if (!isAuthenticated || !tenantId || !auth.currentUser) return;
+    return iniciarSincronizacaoFirestore(tenantId, (colecao, mudanca) => {
+      const set = settersSincronizadosRef.current[colecao];
+      if (set) set(atual => aplicarMudancaRemota(atual, mudanca));
+    });
+  }, [isAuthenticated, currentTenant?.id]);
+
 
   // Mantém users/{uid} no Firestore sincronizado com o tenant do usuário
   // logado. É essa informação que as Firestore Security Rules usam para
@@ -5877,6 +5912,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }}
     >
       {children}
+      <IndicadorSincronizacao />
     </CoopContext.Provider>
   );
 };
