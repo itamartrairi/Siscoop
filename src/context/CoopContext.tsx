@@ -125,7 +125,8 @@ import {
   deleteTenantMemberFromFirestore,
   getTenantMemberFromFirestore,
   subscribeTenantMembers,
-  fetchTenantFromFirestore
+  fetchTenantFromFirestore,
+  lerPermissoesMembro
   } from '../services/firebaseDbService';
 import { PLANO_CONTAS_COOPERATIVA, migrarLancamentosContabeis, CODIGO_BANCO_PADRAO } from '../data/planoContasCooperativa';
 import { publicarPortalEscolas, ouvirComprovantesPortal } from '../services/portalEscolaRemoto';
@@ -168,46 +169,46 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissionsMap = {
     assembleias: 'ADMIN',
     diretoria: 'ADMIN',
     sisgepa: 'ADMIN',
-    fiscal: 'READ',
-    siscont: 'READ',
-    sisfin: 'READ',
-    compras: 'WRITE',
-    estoque: 'READ',
-    rh: 'ADMIN',
-    bi: 'ADMIN',
-    'aluguel-maquinas': 'ADMIN',
-    'portal-cooperado': 'READ',
-    'portal-escola': 'READ',
-    'app-produtor': 'READ',
-    'app-motorista': 'READ',
-    relatorios: 'ADMIN',
-    'backup-sistema': 'READ',
-    configuracoes: 'WRITE'
-  },
-  DIRETOR_FINANCEIRO: {
-    dashboard: 'READ',
-    'cadastro-cooperativa': 'READ',
-    cadastros: 'READ',
-    cooperados: 'READ',
-    capital: 'ADMIN',
-    assembleias: 'READ',
-    diretoria: 'READ',
-    sisgepa: 'READ',
     fiscal: 'ADMIN',
     siscont: 'ADMIN',
     sisfin: 'ADMIN',
     compras: 'ADMIN',
-    estoque: 'WRITE',
-    rh: 'READ',
+    estoque: 'ADMIN',
+    rh: 'ADMIN',
     bi: 'ADMIN',
     'aluguel-maquinas': 'ADMIN',
-    'portal-cooperado': 'NONE',
-    'portal-escola': 'NONE',
-    'app-produtor': 'NONE',
-    'app-motorista': 'NONE',
+    'portal-cooperado': 'ADMIN',
+    'portal-escola': 'ADMIN',
+    'app-produtor': 'ADMIN',
+    'app-motorista': 'ADMIN',
     relatorios: 'ADMIN',
-    'backup-sistema': 'READ',
-    configuracoes: 'READ'
+    'backup-sistema': 'ADMIN',
+    configuracoes: 'ADMIN'
+  },
+  DIRETOR_FINANCEIRO: {
+    dashboard: 'ADMIN',
+    'cadastro-cooperativa': 'ADMIN',
+    cadastros: 'ADMIN',
+    cooperados: 'ADMIN',
+    capital: 'ADMIN',
+    assembleias: 'ADMIN',
+    diretoria: 'ADMIN',
+    sisgepa: 'ADMIN',
+    fiscal: 'ADMIN',
+    siscont: 'ADMIN',
+    sisfin: 'ADMIN',
+    compras: 'ADMIN',
+    estoque: 'ADMIN',
+    rh: 'ADMIN',
+    bi: 'ADMIN',
+    'aluguel-maquinas': 'ADMIN',
+    'portal-cooperado': 'ADMIN',
+    'portal-escola': 'ADMIN',
+    'app-produtor': 'ADMIN',
+    'app-motorista': 'ADMIN',
+    relatorios: 'ADMIN',
+    'backup-sistema': 'ADMIN',
+    configuracoes: 'ADMIN'
   },
   GERENTE: {
     dashboard: 'ADMIN',
@@ -501,7 +502,6 @@ interface CoopContextType {
   getEffectivePermission: (user: User, module: SystemToolModule) => PermissionLevel;
   canAccessModule: (userOrModule: User | SystemToolModule | string, module?: SystemToolModule) => boolean;
   canWriteModule: (module: SystemToolModule, user?: User) => boolean;
-  switchUserRole: (role: UserRole) => void;
   currentTenant: CooperativeTenant;
   setCurrentTenant: (tenant: CooperativeTenant) => void;
   tenants: CooperativeTenant[];
@@ -1570,7 +1570,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       saveUserTenantMappingToFirestore(currentUser.id, currentTenant.id, currentUser.email).then(() => {
         // Publica o cadastro da cooperativa para que a equipe consiga
         // carregá-lo ao entrar de outro computador (ver montarSessaoFirebase).
-        if (auth.currentUser && currentUser.role === 'ADMIN') {
+        if (auth.currentUser && ['ADMIN', 'PRESIDENTE', 'DIRETOR_FINANCEIRO'].includes(currentUser.role)) {
           saveTenantToFirestore(currentTenant as any);
         }
       });
@@ -1599,6 +1599,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
             departamento: m.departamento,
             phone: m.phone,
             authUid: m.authUid,
+            ...(m.customPermissionsJson !== undefined ? { customPermissions: lerPermissoesMembro(m.customPermissionsJson) } : {}),
             tenantId
           };
           if (idx < 0) {
@@ -1606,7 +1607,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
             mudou = true;
           } else {
             const atual = proxima[idx];
-            const diferente = (Object.keys(dados) as (keyof User)[]).some(k => (dados[k] ?? undefined) !== (atual[k] ?? undefined));
+            const diferente = (Object.keys(dados) as (keyof User)[]).some(k => JSON.stringify(dados[k] ?? null) !== JSON.stringify(atual[k] ?? null));
             if (diferente) {
               proxima[idx] = { ...atual, ...dados };
               mudou = true;
@@ -1614,6 +1615,24 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         });
         return mudou ? proxima : prev;
+      });
+      // O cadastro no Firestore é a fonte da verdade: se o gestor mudar o perfil,
+      // as permissões ou desativar este usuário, a sessão aberta acompanha.
+      const meuEmail = (auth.currentUser?.email || '').toLowerCase().trim();
+      const meu = membros.find(m => (m.email || '').toLowerCase().trim() === meuEmail);
+      if (!meu) return;
+      if (meu.active === false) {
+        signOut(auth).catch(() => {});
+        setIsAuthenticated(false);
+        return;
+      }
+      setCurrentUser(prev => {
+        const role = (meu.role as UserRole) || prev.role;
+        const customPermissions = meu.customPermissionsJson !== undefined
+          ? lerPermissoesMembro(meu.customPermissionsJson)
+          : prev.customPermissions;
+        if (role === prev.role && JSON.stringify(customPermissions ?? null) === JSON.stringify(prev.customPermissions ?? null)) return prev;
+        return { ...prev, role, customPermissions };
       });
     });
   }, [isAuthenticated, currentTenant?.id, currentUser?.id]);
@@ -1831,7 +1850,12 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       authUid: fbUser.uid,
       name: cadastro?.name || membro?.name || fbUser.displayName || email.split('@')[0] || 'Usuário',
       email: fbUser.email || cadastro?.email || '',
-      role: cadastro?.role || (membro?.role as UserRole | undefined) || 'ADMIN',
+      // Perfil e permissões vêm primeiro do Firestore (tenantMembers), que vale em
+      // qualquer computador; o cadastro local só é usado se não houver vínculo.
+      role: (membro?.role as UserRole | undefined) || cadastro?.role || 'ADMIN',
+      customPermissions: membro?.customPermissionsJson !== undefined
+        ? lerPermissoesMembro(membro.customPermissionsJson)
+        : cadastro?.customPermissions,
       cargo: cadastro?.cargo || membro?.cargo,
       departamento: cadastro?.departamento || membro?.departamento,
       avatar: fbUser.photoURL || cadastro?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100',
@@ -2217,7 +2241,8 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       cargo: u.cargo || undefined,
       departamento: u.departamento || undefined,
       phone: u.phone || undefined,
-      authUid: u.authUid || undefined
+      authUid: u.authUid || undefined,
+      customPermissionsJson: JSON.stringify(u.customPermissions || {})
     }).then(r => {
       if (!r.ok) console.warn('tenantMembers:', r.error);
     });
@@ -2346,7 +2371,8 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const getEffectivePermission = (user: User, module: SystemToolModule): PermissionLevel => {
-    if (user.role === 'ADMIN') return 'ADMIN';
+    // Admin, Presidente e Diretor Financeiro têm as mesmas permissões (acesso total).
+    if (['ADMIN', 'PRESIDENTE', 'DIRETOR_FINANCEIRO'].includes(user.role)) return 'ADMIN';
     if (user.customPermissions && user.customPermissions[module]) {
       return user.customPermissions[module]!;
     }
@@ -2430,15 +2456,6 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const markNotificationAsRead = (id: string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, lida: true } : n));
-  };
-
-  const switchUserRole = (role: UserRole) => {
-    const foundUser = INITIAL_USERS.find(u => u.role === role) || {
-      ...currentUser,
-      role
-    };
-    setCurrentUser(foundUser);
-    addAuditLog('AUTH', 'LOGIN', `Perfil alterado temporariamente para ${role}`);
   };
 
   // Helper for audit logging
@@ -5424,7 +5441,6 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         getEffectivePermission,
         canAccessModule,
         canWriteModule,
-        switchUserRole,
         currentTenant,
         setCurrentTenant,
         tenants,
