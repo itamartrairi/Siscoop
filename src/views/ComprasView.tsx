@@ -107,7 +107,7 @@ export const ComprasView: React.FC = () => {
     alert('Seu perfil de acesso tem permissão apenas de leitura neste módulo. Fale com um administrador para solicitar permissão de edição.');
   };
 
-  const [activeTab, setActiveTab] = useState<'solicitacoes' | 'ordens' | 'fornecedores' | 'revendas' | 'clientes' | 'relatorios' | 'produtos'>('solicitacoes');
+  const [activeTab, setActiveTab] = useState<'solicitacoes' | 'ordens' | 'fornecedores' | 'revendas' | 'clientes' | 'relatorios' | 'produtos'>('ordens');
 
   // Editing state
   const [editingSolicitacao, setEditingSolicitacao] = useState<SolicitacaoCompra | null>(null);
@@ -120,6 +120,8 @@ export const ComprasView: React.FC = () => {
   const [showFornecedorModal, setShowFornecedorModal] = useState(false);
   const [solicitacaoItens, setSolicitacaoItens] = useState<{ estoqueItemId?: string; descricao: string; quantidade: number; unidade: string }[]>([]);
   const [ordemItens, setOrdemItens] = useState<{ estoqueItemId?: string; descricao: string; quantidade: number; unidade: string; precoUnitario: number; subtotal: number }[]>([]);
+  // Valor total da ordem: sempre calculado pelos itens (quantidade × preço unitário).
+  const totalOrdemItens = ordemItens.reduce((sum, i) => sum + (Number(i.quantidade) || 0) * (Number(i.precoUnitario) || 0), 0);
 
   // Filtros - Solicitações de Compra
   const [filtroSolAno, setFiltroSolAno] = useState('TODOS');
@@ -374,7 +376,7 @@ if (o) {
         condicoesPagamento: '30 Dias Fatura Boleto',
         observacoes: 'Entregar no Galpão Central da Cooperativa em Caixas Identificadas.'
       });
-      setOrdemItens([]);
+      setOrdemItens([{ descricao: '', quantidade: 1, unidade: 'UN', precoUnitario: 0, subtotal: 0 }]);
     }
     setShowOrdemModal(true);
   };
@@ -533,14 +535,6 @@ if (f) {
         </div>
 
         <div className="flex items-center gap-2">
-          {activeTab === 'solicitacoes' && (
-            <button
-              onClick={() => handleOpenSolicitacao()}
-              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" /> Nova Solicitação de Compra
-            </button>
-          )}
           {activeTab === 'ordens' && (
             <button
               onClick={() => handleOpenOrdem()}
@@ -562,16 +556,6 @@ if (f) {
 
       {/* Tabs */}
       <div className="flex border-b border-slate-200 gap-2 overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('solicitacoes')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-            activeTab === 'solicitacoes'
-              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <ShoppingCart className="w-4 h-4" /> Solicitações de Compras ({solicitacoesCompra.length})
-        </button>
         <button
           onClick={() => setActiveTab('ordens')}
           className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
@@ -633,110 +617,6 @@ if (f) {
           <FileText className="w-4 h-4" /> Relatórios PDF
         </button>
       </div>
-
-      {/* Tab Solicitacoes */}
-      {activeTab === 'solicitacoes' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-4">
-          {/* Filtros */}
-          <div className="flex flex-wrap items-end gap-3 pb-4 border-b border-slate-100">
-            <div className="flex items-center gap-2 text-xs font-bold text-slate-500 mr-1">
-              <Filter className="w-3.5 h-3.5" /> Filtros
-            </div>
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 mb-1">Ano</label>
-              <select value={filtroSolAno} onChange={e => setFiltroSolAno(e.target.value)} className="p-2 border border-slate-200 rounded-xl text-xs font-semibold bg-white">
-                <option value="TODOS">Todos</option>
-                {solAnosDisponiveis.map(ano => <option key={ano} value={ano}>{ano}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 mb-1">Mês</label>
-              <select value={filtroSolMes} onChange={e => setFiltroSolMes(e.target.value)} className="p-2 border border-slate-200 rounded-xl text-xs font-semibold bg-white">
-                <option value="TODOS">Todos</option>
-                {MESES_LABEL.map((nome, idx) => <option key={nome} value={String(idx + 1).padStart(2, '0')}>{nome}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 mb-1">Status</label>
-              <select value={filtroSolStatus} onChange={e => setFiltroSolStatus(e.target.value)} className="p-2 border border-slate-200 rounded-xl text-xs font-semibold bg-white">
-                <option value="TODOS">Todos</option>
-                {solStatusDisponiveis.map(st => <option key={st} value={st}>{st}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 mb-1">Prioridade</label>
-              <select value={filtroSolPrioridade} onChange={e => setFiltroSolPrioridade(e.target.value)} className="p-2 border border-slate-200 rounded-xl text-xs font-semibold bg-white">
-                <option value="TODOS">Todas</option>
-                <option value="BAIXA">Baixa</option>
-                <option value="MEDIA">Média</option>
-                <option value="ALTA">Alta</option>
-              </select>
-            </div>
-            <button onClick={limparFiltrosSolicitacoes} className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-all">
-              <RotateCcw className="w-3.5 h-3.5" /> Limpar
-            </button>
-            <span className="text-[11px] text-slate-400 font-semibold ml-auto">
-              {solicitacoesFiltradas.length} de {solicitacoesCompra.length} registro(s)
-            </span>
-          </div>
-
-          <DataGrid
-              rows={solicitacoesFiltradas}
-              getRowId={s => s.id}
-              pageSize={20}
-              onRowDoubleClick={s => handleOpenSolicitacao(s)}
-              panelTitle={s => (s.itens?.length ? `${s.itens.length} produto(s) solicitado(s)` : s.itemDescricao)}
-              panelSubtitle={s => [formatarData(s.dataSolicitacao), s.departamentoSolicitante].filter(Boolean).join(' · ')}
-              emptyMessage="Nenhuma solicitação encontrada para os filtros selecionados."
-              columns={[
-                {
-                  key: 'status',
-                  header: 'Status',
-                  width: 130,
-                  render: s => <GridStatus tone={/APROV|CONCLU|ATEND/i.test(String(s.status)) ? 'success' : /CANCEL|REPROV/i.test(String(s.status)) ? 'danger' : 'warning'} label={s.status} />,
-                },
-                { key: 'dataSolicitacao', header: 'Data', width: 100, value: s => s.dataSolicitacao, render: s => formatarData(s.dataSolicitacao) },
-                {
-                  key: 'item',
-                  header: 'Item / Insumo',
-                  width: 280,
-                  value: s => (s.itens?.length ? s.itens.map(i => `${i.descricao} (${i.quantidade} ${i.unidade})`).join(' · ') : s.itemDescricao),
-                },
-                { key: 'departamentoSolicitante', header: 'Departamento', width: 150 },
-                { key: 'quantidade', header: 'Quantidade', width: 110, align: 'right', value: s => (s.quantidade ? `${s.quantidade} ${s.unidadeMedida || ''}`.trim() : null) },
-                {
-                  key: 'prioridade',
-                  header: 'Prioridade',
-                  width: 110,
-                  render: s => <GridStatus tone={s.prioridade === 'ALTA' ? 'danger' : 'neutral'} label={s.prioridade} />,
-                },
-                {
-                  key: 'valorEstimado',
-                  header: 'Valor Est.',
-                  width: 120,
-                  align: 'right',
-                  value: s => s.valorEstimado || 0,
-                  render: s => (s.valorEstimado || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-                },
-                { key: 'justificativa', header: 'Justificativa', width: 220 },
-              ]}
-              actions={[
-                { label: 'Gerar Ordem de Compra', icon: ShoppingCart, onClick: s => handleConvertSolicitacaoToOrdem(s) },
-                { label: 'Editar', icon: Pencil, onClick: s => handleOpenSolicitacao(s) },
-                {
-                  label: 'Excluir',
-                  icon: Trash2,
-                  tone: 'danger',
-                  divider: true,
-                  onClick: s => {
-                    if (!canWrite) { blockWriteAction(); return; }
-                    if (confirm('Deseja excluir esta solicitação de compra?')) deleteSolicitacaoCompra(s.id);
-                  },
-                },
-              ]}
-            />
-        </div>
-      )}
 
       {/* Tab Ordens de Compra */}
       {activeTab === 'ordens' && (
@@ -886,65 +766,6 @@ if (f) {
         />
       )}
 
-      {/* Modal Solicitação */}
-      {showSolicitacaoModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-3xl w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-slate-100 my-8">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-              <h2 className="text-xl font-black text-slate-900">
-                {editingSolicitacao ? 'Editar Solicitação de Compra' : 'Nova Solicitação de Compra'}
-              </h2>
-              <button onClick={() => setShowSolicitacaoModal(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleSaveSolicitacao} className="space-y-4 text-xs">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3">
-                <div className="flex items-center justify-between"><div><div className="font-black text-slate-800">Produtos solicitados</div><div className="text-[10px] text-slate-500">Selecione produtos previamente cadastrados no SisEstoque.</div></div><button type="button" onClick={() => setSolicitacaoItens([...solicitacaoItens, { descricao: '', quantidade: 1, unidade: 'UN' }])} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold">+ Adicionar produto</button></div>
-                {solicitacaoItens.map((item, index) => <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr_110px_90px_32px] gap-2 items-end">
-                  <div><label className="block text-[10px] font-bold text-slate-500 mb-1">Produto do estoque</label><select required value={item.estoqueItemId || ''} onChange={e => { const p = estoque.find(x => x.id === e.target.value); setSolicitacaoItens(solicitacaoItens.map((x, i) => i === index ? { ...x, estoqueItemId: p?.id, descricao: p?.nomeItem || '', unidade: p?.unidadeMedida || x.unidade } : x)); }} className="w-full p-2.5 border border-slate-200 rounded-xl bg-white"><option value="">Selecione um produto</option>{estoque.map(p => <option key={p.id} value={p.id}>{p.codigoSku || p.codigoItem || '—'} — {p.nomeItem}</option>)}</select></div>
-                  <div><label className="block text-[10px] font-bold text-slate-500 mb-1">Quantidade</label><input type="number" min="1" required value={item.quantidade} onChange={e => setSolicitacaoItens(solicitacaoItens.map((x, i) => i === index ? { ...x, quantidade: Number(e.target.value) || 0 } : x))} className="w-full p-2.5 border border-slate-200 rounded-xl" /></div>
-                  <div><label className="block text-[10px] font-bold text-slate-500 mb-1">Unidade</label><input value={item.unidade} readOnly className="w-full p-2.5 border border-slate-200 rounded-xl bg-slate-100" /></div>
-                  <button type="button" onClick={() => setSolicitacaoItens(solicitacaoItens.filter((_, i) => i !== index))} className="p-2.5 rounded-xl text-rose-500 hover:bg-rose-50">×</button>
-                </div>)}
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-slate-700 font-bold mb-1">Valor Estimado (R$)</label><input type="number" value={solicitacaoForm.valorEstimado} onChange={e => setSolicitacaoForm({ ...solicitacaoForm, valorEstimado: parseFloat(e.target.value) || 0 })} className="w-full p-2.5 border border-slate-200 rounded-xl" /></div>
-                <div><label className="block text-slate-700 font-bold mb-1">Prioridade</label><select value={solicitacaoForm.prioridade} onChange={e => setSolicitacaoForm({ ...solicitacaoForm, prioridade: e.target.value as any })} className="w-full p-2.5 border border-slate-200 rounded-xl"><option>BAIXA</option><option>MEDIA</option><option>ALTA</option></select></div>
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-bold mb-1">Justificativa</label>
-                <input
-                  type="text"
-                  value={solicitacaoForm.justificativa}
-                  onChange={e => setSolicitacaoForm({ ...solicitacaoForm, justificativa: e.target.value })}
-                  className="w-full p-2.5 border border-slate-200 rounded-xl"
-                  placeholder="Reposição de estoque urgente"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setShowSolicitacaoModal(false)}
-                  className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl font-bold"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700"
-                >
-                  Salvar
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* Modal Ordem de Compra */}
       {showOrdemModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
@@ -999,7 +820,7 @@ if (f) {
                   <div><label className="block text-[10px] font-bold text-slate-500 mb-1">Preço unitário</label><input type="number" min="0" step="0.01" required value={item.precoUnitario} onChange={e => setOrdemItens(ordemItens.map((x, i) => i === index ? { ...x, precoUnitario: Number(e.target.value) || 0 } : x))} className="w-full p-2.5 border border-slate-200 rounded-xl" /></div>
                   <button type="button" onClick={() => setOrdemItens(ordemItens.filter((_, i) => i !== index))} className="p-2.5 rounded-xl text-rose-500 hover:bg-rose-50">×</button>
                 </div>)}
-                <div className="text-right font-black text-emerald-700">Total calculado: R$ {ordemItens.reduce((sum, i) => sum + i.quantidade * i.precoUnitario, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                <div className="text-right font-black text-emerald-700">Total calculado: R$ {totalOrdemItens.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1027,12 +848,12 @@ if (f) {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-700 font-bold mb-1">Valor Total (R$) *</label>
+                  <label className="block text-slate-700 font-bold mb-1">Valor Total (R$) — calculado pelos itens</label>
                   <input
-                    type="number"
-                    required
-                    value={ordemForm.valorTotal}
-                    onChange={e => setOrdemForm({ ...ordemForm, valorTotal: parseFloat(e.target.value) || 0 })}
+                    type="text"
+                    readOnly
+                    value={formatarMoeda(totalOrdemItens)}
+                    title="Calculado automaticamente: quantidade × preço unitário de cada item"
                     className="w-full p-2.5 border border-emerald-300 rounded-xl font-bold text-emerald-900 bg-emerald-50/50"
                   />
                 </div>
@@ -1085,7 +906,7 @@ if (f) {
                   </div>
                 </div>
                 <div className="text-[11px] text-slate-600 space-y-0.5">
-                  {gerarParcelas(ordemItens.reduce((sum, i) => sum + i.quantidade * i.precoUnitario, 0), ordemForm.numeroParcelas, ordemForm.primeiroVencimento, ordemForm.intervaloDias).map((p, _i, todas) => (
+                  {gerarParcelas(totalOrdemItens, ordemForm.numeroParcelas, ordemForm.primeiroVencimento, ordemForm.intervaloDias).map((p, _i, todas) => (
                     <div key={p.numero} className="flex justify-between border-t border-slate-100 pt-0.5">
                       <span>{todas.length > 1 ? `Parcela ${p.numero}/${todas.length}` : 'Parcela única'} — venc. {dataBR(p.vencimento)}</span>
                       <span className="font-bold">{formatarMoeda(p.valor)}</span>
@@ -1112,8 +933,8 @@ if (f) {
               <div className="bg-emerald-50 p-3.5 rounded-xl border border-emerald-200 text-[11px] text-emerald-800 space-y-1">
                 <div>✨ <strong>Integração Automática SisEstoque & SisFin:</strong></div>
                 <ul className="list-disc list-inside text-emerald-700 space-y-0.5">
-                  <li><strong>SisEstoque:</strong> Credita automaticamente <strong>{ordemForm.quantidade} {ordemForm.unidadeMedida}</strong> do item <i>"{ordemForm.itemDescricao}"</i> com registro de movimentação de entrada.</li>
-                  <li><strong>SisFin (Financeiro):</strong> Gera {ordemForm.numeroParcelas > 1 ? `${ordemForm.numeroParcelas} parcelas` : 'uma conta'} a pagar de <strong>{formatarMoeda(ordemItens.reduce((sum, i) => sum + i.quantidade * i.precoUnitario, 0))}</strong> ({rotuloFormaPagamento(ordemForm.formaPagamento)}{ordemForm.tipoCompra === 'REVENDA' ? ', mercadorias para revenda' : ''}) para o fornecedor <i>{ordemForm.fornecedorNome}</i>.</li>
+                  <li><strong>SisEstoque:</strong> Credita automaticamente <strong>{ordemItens.filter(i => i.estoqueItemId && i.quantidade > 0).map(i => `${i.quantidade} ${i.unidade} de ${i.descricao}`).join(', ') || 'os itens selecionados'}</strong> com registro de movimentação de entrada{editingOrdem ? ' (na edição, só a diferença de quantidade é ajustada)' : ''}.</li>
+                  <li><strong>SisFin (Financeiro):</strong> Gera {ordemForm.numeroParcelas > 1 ? `${ordemForm.numeroParcelas} parcelas` : 'uma conta'} a pagar de <strong>{formatarMoeda(totalOrdemItens)}</strong> ({rotuloFormaPagamento(ordemForm.formaPagamento)}{ordemForm.tipoCompra === 'REVENDA' ? ', mercadorias para revenda' : ''}) para o fornecedor <i>{ordemForm.fornecedorNome}</i>.</li>
                 </ul>
               </div>
 
