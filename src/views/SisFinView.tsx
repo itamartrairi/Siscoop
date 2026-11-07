@@ -107,12 +107,12 @@ export const SisFinView: React.FC = () => {
     const s = situacaoConta(c);
     return s === 'PAGO' ? (c.tipo === 'RECEBER' ? 'Recebido' : 'Pago') : s === 'VENCIDO' ? 'Vencido' : s === 'CANCELADO' ? 'Cancelado' : 'Em aberto';
   };
-  const contasFiltradas = contasPagarReceber.filter(c =>
+  const contasListaFiltradas = contasPagarReceber.filter(c =>
     (filtroBanco === 'TODAS' || (c.contaBancariaId || '') === filtroBanco) &&
     (filtroTipoConta === 'TODOS' || c.tipo === filtroTipoConta) &&
     (filtroSituacao === 'TODAS' || situacaoConta(c) === filtroSituacao || (filtroSituacao === 'ABERTO' && situacaoConta(c) === 'VENCIDO'))
   );
-  const somaContas = (tipo: 'PAGAR' | 'RECEBER', aberto: boolean) => contasFiltradas
+  const somaContas = (tipo: 'PAGAR' | 'RECEBER', aberto: boolean) => contasListaFiltradas
     .filter(c => c.tipo === tipo && (aberto ? (c.status !== 'PAGO' && c.status !== 'CANCELADO') : c.status === 'PAGO'))
     .reduce((s, c) => s + (Number(c.valor) || 0), 0);
   // Filtro de conta bancária: vale para Dashboard, DRE, Fluxo de Caixa, Contas e Extrato.
@@ -897,7 +897,7 @@ if (c) {
               ))}
             </div>
           <DataGrid
-              rows={contasFiltradas}
+              rows={contasListaFiltradas}
               getRowId={c => c.id}
               pageSize={20}
               onRowDoubleClick={c => handleOpenModal(c)}
