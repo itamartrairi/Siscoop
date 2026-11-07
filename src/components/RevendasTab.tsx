@@ -303,12 +303,11 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
                   <button type="button" onClick={() => setItens([...itens, itemVazio()])} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold">+ Adicionar produto</button>
                 </div>
                 <div className="max-h-64 overflow-auto rounded-xl border border-slate-200 bg-white">
-                  <table className="w-full min-w-[820px] text-xs">
+                  <table className="w-full min-w-[660px] text-xs">
                     <thead className="sticky top-0 z-10 bg-slate-100 text-[10px] uppercase tracking-wide text-slate-500">
                       <tr>
                         <th className="px-2 py-2 text-left font-bold w-8">#</th>
                         <th className="px-2 py-2 text-left font-bold">Produto / insumo</th>
-                        <th className="px-2 py-2 text-left font-bold w-40">Fornecedor (origem)</th>
                         <th className="px-2 py-2 text-left font-bold w-36">ICMS</th>
                         <th className="px-2 py-2 text-right font-bold w-20">Qtd.</th>
                         <th className="px-2 py-2 text-right font-bold w-24">Preço unit.</th>
@@ -331,12 +330,6 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
                               {semSaldo && <div className="mt-0.5 text-[10px] font-bold text-rose-600">Saldo insuficiente: disponível {est?.quantidadeAtual} {est?.unidadeMedida}.</div>}
                             </td>
                             <td className="px-2 py-1.5">
-                              <select value={item.fornecedorId || ''} onChange={e => atualizarItem(idx, { fornecedorId: e.target.value || undefined })} className="w-full p-1.5 border border-slate-200 rounded-lg bg-white">
-                                <option value="">—</option>
-                                {fornecedores.map(f => <option key={f.id} value={f.id}>{f.nomeFantasia || f.razaoSocial}</option>)}
-                              </select>
-                            </td>
-                            <td className="px-2 py-1.5">
                               <select value={item.tributacaoIcms || 'TRIBUTADO'} onChange={e => atualizarItem(idx, { tributacaoIcms: e.target.value as TributacaoIcmsItem })} className="w-full p-1.5 border border-slate-200 rounded-lg bg-white">
                                 {OPCOES_TRIBUTACAO_ICMS.map(o => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
                               </select>
@@ -355,7 +348,7 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
                         );
                       })}
                       {itens.length === 0 && (
-                        <tr><td colSpan={8} className="px-2 py-4 text-center text-slate-400">Nenhum produto. Clique em “+ Adicionar produto”.</td></tr>
+                        <tr><td colSpan={7} className="px-2 py-4 text-center text-slate-400">Nenhum produto. Clique em “+ Adicionar produto”.</td></tr>
                       )}
                     </tbody>
                   </table>
