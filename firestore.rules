@@ -40,7 +40,11 @@ service cloud.firestore {
     }
 
     function belongsToTenant(dataTenantId) {
-      return isSignedIn() && dataTenantId == myTenantId();
+      // Além do users/{uid}, exige que a pessoa ainda seja dona da cooperativa
+      // ou membro ATIVO da equipe (tenantMembers). Assim, usuário desativado ou
+      // excluído em Configurações → Usuários perde o acesso ao banco na hora.
+      return isSignedIn() && dataTenantId == myTenantId() &&
+        (donoDoTenant(dataTenantId) || membroDoTenant(dataTenantId));
     }
     function semTenant(data) {
       return !('tenantId' in data) || data.tenantId == null || data.tenantId == '';
@@ -307,7 +311,7 @@ service cloud.firestore {
     // Cooperativa / Tenants — o próprio registro da cooperativa só pode ser
     // lido/editado por quem pertence a ela (ou admin)
     match /tenants/{tenantId} {
-      allow read, update: if isAdmin() || (isSignedIn() && tenantId == myTenantId());
+      allow read, update: if isAdmin() || belongsToTenant(tenantId);
       // Criação acontece no cadastro inicial, antes de o usuário ter tenantId.
       // A condição extra impede que uma conta crie cooperativas em massa: ela
       // só pode criar o tenant que já está registrado no próprio /users/{uid},
