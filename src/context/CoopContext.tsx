@@ -4336,6 +4336,12 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     'Taxa Administrativa PAA/PNAE': { ativoPassivoCodigo: '11201.9999', ativoPassivoNome: 'Clientes', receitaDespesaCodigo: '31103.0999', receitaDespesaNome: 'Outras Receitas de Atos Cooperativos' },
     'COMPRAS_REVENDA': { ativoPassivoCodigo: '21302.0900', ativoPassivoNome: 'Fornecedores de Insumos', receitaDespesaCodigo: '35601.0009', receitaDespesaNome: 'Custos das Mercadorias Vendidas – Ato não cooperativo' },
     'VENDAS_REVENDA': { ativoPassivoCodigo: '11201.9999', ativoPassivoNome: 'Duplicatas a Receber Diversas', receitaDespesaCodigo: '35101.0009', receitaDespesaNome: 'Mercadorias e Produtos Diversos – Ato Não Cooperativo' },
+    'IMPOSTO_ICMS': { ativoPassivoCodigo: '21401.0320', ativoPassivoNome: 'ICMS a Recolher', receitaDespesaCodigo: '35903.0001', receitaDespesaNome: 'ICMS sobre Vendas – Ato Não Cooperativo' },
+    'IMPOSTO_PIS': { ativoPassivoCodigo: '21401.0309', ativoPassivoNome: 'PIS a Recolher', receitaDespesaCodigo: '35903.0002', receitaDespesaNome: 'PIS sobre Vendas – Ato Não Cooperativo' },
+    'IMPOSTO_COFINS': { ativoPassivoCodigo: '21401.0019', ativoPassivoNome: 'COFINS a Recolher', receitaDespesaCodigo: '35903.0003', receitaDespesaNome: 'COFINS sobre Vendas – Ato Não Cooperativo' },
+    'IMPOSTO_DAS': { ativoPassivoCodigo: '21401.0321', ativoPassivoNome: 'Simples Nacional (DAS) a Recolher', receitaDespesaCodigo: '35903.0004', receitaDespesaNome: 'Simples Nacional (DAS) – Ato Não Cooperativo' },
+    'IMPOSTO_IRPJ': { ativoPassivoCodigo: '21401.0322', ativoPassivoNome: 'IRPJ a Recolher', receitaDespesaCodigo: '35903.0005', receitaDespesaNome: 'IRPJ – Ato Não Cooperativo' },
+    'IMPOSTO_CSLL': { ativoPassivoCodigo: '21401.0314', ativoPassivoNome: 'CSSLL a Recolher', receitaDespesaCodigo: '35903.0006', receitaDespesaNome: 'CSLL – Ato Não Cooperativo' },
     'DEFAULT_PAGAR': { ativoPassivoCodigo: '21001.0001', ativoPassivoNome: 'Produção a Pagar aos Cooperados', receitaDespesaCodigo: '31601.0009', receitaDespesaNome: 'Aquisição da Produção dos Cooperados' },
     'DEFAULT_RECEBER': { ativoPassivoCodigo: '11201.9999', ativoPassivoNome: 'Clientes', receitaDespesaCodigo: '31101.0009', receitaDespesaNome: 'Venda da Produção dos Cooperados' }
   };
