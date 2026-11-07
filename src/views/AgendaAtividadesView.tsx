@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CalendarDays,
   ListChecks,
@@ -111,14 +111,18 @@ export const AgendaAtividadesView: React.FC = () => {
     setMesRef({ ano: d.getFullYear(), mes: d.getMonth() });
   };
 
-  const eventosPorDia = useMemo(() => {
-    const mapa = new Map<string, EventoGoogle[]>();
-    eventos.forEach(e => {
-      const dia = diaDoEvento(e);
-      mapa.set(dia, [...(mapa.get(dia) || []), e]);
-    });
-    return Array.from(mapa.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [eventos]);
+  // Agenda do mês: eventos do Google + atividades com prazo no mês. O evento
+  // que já representa uma atividade não aparece duplicado (mostra a atividade).
+  type ItemAgenda = { tipo: 'evento'; e: EventoGoogle } | { tipo: 'atividade'; a: Atividade };
+  const itensPorDia = useMemo(() => {
+    const prefixoMes = `${mesRef.ano}-${String(mesRef.mes + 1).padStart(2, '0')}`;
+    const idsDeAtividades = new Set((atividades || []).map(a => a.googleEventId).filter(Boolean) as string[]);
+    const mapa = new Map<string, ItemAgenda[]>();
+    const add = (dia: string, item: ItemAgenda) => mapa.set(dia, [...(mapa.get(dia) || []), item]);
+    (atividades || []).filter(a => a.prazo && a.prazo.startsWith(prefixoMes)).forEach(a => add(a.prazo as string, { tipo: 'atividade', a }));
+    eventos.filter(e => !idsDeAtividades.has(e.id)).forEach(e => add(diaDoEvento(e), { tipo: 'evento', e }));
+    return Array.from(mapa.entries()).sort((x, y) => x[0].localeCompare(y[0]));
+  }, [eventos, atividades, mesRef]);
 
   // Modal de evento
   const [showEvento, setShowEvento] = useState(false);
@@ -219,10 +223,12 @@ export const AgendaAtividadesView: React.FC = () => {
     descricao: '',
     responsavelId: currentUser?.id || '',
     responsavelNome: currentUser?.name || '',
+    responsavelEmail: currentUser?.email || '',
     status: 'PENDENTE' as StatusAtividade,
     prioridade: 'MEDIA' as PrioridadeAtividade,
     prazo: hojeISO(),
-    noGoogle: agendaConectada()
+    noGoogle: true,
+    outro: false
   });
   const [ativForm, setAtivForm] = useState(formVazio());
 
@@ -234,10 +240,12 @@ export const AgendaAtividadesView: React.FC = () => {
         descricao: a.descricao || '',
         responsavelId: a.responsavelId || '',
         responsavelNome: a.responsavelNome || '',
+        responsavelEmail: a.responsavelEmail || equipe.find(u => u.id === a.responsavelId)?.email || '',
         status: a.status,
         prioridade: a.prioridade || 'MEDIA',
         prazo: a.prazo || '',
-        noGoogle: !!a.googleEventId
+        noGoogle: a.sincronizarAgenda !== false,
+        outro: !a.responsavelId
       });
     } else {
       setEditandoAtiv(null);
@@ -247,21 +255,89 @@ export const AgendaAtividadesView: React.FC = () => {
   };
 
   const escolherResponsavel = (valor: string) => {
-    if (valor === '__outro') { setAtivForm({ ...ativForm, responsavelId: '', responsavelNome: '' }); return; }
+    if (valor === '__outro') { setAtivForm({ ...ativForm, responsavelId: '', responsavelNome: '', responsavelEmail: '', outro: true }); return; }
     const u = equipe.find(x => x.id === valor);
-    setAtivForm({ ...ativForm, responsavelId: u?.id || '', responsavelNome: u?.name || '' });
+    setAtivForm({ ...ativForm, responsavelId: u?.id || '', responsavelNome: u?.name || '', responsavelEmail: u?.email || '', outro: false });
   };
 
-  const eventoDaAtividade = (f: typeof ativForm) => ({
-    titulo: `[Atividade] ${f.titulo.trim()}`,
-    data: f.prazo,
-    descricao: [
-      f.descricao,
-      `Responsável: ${f.responsavelNome}`,
-      `Status: ${rotuloStatusAtividade(f.status)}`,
-      'Lançado no SICOOP — Agenda & Atividades'
-    ].filter(Boolean).join('\n')
-  });
+  // ------------------------------------------------ Vínculo Atividade ↔ Google Agenda
+  // Evento de dia inteiro no prazo, na agenda de quem lançou (dono), com o
+  // responsável convidado. Título e descrição acompanham o status.
+  const eventoDaAtividade = (a: Atividade) => {
+    const dono = (a.agendaDonoEmail || emailAgendaConectada() || '').toLowerCase();
+    const email = (a.responsavelEmail || '').trim().toLowerCase();
+    const prefixo = a.status === 'PENDENTE' ? '[Atividade]' : `[Atividade · ${rotuloStatusAtividade(a.status)}]`;
+    return {
+      titulo: `${prefixo} ${a.titulo}`,
+      data: a.prazo as string,
+      descricao: [
+        a.descricao,
+        `Responsável: ${a.responsavelNome}`,
+        `Status: ${rotuloStatusAtividade(a.status)}`,
+        `Prioridade: ${a.prioridade === 'ALTA' ? 'Alta' : a.prioridade === 'BAIXA' ? 'Baixa' : 'Média'}`,
+        'Lançado no SICOOP — Agenda & Atividades'
+      ].filter(Boolean).join('\n'),
+      convidados: email && email !== dono && /\S+@\S+\.\S+/.test(email) ? [email] : [],
+      corId: a.status === 'CONCLUIDA' ? '10' : a.status === 'CANCELADA' ? '8' : a.prioridade === 'ALTA' ? '11' : '5'
+    };
+  };
+
+  /**
+   * Leva a atividade para a Google Agenda (cria, atualiza ou remove o evento).
+   * Devolve os campos a gravar na atividade. Sem agenda conectada (ou se o
+   * evento pertence à agenda de outra pessoa), fica marcada como pendente.
+   */
+  const sincronizarAtividade = async (a: Atividade): Promise<Partial<Atividade>> => {
+    const querAgenda = a.sincronizarAgenda !== false && !!a.prazo;
+    const precisa = querAgenda || !!a.googleEventId;
+    if (!precisa) return { agendaPendente: false };
+    const conectadoComo = agendaConectada() ? (emailAgendaConectada() || '').toLowerCase() : '';
+    const dono = (a.agendaDonoEmail || '').toLowerCase();
+    if (!conectadoComo || (dono && a.googleEventId && dono !== conectadoComo)) return { agendaPendente: true };
+    try {
+      if (!querAgenda) {
+        try { await excluirEventoGoogle(a.googleEventId as string); } catch (e: any) { if (e?.status !== 404 && e?.status !== 410) throw e; }
+        return { googleEventId: undefined, agendaPendente: false };
+      }
+      const dados = eventoDaAtividade({ ...a, agendaDonoEmail: dono || conectadoComo });
+      let id = a.googleEventId;
+      if (id) {
+        try { await atualizarEventoGoogle(id, dados); } catch (e: any) {
+          if (e?.status !== 404 && e?.status !== 410) throw e;
+          id = undefined; // evento apagado direto no Google: cria de novo
+        }
+      }
+      if (!id) id = (await criarEventoGoogle(dados)).id;
+      return { googleEventId: id, agendaDonoEmail: dono || conectadoComo, agendaPendente: false };
+    } catch (e: any) {
+      setErroAgenda(e?.message || 'Falha ao atualizar a Google Agenda.');
+      return { agendaPendente: true };
+    }
+  };
+
+  // Ao conectar a agenda, envia o que ficou pendente (desta conta).
+  const sincronizandoRef = useRef(false);
+  const tentadasRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!conectada) { tentadasRef.current.clear(); return; }
+    if (sincronizandoRef.current) return;
+    const email = (emailAgendaConectada() || '').toLowerCase();
+    // Cada pendência é tentada uma vez por conexão (evita repetir um erro em laço).
+    const pendentes = (atividades || []).filter(a => a.agendaPendente && !tentadasRef.current.has(a.id)
+      && (!a.agendaDonoEmail || a.agendaDonoEmail.toLowerCase() === email));
+    if (!pendentes.length) return;
+    sincronizandoRef.current = true;
+    pendentes.forEach(a => tentadasRef.current.add(a.id));
+    (async () => {
+      for (const a of pendentes) {
+        const patch = await sincronizarAtividade(a);
+        updateAtividade(a.id, patch);
+      }
+      sincronizandoRef.current = false;
+      carregarEventos();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conectada, atividades]);
 
   const salvarAtividade = async (ev: React.FormEvent) => {
     ev.preventDefault();
@@ -269,46 +345,51 @@ export const AgendaAtividadesView: React.FC = () => {
     if (!ativForm.responsavelNome.trim()) { alert('Informe o responsável pela atividade.'); return; }
     setSalvandoAtiv(true);
     try {
-      let googleEventId = editandoAtiv?.googleEventId;
-      let avisoGoogle = '';
-      const querGoogle = ativForm.noGoogle && !!ativForm.prazo;
-      if (agendaConectada()) {
-        try {
-          if (querGoogle && googleEventId) await atualizarEventoGoogle(googleEventId, eventoDaAtividade(ativForm));
-          else if (querGoogle) googleEventId = (await criarEventoGoogle(eventoDaAtividade(ativForm))).id;
-          else if (!querGoogle && googleEventId) { await excluirEventoGoogle(googleEventId); googleEventId = undefined; }
-        } catch (e: any) {
-          avisoGoogle = e?.message || 'Falha ao atualizar a Google Agenda.';
-        }
-      } else if (querGoogle && !googleEventId) {
-        avisoGoogle = 'A atividade foi salva, mas a Google Agenda não está conectada. Conecte na aba Agenda para enviar o prazo.';
-      }
       const dados = {
         titulo: ativForm.titulo.trim(),
         descricao: ativForm.descricao.trim() || undefined,
         responsavelId: ativForm.responsavelId || undefined,
         responsavelNome: ativForm.responsavelNome.trim(),
+        responsavelEmail: ativForm.responsavelEmail.trim() || undefined,
         status: ativForm.status,
         prioridade: ativForm.prioridade,
         prazo: ativForm.prazo || undefined,
-        googleEventId
+        sincronizarAgenda: ativForm.noGoogle
       };
-      if (editandoAtiv) updateAtividade(editandoAtiv.id, dados);
-      else addAtividade(dados);
+      const base: Atividade = editandoAtiv
+        ? { ...editandoAtiv, ...dados }
+        : { ...dados, id: '', tenantId: '', criadoEm: '', agendaDonoEmail: (emailAgendaConectada() || currentUser?.email || '').toLowerCase() || undefined };
+      const patch = await sincronizarAtividade(base);
+      const final = { ...dados, agendaDonoEmail: base.agendaDonoEmail, googleEventId: editandoAtiv?.googleEventId, ...patch };
+      if (editandoAtiv) updateAtividade(editandoAtiv.id, final);
+      else addAtividade(final);
       setShowAtividade(false);
-      if (avisoGoogle) alert(avisoGoogle);
+      if (patch.agendaPendente) {
+        alert(`Atividade salva. O prazo ainda não foi para a Google Agenda: será enviado quando a agenda de ${final.agendaDonoEmail || 'quem lançou'} estiver conectada na aba Agenda.`);
+      }
       if (conectada) carregarEventos();
     } finally {
       setSalvandoAtiv(false);
     }
   };
 
-  const mudarStatus = (a: Atividade, status: StatusAtividade) => updateAtividade(a.id, { status });
+  const mudarStatus = async (a: Atividade, status: StatusAtividade) => {
+    updateAtividade(a.id, { status });
+    const patch = await sincronizarAtividade({ ...a, status });
+    updateAtividade(a.id, patch);
+    if (conectada) carregarEventos();
+  };
 
   const removerAtividade = async (a: Atividade) => {
-    if (!confirm(`Excluir a atividade "${a.titulo}"?`)) return;
-    if (a.googleEventId && agendaConectada()) {
-      try { await excluirEventoGoogle(a.googleEventId); } catch { /* evento já removido na agenda */ }
+    const naAgenda = !!a.googleEventId;
+    const podeRemover = naAgenda && agendaConectada()
+      && (!a.agendaDonoEmail || a.agendaDonoEmail.toLowerCase() === (emailAgendaConectada() || '').toLowerCase());
+    const aviso = naAgenda && !podeRemover
+      ? `\n\nO evento continuará na Google Agenda de ${a.agendaDonoEmail || 'quem lançou'} (agenda não conectada nesta conta).`
+      : '';
+    if (!confirm(`Excluir a atividade "${a.titulo}"?${aviso}`)) return;
+    if (podeRemover) {
+      try { await excluirEventoGoogle(a.googleEventId as string); } catch { /* evento já removido na agenda */ }
     }
     deleteAtividade(a.id);
     if (conectada) carregarEventos();
@@ -368,77 +449,103 @@ export const AgendaAtividadesView: React.FC = () => {
       {activeTab === 'agenda' && (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-4">
           {!conectada ? (
-            <div className="text-center py-12 space-y-4">
-              <div className="mx-auto h-16 w-16 rounded-full bg-emerald-50 flex items-center justify-center">
-                <CalendarDays className="w-8 h-8 text-emerald-600" />
+            <div className="p-4 rounded-2xl border border-emerald-200 bg-emerald-50/60 flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="h-10 w-10 shrink-0 rounded-full bg-white flex items-center justify-center border border-emerald-200">
+                  <CalendarDays className="w-5 h-5 text-emerald-600" />
+                </div>
+                <div>
+                  <div className="font-black text-slate-900">Conecte sua Google Agenda</div>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    Para ver e criar eventos da agenda Google{currentUser?.email ? <> de <strong>{currentUser.email}</strong></> : null} e enviar os prazos das atividades.
+                    A conexão vale enquanto esta aba estiver aberta (cerca de 1 hora).
+                  </p>
+                </div>
               </div>
-              <div>
-                <div className="text-lg font-black text-slate-900">Conecte sua Google Agenda</div>
-                <p className="text-sm text-slate-500 max-w-lg mx-auto mt-1">
-                  Veja, crie e edite os eventos da agenda Google da conta com que você entrou no sistema
-                  {currentUser?.email ? <> (<strong>{currentUser.email}</strong>)</> : null}. O Google vai pedir sua autorização.
-                </p>
-              </div>
-              <button onClick={conectar} className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-sm inline-flex items-center gap-2">
+              <button onClick={conectar} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm inline-flex items-center gap-2 shrink-0">
                 <Link2 className="w-4 h-4" /> Conectar Google Agenda
               </button>
-              <p className="text-[11px] text-slate-400">A conexão vale enquanto esta aba estiver aberta (cerca de 1 hora); depois é só conectar de novo.</p>
             </div>
-          ) : (
-            <>
-              <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-100">
-                <div className="flex items-center gap-2">
-                  <button onClick={() => mudarMes(-1)} className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50" title="Mês anterior"><ChevronLeft className="w-4 h-4" /></button>
-                  <div className="min-w-[160px] text-center font-black text-slate-900">{MESES[mesRef.mes]} {mesRef.ano}</div>
-                  <button onClick={() => mudarMes(1)} className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50" title="Próximo mês"><ChevronRight className="w-4 h-4" /></button>
-                  <button onClick={() => setMesRef({ ano: hoje.getFullYear(), mes: hoje.getMonth() })} className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50">Hoje</button>
-                  <button onClick={carregarEventos} className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50" title="Atualizar"><RefreshCw className={`w-4 h-4 ${carregando ? 'animate-spin' : ''}`} /></button>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-slate-500">
+          ) : null}
+
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <button onClick={() => mudarMes(-1)} className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50" title="Mês anterior"><ChevronLeft className="w-4 h-4" /></button>
+              <div className="min-w-[160px] text-center font-black text-slate-900">{MESES[mesRef.mes]} {mesRef.ano}</div>
+              <button onClick={() => mudarMes(1)} className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50" title="Próximo mês"><ChevronRight className="w-4 h-4" /></button>
+              <button onClick={() => setMesRef({ ano: hoje.getFullYear(), mes: hoje.getMonth() })} className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50">Hoje</button>
+              {conectada && <button onClick={carregarEventos} className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50" title="Atualizar"><RefreshCw className={`w-4 h-4 ${carregando ? 'animate-spin' : ''}`} /></button>}
+            </div>
+            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-400" /> Atividades</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Google Agenda</span>
+              {conectada && (
+                <>
                   <span>Conectada: <strong className="text-slate-700">{emailAgendaConectada()}</strong></span>
                   <button onClick={desconectar} className="px-3 py-2 rounded-xl border border-slate-200 font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-1.5"><Unlink className="w-3.5 h-3.5" /> Desconectar</button>
-                </div>
-              </div>
-
-              {carregando && eventos.length === 0 ? (
-                <div className="py-10 text-center text-sm text-slate-400">Carregando eventos…</div>
-              ) : eventosPorDia.length === 0 ? (
-                <div className="py-10 text-center text-sm text-slate-400">Nenhum evento em {MESES[mesRef.mes].toLowerCase()}.</div>
-              ) : (
-                <div className="space-y-4">
-                  {eventosPorDia.map(([dia, lista]) => {
-                    const d = new Date(`${dia}T12:00:00`);
-                    return (
-                      <div key={dia} className="grid grid-cols-[88px_1fr] gap-4">
-                        <div className={`text-center rounded-xl p-2 h-fit ${dia === hj ? 'bg-emerald-600 text-white' : 'bg-slate-50 text-slate-700'}`}>
-                          <div className="text-2xl font-black leading-none">{d.getDate()}</div>
-                          <div className="text-[10px] font-bold uppercase mt-1 opacity-80">{DIAS_SEMANA[d.getDay()].slice(0, 3)}</div>
-                        </div>
-                        <div className="space-y-2">
-                          {lista.map(e => (
-                            <div key={e.id} className="p-3 rounded-xl border border-slate-200 hover:border-emerald-300 flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="font-bold text-slate-900 text-sm truncate">{e.summary || '(sem título)'}</div>
-                                <div className="text-[11px] text-slate-500 flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
-                                  <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {horaDoEvento(e)}</span>
-                                  {e.location && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {e.location}</span>}
-                                </div>
-                                {e.description && <div className="text-[11px] text-slate-500 mt-1 line-clamp-2 whitespace-pre-line">{e.description}</div>}
-                              </div>
-                              <div className="flex items-center gap-1 shrink-0">
-                                {e.htmlLink && <a href={e.htmlLink} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100" title="Abrir no Google Agenda"><ExternalLink className="w-4 h-4" /></a>}
-                                <button onClick={() => abrirEvento(e)} className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100" title="Editar"><Pencil className="w-4 h-4" /></button>
-                                <button onClick={() => removerEvento(e)} className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50" title="Excluir"><Trash2 className="w-4 h-4" /></button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                </>
               )}
-            </>
+            </div>
+          </div>
+
+          {carregando && itensPorDia.length === 0 ? (
+            <div className="py-10 text-center text-sm text-slate-400">Carregando eventos…</div>
+          ) : itensPorDia.length === 0 ? (
+            <div className="py-10 text-center text-sm text-slate-400">Nada na agenda em {MESES[mesRef.mes].toLowerCase()}.</div>
+          ) : (
+            <div className="space-y-4">
+              {itensPorDia.map(([dia, lista]) => {
+                const d = new Date(`${dia}T12:00:00`);
+                return (
+                  <div key={dia} className="grid grid-cols-[88px_1fr] gap-4">
+                    <div className={`text-center rounded-xl p-2 h-fit ${dia === hj ? 'bg-emerald-600 text-white' : 'bg-slate-50 text-slate-700'}`}>
+                      <div className="text-2xl font-black leading-none">{d.getDate()}</div>
+                      <div className="text-[10px] font-bold uppercase mt-1 opacity-80">{DIAS_SEMANA[d.getDay()].slice(0, 3)}</div>
+                    </div>
+                    <div className="space-y-2">
+                      {lista.map(item => item.tipo === 'atividade' ? (
+                        <button
+                          key={`a-${item.a.id}`}
+                          type="button"
+                          onClick={() => abrirAtividade(item.a)}
+                          className={`w-full text-left p-3 rounded-xl border-l-4 border border-amber-200 bg-amber-50/70 hover:bg-amber-50 flex items-start justify-between gap-3 ${item.a.status === 'CONCLUIDA' || item.a.status === 'CANCELADA' ? 'opacity-70' : ''}`}
+                          style={{ borderLeftColor: item.a.prioridade === 'ALTA' ? '#e11d48' : '#f59e0b' }}
+                          title="Abrir a atividade"
+                        >
+                          <div className="min-w-0">
+                            <div className={`font-bold text-slate-900 text-sm truncate flex items-center gap-1.5 ${item.a.status === 'CONCLUIDA' ? 'line-through' : ''}`}>
+                              <ListChecks className="w-4 h-4 text-amber-600 shrink-0" /> {item.a.titulo}
+                            </div>
+                            <div className="text-[11px] text-slate-600 flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
+                              <span>Responsável: <strong>{item.a.responsavelNome}</strong></span>
+                              {item.a.prazo && item.a.prazo < hj && (item.a.status === 'PENDENTE' || item.a.status === 'EM_ANDAMENTO') && <span className="font-bold text-rose-600">Atrasada</span>}
+                              {item.a.agendaPendente && <span className="text-slate-500">Aguardando envio à Google Agenda</span>}
+                            </div>
+                          </div>
+                          <GridStatus tone={tomStatus(item.a.status)} label={rotuloStatusAtividade(item.a.status)} />
+                        </button>
+                      ) : (
+                        <div key={`e-${item.e.id}`} className="p-3 rounded-xl border-l-4 border border-slate-200 hover:border-emerald-300 flex items-start justify-between gap-3" style={{ borderLeftColor: '#10b981' }}>
+                          <div className="min-w-0">
+                            <div className="font-bold text-slate-900 text-sm truncate">{item.e.summary || '(sem título)'}</div>
+                            <div className="text-[11px] text-slate-500 flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
+                              <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {horaDoEvento(item.e)}</span>
+                              {item.e.location && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {item.e.location}</span>}
+                            </div>
+                            {item.e.description && <div className="text-[11px] text-slate-500 mt-1 line-clamp-2 whitespace-pre-line">{item.e.description}</div>}
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {item.e.htmlLink && <a href={item.e.htmlLink} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100" title="Abrir no Google Agenda"><ExternalLink className="w-4 h-4" /></a>}
+                            <button onClick={() => abrirEvento(item.e)} className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100" title="Editar"><Pencil className="w-4 h-4" /></button>
+                            <button onClick={() => removerEvento(item.e)} className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50" title="Excluir"><Trash2 className="w-4 h-4" /></button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       )}
@@ -599,7 +706,7 @@ export const AgendaAtividadesView: React.FC = () => {
                 <div>
                   <label className={labelCls}>Responsável *</label>
                   <select
-                    value={ativForm.responsavelId || (ativForm.responsavelNome || !equipe.length ? '__outro' : '')}
+                    value={ativForm.responsavelId || (ativForm.outro || !equipe.length ? '__outro' : '')}
                     onChange={e => escolherResponsavel(e.target.value)}
                     className={inputCls}
                   >
@@ -607,7 +714,7 @@ export const AgendaAtividadesView: React.FC = () => {
                     {equipe.map(u => <option key={u.id} value={u.id}>{u.name}{u.cargo ? ` — ${u.cargo}` : ''}</option>)}
                     <option value="__outro">Outra pessoa (digitar o nome)</option>
                   </select>
-                  {!ativForm.responsavelId && (
+                  {!ativForm.responsavelId && (ativForm.outro || !equipe.length) && (
                     <input
                       value={ativForm.responsavelNome}
                       onChange={e => setAtivForm({ ...ativForm, responsavelNome: e.target.value })}
@@ -615,6 +722,13 @@ export const AgendaAtividadesView: React.FC = () => {
                       placeholder="Nome do responsável"
                     />
                   )}
+                  <input
+                    type="email"
+                    value={ativForm.responsavelEmail}
+                    onChange={e => setAtivForm({ ...ativForm, responsavelEmail: e.target.value })}
+                    className={`${inputCls} mt-2`}
+                    placeholder="E-mail do responsável (recebe o convite da agenda)"
+                  />
                 </div>
                 <div>
                   <label className={labelCls}>Status</label>
@@ -640,11 +754,15 @@ export const AgendaAtividadesView: React.FC = () => {
                 <textarea rows={3} value={ativForm.descricao} onChange={e => setAtivForm({ ...ativForm, descricao: e.target.value })} className={inputCls} />
               </div>
               <label className="flex items-start gap-2 p-3 rounded-xl border border-slate-200 bg-slate-50">
-                <input type="checkbox" className="mt-0.5" checked={ativForm.noGoogle} disabled={!ativForm.prazo} onChange={e => setAtivForm({ ...ativForm, noGoogle: e.target.checked })} />
+                <input type="checkbox" className="mt-0.5" checked={ativForm.noGoogle && !!ativForm.prazo} disabled={!ativForm.prazo} onChange={e => setAtivForm({ ...ativForm, noGoogle: e.target.checked })} />
                 <span>
-                  <span className="font-bold text-slate-800">Colocar o prazo na minha Google Agenda</span>
+                  <span className="font-bold text-slate-800">Colocar o prazo na Google Agenda e convidar o responsável</span>
                   <span className="block text-[11px] text-slate-500">
-                    {conectada ? `Cria um evento de dia inteiro na data do prazo em ${emailAgendaConectada()}.` : 'Conecte a Google Agenda na aba Agenda para usar esta opção.'}
+                    {!ativForm.prazo
+                      ? 'Informe um prazo para enviar a atividade à agenda.'
+                      : conectada
+                        ? `Evento de dia inteiro no prazo, na agenda de ${editandoAtiv?.agendaDonoEmail || emailAgendaConectada()}${ativForm.responsavelEmail ? `, com convite para ${ativForm.responsavelEmail}` : ''}. Status e alterações são atualizados no evento.`
+                        : 'A Google Agenda não está conectada: o prazo será enviado assim que você conectar na aba Agenda.'}
                   </span>
                 </span>
               </label>
