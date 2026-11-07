@@ -91,8 +91,13 @@ interface Props {
   initialTab?: 'meu-perfil' | 'usuarios' | 'permissoes' | 'integracoes' | 'webhooks' | 'auditoria' | 'backup';
 }
 
+// Mesma ordem, grupos e nomes do menu lateral (Sidebar.tsx). Ao criar um
+// módulo novo no menu, inclua-o aqui também para ele aparecer nas permissões.
+// "Cargos & Departamentos" segue a permissão de "Colaboradores & Folha" (rh) e
+// a "Licença" é liberada só para Admin, Presidente e Diretor Financeiro.
 const SYSTEM_MODULES_LIST: { id: SystemToolModule; label: string; category: string; description: string }[] = [
-  { id: 'dashboard', label: 'Painel da Cooperativa', category: 'Quadro Social & Governança', description: 'Visão geral com KPIs de capital social, quadro de sócios e atalhos estratégicos' },
+  { id: 'dashboard', label: 'Painel da Cooperativa', category: 'Visão Geral', description: 'Visão geral com KPIs de capital social, quadro de sócios e atalhos estratégicos' },
+
   { id: 'cadastro-cooperativa', label: 'Dados da Cooperativa', category: 'Quadro Social & Governança', description: 'Dados cadastrais, CNPJ, cota-parte mínima, estatuto e logotipo oficial' },
   { id: 'cadastros', label: 'Cadastros Agropecuários', category: 'Quadro Social & Governança', description: 'Produtores rurais, produtos agrícolas, programas e escolas consumidoras' },
   { id: 'cooperados', label: 'Cooperados & Produtores', category: 'Quadro Social & Governança', description: 'Livro de matrícula de sócios, documentos, CAF/DAP e fichas cadastrais' },
@@ -101,18 +106,20 @@ const SYSTEM_MODULES_LIST: { id: SystemToolModule; label: string; category: stri
   { id: 'diretoria', label: 'Diretoria & Conselho Fiscal', category: 'Quadro Social & Governança', description: 'Mandatos vigentes, conselho de administração e conselho fiscal' },
 
   { id: 'sisgepa', label: 'Comercialização Agrícola (PAA/PNAE)', category: 'Gestão da Produção & Agro', description: 'Editais de chamadas públicas, propostas, rateio de cotas e programação de entregas' },
-  { id: 'fiscal', label: 'Notas Fiscais (NF-e / SEFAZ)', category: 'Gestão da Produção & Agro', description: 'Emissão e transmissão de NF-e (55), NFA-e avulsa e NFC-e com desoneração' },
   { id: 'estoque', label: 'Galpão & Estoque Agrícola', category: 'Gestão da Produção & Agro', description: 'Armazenamento de safras, hortifruti, grãos, embalagens e insumos' },
   { id: 'compras', label: 'Compras & Insumos Agrícolas', category: 'Gestão da Produção & Agro', description: 'Compras coletivas, cotações de insumos, adubos e homologação de fornecedores' },
-  { id: 'sisfin', label: 'Financeiro & Repasses aos Cooperados', category: 'Gestão da Produção & Agro', description: 'Contas a pagar/receber, liquidação de safras, conciliação e sobras/perdas' },
-  { id: 'siscont', label: 'Contabilidade & Livro Diário', category: 'Gestão da Produção & Agro', description: 'Plano de contas cooperativo, atos cooperativos vs não cooperativos e balancetes' },
-  { id: 'rh', label: 'Colaboradores & Folha', category: 'Gestão da Produção & Agro', description: 'Quadro funcional da cooperativa, folha de pagamento e holerites' },
-  { id: 'bi', label: 'Indicadores de Desempenho (BI)', category: 'Gestão da Produção & Agro', description: 'Painéis analíticos, indicadores de volume de safra e projeções' },
+  { id: 'aluguel-maquinas', label: 'Aluguel de Máquinas', category: 'Gestão da Produção & Agro', description: 'Agendamento e controle do aluguel de máquinas aos cooperados' },
+
+  { id: 'sisfin', label: 'Financeiro & Contas da Cooperativa', category: 'Finanças & Contabilidade', description: 'Contas a pagar/receber, liquidação de safras, conciliação e sobras/perdas' },
+  { id: 'fiscal', label: 'Notas Fiscais (NF-e / SEFAZ)', category: 'Finanças & Contabilidade', description: 'Emissão e transmissão de NF-e (55), NFA-e avulsa e NFC-e com desoneração' },
+  { id: 'siscont', label: 'Contabilidade & Livro Diário', category: 'Finanças & Contabilidade', description: 'Plano de contas cooperativo, atos cooperativos vs não cooperativos e balancetes' },
+  { id: 'rh', label: 'Colaboradores & Folha / Cargos & Departamentos', category: 'Finanças & Contabilidade', description: 'Quadro funcional, folha de pagamento, holerites e o cadastro de cargos e departamentos' },
+  { id: 'bi', label: 'Indicadores de Desempenho (BI)', category: 'Finanças & Contabilidade', description: 'Painéis analíticos, indicadores de volume de safra e projeções' },
 
   { id: 'portal-cooperado', label: 'Portal do Cooperado', category: 'Canais de Campo & Portais', description: 'Espaço do sócio para extrato de cotas-partes, entregas e recibos' },
-  { id: 'portal-escola', label: 'Portal da Merenda / Escolas', category: 'Canais de Campo & Portais', description: 'Recebimento de gêneros alimentícios, atesto de notas e merenda escolar' },
   { id: 'app-produtor', label: 'App do Produtor (Colheita)', category: 'Canais de Campo & Portais', description: 'Registro de colheita no campo, oferta de produção e acompanhamento de pedidos' },
   { id: 'app-motorista', label: 'App do Motorista (Rotas)', category: 'Canais de Campo & Portais', description: 'Rotas de transporte da safra, romaneios e comprovantes de entrega' },
+  { id: 'portal-escola', label: 'Portal da Merenda / Escolas', category: 'Canais de Campo & Portais', description: 'Recebimento de gêneros alimentícios, atesto de notas e merenda escolar' },
 
   { id: 'relatorios', label: 'Relatórios Operacionais', category: 'Administração & Sistema', description: 'Relatórios em PDF e Excel para prestação de contas e órgãos fiscalizadores' },
   { id: 'backup-sistema', label: 'Backup de Dados', category: 'Administração & Sistema', description: 'Cópias de segurança, nuvem e exportação de dados' },
@@ -1451,7 +1458,7 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
             {/* Category Filter */}
             <div className="flex items-center gap-2 pt-2 text-[11px]">
               <span className="font-bold text-slate-500">Filtrar por Categoria:</span>
-              {['TODAS', 'Núcleo & Governança', 'Sistemas Especializados', 'Portais & Aplicativos', 'Gerencial & Sistema'].map(cat => (
+              {['TODAS', ...Array.from(new Set(SYSTEM_MODULES_LIST.map(m => m.category)))].map(cat => (
                 <button
                   key={cat}
                   onClick={() => setMatrixCategoryFilter(cat)}
