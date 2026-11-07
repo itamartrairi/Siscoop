@@ -54,7 +54,13 @@ As regras agora também cobrem:
   seu. É o que permite a pessoa entrar com **Google** ou com **e-mail e senha**
   em qualquer computador e ser vinculada à cooperativa (`users/{uid}`).
 - `departamentos` e `cargos` — cadastros da tela **Cargos & Departamentos**,
-  isolados por `tenantId` como `cooperados`.
+  **comuns a todas as cooperativas**: qualquer cooperativa vinculada lê e
+  edita a mesma lista (`tenantId` só registra quem cadastrou). A exclusão é
+  negada enquanto o item estiver em uso.
+- `usoCadastrosRH/{colecao}__{itemId}` — quantos usuários/colaboradores de
+  cada cooperativa usam um cargo/departamento (mapa `tenants`). Cada
+  cooperativa só altera a própria chave; é o que impede uma cooperativa de
+  excluir um item que outra está usando.
 - `diagnostico/{uid}` — documento usado pelo teste de conexão para provar que
   o app consegue **gravar** e ler de volta no Firestore.
 
