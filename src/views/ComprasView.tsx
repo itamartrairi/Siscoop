@@ -9,10 +9,52 @@ import {
   Trash2,
   X,
   Filter,
-  RotateCcw
+  RotateCcw,
+  Search,
+  ExternalLink
 } from 'lucide-react';
 import { SolicitacaoCompra, Fornecedor, ItemEstoque } from '../types';
 import { DataGrid, GridStatus } from '../components/ui/DataGrid';
+import { consultarCnpjReceita, cnpjValido } from '../services/cnpjService';
+import type { DadosCnpjReceita } from '../services/cnpjService';
+
+// Páginas oficiais da Receita Federal
+const URL_RECEITA_CPF = 'https://servicos.receita.fazenda.gov.br/servicos/cpf/consultasituacao/consultapublica.asp';
+const URL_RECEITA_CNPJ = 'https://solucoes.receita.fazenda.gov.br/servicos/cnpjreva/cnpjreva_solicitacao.asp';
+
+const somenteDigitos = (v: string) => (v || '').replace(/\D/g, '');
+
+/** Valida os dígitos verificadores do CPF. */
+const cpfValido = (valor: string): boolean => {
+  const cpf = somenteDigitos(valor);
+  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+  const dv = (base: string) => {
+    const soma = base.split('').reduce((acc, d, i) => acc + Number(d) * (base.length + 1 - i), 0);
+    const resto = (soma * 10) % 11;
+    return resto === 10 ? 0 : resto;
+  };
+  const d1 = dv(cpf.slice(0, 9));
+  const d2 = dv(cpf.slice(0, 9) + d1);
+  return cpf.endsWith(`${d1}${d2}`);
+};
+
+/** Aplica a máscara de CPF ou CNPJ enquanto o usuário digita. */
+const formatarDocumento = (valor: string, tipo: 'PF' | 'PJ'): string => {
+  const d = somenteDigitos(valor).slice(0, tipo === 'PF' ? 11 : 14);
+  if (tipo === 'PF') {
+    return d
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  }
+  return d
+    .replace(/^(\d{2})(\d)/, '$1.$2')
+    .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+    .replace(/\.(\d{3})(\d)/, '.$1/$2')
+    .replace(/(\d{4})(\d)/, '$1-$2');
+};
+
+const tipoPessoaDoDocumento = (doc: string): 'PF' | 'PJ' => (somenteDigitos(doc).length === 11 ? 'PF' : 'PJ');
 
 const MESES_LABEL = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -151,8 +193,64 @@ export const ComprasView: React.FC = () => {
     categoria: 'EMBALAGENS' as any,
     contatoNome: '',
     telefone: '',
-    email: ''
+    email: '',
+    tipoPessoa: 'PJ' as 'PF' | 'PJ',
+    inscricaoEstadual: '',
+    cidadeUf: ''
   });
+
+  // Consulta na Receita Federal
+  const [consultaCnpj, setConsultaCnpj] = useState<DadosCnpjReceita | null>(null);
+  const [consultandoDoc, setConsultandoDoc] = useState(false);
+  const [mensagemDoc, setMensagemDoc] = useState<{ tipo: 'erro' | 'info'; texto: string } | null>(null);
+
+  const handleVerificarDocumento = async () => {
+    setMensagemDoc(null);
+    const doc = somenteDigitos(fornecedorForm.cnpj);
+    if (fornecedorForm.tipoPessoa === 'PF') {
+      if (!cpfValido(doc)) {
+        setMensagemDoc({ tipo: 'erro', texto: 'CPF inválido. Confira os números digitados.' });
+        return;
+      }
+      try { await navigator.clipboard.writeText(doc); } catch { /* sem permissão de área de transferência */ }
+      window.open(URL_RECEITA_CPF, 'receitaCpf', 'width=900,height=760');
+      setMensagemDoc({
+        tipo: 'info',
+        texto: 'CPF válido. O CPF foi copiado: cole no site da Receita, informe a data de nascimento e resolva o captcha para ver a situação cadastral.'
+      });
+      return;
+    }
+    if (!cnpjValido(doc)) {
+      setMensagemDoc({ tipo: 'erro', texto: 'CNPJ inválido. Confira os números digitados.' });
+      return;
+    }
+    setConsultandoDoc(true);
+    try {
+      setConsultaCnpj(await consultarCnpjReceita(doc));
+    } catch (err: any) {
+      setMensagemDoc({ tipo: 'erro', texto: err?.message || 'Não foi possível consultar o CNPJ na Receita.' });
+    } finally {
+      setConsultandoDoc(false);
+    }
+  };
+
+  const handleUsarDadosReceita = () => {
+    if (!consultaCnpj) return;
+    const d = consultaCnpj;
+    setFornecedorForm(prev => ({
+      ...prev,
+      tipoPessoa: 'PJ',
+      cnpj: formatarDocumento(d.cnpj || prev.cnpj, 'PJ'),
+      razaoSocial: d.razaoSocial || prev.razaoSocial,
+      nomeFantasia: d.nomeFantasia || prev.nomeFantasia,
+      telefone: d.telefone || prev.telefone,
+      email: d.email || prev.email,
+      inscricaoEstadual: d.inscricaoEstadual || prev.inscricaoEstadual,
+      cidadeUf: d.cidade ? `${d.cidade}/${d.estado}` : prev.cidadeUf
+    }));
+    setConsultaCnpj(null);
+    setMensagemDoc({ tipo: 'info', texto: 'Dados da Receita aplicados ao cadastro.' });
+  };
 
   // Handlers
   const handleOpenSolicitacao = (s?: SolicitacaoCompra) => {
@@ -307,7 +405,10 @@ if (f) {
         categoria: f.categoria,
         contatoNome: f.contatoNome || '',
         telefone: f.telefone || '',
-        email: f.email || ''
+        email: f.email || '',
+        tipoPessoa: f.tipoPessoa || tipoPessoaDoDocumento(f.cnpj),
+        inscricaoEstadual: f.inscricaoEstadual || '',
+        cidadeUf: f.cidadeUf || ''
       });
     } else {
       setEditingFornecedor(null);
@@ -318,9 +419,14 @@ if (f) {
         categoria: 'EMBALAGENS',
         contatoNome: '',
         telefone: '(88) 98888-0000',
-        email: ''
+        email: '',
+        tipoPessoa: 'PJ',
+        inscricaoEstadual: '',
+        cidadeUf: ''
       });
     }
+    setMensagemDoc(null);
+    setConsultaCnpj(null);
     setShowFornecedorModal(true);
   };
 
@@ -328,6 +434,13 @@ if (f) {
     e.preventDefault();
     if (!canWrite) { blockWriteAction(); return; }
     if (!fornecedorForm.razaoSocial || !fornecedorForm.cnpj) return;
+    const docValido = fornecedorForm.tipoPessoa === 'PF'
+      ? cpfValido(fornecedorForm.cnpj)
+      : cnpjValido(fornecedorForm.cnpj);
+    if (!docValido) {
+      alert(`${fornecedorForm.tipoPessoa === 'PF' ? 'CPF' : 'CNPJ'} inválido. Confira os números digitados.`);
+      return;
+    }
     if (editingFornecedor) {
       updateFornecedor(editingFornecedor.id, fornecedorForm);
     } else {
@@ -623,7 +736,9 @@ if (f) {
           columns={[
             { key: 'razaoSocial', header: 'Razão Social', width: 260 },
             { key: 'nomeFantasia', header: 'Nome Fantasia', width: 200 },
-            { key: 'cnpj', header: 'CNPJ', width: 160 },
+            { key: 'tipoPessoa', header: 'PF/PJ', width: 80, value: (f: Fornecedor) => f.tipoPessoa || tipoPessoaDoDocumento(f.cnpj) },
+              { key: 'cnpj', header: 'CPF/CNPJ', width: 160 },
+              { key: 'inscricaoEstadual', header: 'Insc. Estadual', width: 140 },
             { key: 'categoria', header: 'Categoria', width: 150 },
             { key: 'contatoNome', header: 'Contato', width: 170 },
             { key: 'telefone', header: 'Telefone', width: 140 },
@@ -859,7 +974,7 @@ if (f) {
             </div>
             <form onSubmit={handleSaveFornecedor} className="space-y-3 text-xs">
               <div>
-                <label className="block text-slate-700 font-bold mb-1">Razão Social *</label>
+                <label className="block text-slate-700 font-bold mb-1">{fornecedorForm.tipoPessoa === 'PF' ? 'Nome Completo *' : 'Razão Social *'}</label>
                 <input
                   type="text"
                   required
@@ -871,14 +986,63 @@ if (f) {
               </div>
 
               <div>
-                <label className="block text-slate-700 font-bold mb-1">CNPJ *</label>
+                <label className="block text-slate-700 font-bold mb-1">Tipo de Pessoa *</label>
+                <div className="flex gap-2">
+                  {(['PJ', 'PF'] as const).map(tp => (
+                    <button
+                      key={tp}
+                      type="button"
+                      onClick={() => {
+                        setMensagemDoc(null);
+                        setFornecedorForm({ ...fornecedorForm, tipoPessoa: tp, cnpj: formatarDocumento(fornecedorForm.cnpj, tp) });
+                      }}
+                      className={`flex-1 p-2.5 rounded-xl border font-bold transition-all ${fornecedorForm.tipoPessoa === tp ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                    >
+                      {tp === 'PJ' ? 'Pessoa Jurídica (CNPJ)' : 'Pessoa Física (CPF)'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">{fornecedorForm.tipoPessoa === 'PF' ? 'CPF *' : 'CNPJ *'}</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    required
+                    inputMode="numeric"
+                    value={fornecedorForm.cnpj}
+                    onChange={e => {
+                      setMensagemDoc(null);
+                      setFornecedorForm({ ...fornecedorForm, cnpj: formatarDocumento(e.target.value, fornecedorForm.tipoPessoa) });
+                    }}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl"
+                    placeholder={fornecedorForm.tipoPessoa === 'PF' ? '000.000.000-00' : '00.000.000/0001-00'}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleVerificarDocumento}
+                    disabled={consultandoDoc}
+                    className="shrink-0 flex items-center gap-1.5 px-3 rounded-xl bg-slate-800 text-white font-bold hover:bg-slate-700 disabled:opacity-60"
+                    title="Verificar na Receita Federal"
+                  >
+                    <Search className="w-3.5 h-3.5" />
+                    {consultandoDoc ? 'Consultando...' : 'Verificar na Receita'}
+                  </button>
+                </div>
+                {mensagemDoc && (
+                  <p className={`mt-1 ${mensagemDoc.tipo === 'erro' ? 'text-rose-600' : 'text-emerald-700'}`}>{mensagemDoc.texto}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">Inscrição Estadual</label>
                 <input
                   type="text"
-                  required
-                  value={fornecedorForm.cnpj}
-                  onChange={e => setFornecedorForm({ ...fornecedorForm, cnpj: e.target.value })}
+                  value={fornecedorForm.inscricaoEstadual}
+                  onChange={e => setFornecedorForm({ ...fornecedorForm, inscricaoEstadual: e.target.value })}
                   className="w-full p-2.5 border border-slate-200 rounded-xl"
-                  placeholder="00.000.000/0001-00"
+                  placeholder="Número da IE ou ISENTO"
                 />
               </div>
 
@@ -919,6 +1083,64 @@ if (f) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Popup: dados do CNPJ na Receita Federal */}
+      {consultaCnpj && (
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={() => setConsultaCnpj(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+              <div>
+                <h3 className="text-lg font-bold text-slate-800">Dados do CNPJ na Receita Federal</h3>
+                <p className="text-xs text-slate-500">Fonte: {consultaCnpj.fonte || 'base pública da Receita'}</p>
+              </div>
+              <button type="button" onClick={() => setConsultaCnpj(null)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-slate-700">Situação cadastral:</span>
+                <span className={`px-2 py-0.5 rounded-full font-bold ${/ATIVA/i.test(consultaCnpj.situacaoCadastral) ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
+                  {consultaCnpj.situacaoCadastral || 'Não informada'}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {([
+                  ['CNPJ', formatarDocumento(consultaCnpj.cnpj, 'PJ')],
+                  ['Razão Social', consultaCnpj.razaoSocial],
+                  ['Nome Fantasia', consultaCnpj.nomeFantasia],
+                  ['Inscrição Estadual', consultaCnpj.inscricaoEstadual],
+                  ['Telefone', consultaCnpj.telefone],
+                  ['E-mail', consultaCnpj.email],
+                  ['Endereço', [consultaCnpj.logradouro, consultaCnpj.numero, consultaCnpj.complemento].filter(Boolean).join(', ')],
+                  ['Bairro', consultaCnpj.bairro],
+                  ['Cidade/UF', consultaCnpj.cidade ? `${consultaCnpj.cidade}/${consultaCnpj.estado}` : ''],
+                  ['CEP', consultaCnpj.cep]
+                ] as [string, string][]).map(([rotulo, valor]) => (
+                  <div key={rotulo} className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                    <div className="text-[10px] uppercase tracking-wide text-slate-500 font-bold">{rotulo}</div>
+                    <div className="text-slate-800 font-semibold break-words">{valor || '—'}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex flex-wrap justify-end gap-2 p-5 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => window.open(URL_RECEITA_CNPJ, 'receitaCnpj', 'width=900,height=760')}
+                className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50"
+              >
+                <ExternalLink className="w-3.5 h-3.5" /> Comprovante no site da Receita
+              </button>
+              <button type="button" onClick={() => setConsultaCnpj(null)} className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50">
+                Fechar
+              </button>
+              <button type="button" onClick={handleUsarDadosReceita} className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700">
+                Usar estes dados no cadastro
+              </button>
+            </div>
           </div>
         </div>
       )}
