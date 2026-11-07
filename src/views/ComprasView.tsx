@@ -586,36 +586,6 @@ if (f) {
         >
           <Truck className="w-4 h-4" /> Fornecedores Homologados ({fornecedores.length})
         </button>
-          <button
-            onClick={() => setActiveTab('revendas')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-              activeTab === 'revendas'
-                ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-                : 'border-transparent text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <Store className="w-4 h-4" /> Revendas de Produtos
-          </button>
-          <button
-            onClick={() => setActiveTab('clientes')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-              activeTab === 'clientes'
-                ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-                : 'border-transparent text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <Users className="w-4 h-4" /> Clientes
-          </button>
-        <button
-          onClick={() => setActiveTab('relatorios')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-            activeTab === 'relatorios'
-              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <FileText className="w-4 h-4" /> Relatórios PDF
-        </button>
       </div>
 
       {/* Tab Ordens de Compra */}
@@ -717,17 +687,11 @@ if (f) {
       {activeTab === 'produtos' && <ProdutosTab canWrite={canWrite} onBlocked={blockWriteAction} />}
 
 
-      {/* Tab Revendas de Produtos */}
-      {activeTab === 'revendas' && <RevendasTab canWrite={canWrite} onBlocked={blockWriteAction} />}
 
-      {/* Tab Clientes */}
-      {activeTab === 'clientes' && <ClientesTab canWrite={canWrite} onBlocked={blockWriteAction} />}
 
       
-{/* Tab Relatórios PDF */}
 
       
-{activeTab === 'relatorios' && <RelatoriosPdfTab tipoInicial="COMPRAS" />}
 
 
       
@@ -813,13 +777,48 @@ if (f) {
 
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-3">
                 <div className="flex items-center justify-between"><div><div className="text-xs font-extrabold text-slate-800">Itens da ordem de compra</div><div className="text-[10px] text-slate-500">Os produtos são sempre selecionados do SisEstoque.</div></div><button type="button" onClick={() => setOrdemItens([...ordemItens, { descricao: '', quantidade: 1, unidade: 'UN', precoUnitario: 0, subtotal: 0 }])} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold">+ Adicionar item</button></div>
-                {ordemItens.map((item, index) => <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr_90px_80px_110px_32px] gap-2 items-end">
-                  <div><label className="block text-[10px] font-bold text-slate-500 mb-1">Produto do estoque</label><select required value={item.estoqueItemId || ''} onChange={e => { const p = estoque.find(x => x.id === e.target.value); setOrdemItens(ordemItens.map((x, i) => i === index ? { ...x, estoqueItemId: p?.id, descricao: p?.nomeItem || '', unidade: p?.unidadeMedida || x.unidade } : x)); }} className="w-full p-2.5 border border-slate-200 rounded-xl bg-white"><option value="">Selecione um produto</option>{estoque.map(p => <option key={p.id} value={p.id}>{p.codigoSku || p.codigoItem || '—'} — {p.nomeItem}</option>)}</select></div>
-                  <div><label className="block text-[10px] font-bold text-slate-500 mb-1">Qtd.</label><input type="number" min="1" required value={item.quantidade} onChange={e => setOrdemItens(ordemItens.map((x, i) => i === index ? { ...x, quantidade: Number(e.target.value) || 0 } : x))} className="w-full p-2.5 border border-slate-200 rounded-xl" /></div>
-                  <div><label className="block text-[10px] font-bold text-slate-500 mb-1">Unid.</label><input value={item.unidade} readOnly className="w-full p-2.5 border border-slate-200 rounded-xl bg-slate-100" /></div>
-                  <div><label className="block text-[10px] font-bold text-slate-500 mb-1">Preço unitário</label><input type="number" min="0" step="0.01" required value={item.precoUnitario} onChange={e => setOrdemItens(ordemItens.map((x, i) => i === index ? { ...x, precoUnitario: Number(e.target.value) || 0 } : x))} className="w-full p-2.5 border border-slate-200 rounded-xl" /></div>
-                  <button type="button" onClick={() => setOrdemItens(ordemItens.filter((_, i) => i !== index))} className="p-2.5 rounded-xl text-rose-500 hover:bg-rose-50">×</button>
-                </div>)}
+                <div className="max-h-64 overflow-auto rounded-xl border border-slate-200 bg-white">
+                  <table className="w-full min-w-[620px] text-xs">
+                    <thead className="sticky top-0 z-10 bg-slate-100 text-[10px] uppercase tracking-wide text-slate-500">
+                      <tr>
+                        <th className="px-2 py-2 text-left font-bold w-8">#</th>
+                        <th className="px-2 py-2 text-left font-bold">Produto do estoque</th>
+                        <th className="px-2 py-2 text-right font-bold w-20">Qtd.</th>
+                        <th className="px-2 py-2 text-left font-bold w-16">Unid.</th>
+                        <th className="px-2 py-2 text-right font-bold w-28">Preço unitário</th>
+                        <th className="px-2 py-2 text-right font-bold w-28">Subtotal</th>
+                        <th className="px-2 py-2 w-8"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {ordemItens.map((item, index) => (
+                        <tr key={index}>
+                          <td className="px-2 py-1.5 font-bold text-slate-400">{index + 1}</td>
+                          <td className="px-2 py-1.5">
+                            <select required value={item.estoqueItemId || ''} onChange={e => { const p = estoque.find(x => x.id === e.target.value); setOrdemItens(ordemItens.map((x, i) => i === index ? { ...x, estoqueItemId: p?.id, descricao: p?.nomeItem || '', unidade: p?.unidadeMedida || x.unidade } : x)); }} className="w-full p-1.5 border border-slate-200 rounded-lg bg-white">
+                              <option value="">Selecione um produto</option>
+                              {estoque.map(p => <option key={p.id} value={p.id}>{p.codigoSku || p.codigoItem || '—'} — {p.nomeItem}</option>)}
+                            </select>
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <input type="number" min="1" step="any" required value={item.quantidade} onChange={e => setOrdemItens(ordemItens.map((x, i) => i === index ? { ...x, quantidade: Number(e.target.value) || 0 } : x))} className="w-full p-1.5 border border-slate-200 rounded-lg text-right" />
+                          </td>
+                          <td className="px-2 py-1.5 text-slate-600 font-semibold">{item.unidade}</td>
+                          <td className="px-2 py-1.5">
+                            <input type="number" min="0" step="0.01" required value={item.precoUnitario} onChange={e => setOrdemItens(ordemItens.map((x, i) => i === index ? { ...x, precoUnitario: Number(e.target.value) || 0 } : x))} className="w-full p-1.5 border border-slate-200 rounded-lg text-right" />
+                          </td>
+                          <td className="px-2 py-1.5 text-right font-bold text-slate-700 whitespace-nowrap">{formatarMoeda((Number(item.quantidade) || 0) * (Number(item.precoUnitario) || 0))}</td>
+                          <td className="px-1 py-1.5 text-center">
+                            <button type="button" title="Remover item" onClick={() => setOrdemItens(ordemItens.filter((_, i) => i !== index))} className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50">×</button>
+                          </td>
+                        </tr>
+                      ))}
+                      {ordemItens.length === 0 && (
+                        <tr><td colSpan={7} className="px-2 py-4 text-center text-slate-400">Nenhum item. Clique em “+ Adicionar item”.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
                 <div className="text-right font-black text-emerald-700">Total calculado: R$ {totalOrdemItens.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
               </div>
 
