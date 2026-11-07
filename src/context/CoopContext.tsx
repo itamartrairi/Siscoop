@@ -1,3 +1,4 @@
+import { encontrarVinculos, mensagemExclusaoBloqueada, type EntidadeVinculavel, type ReferenciaPorValor } from '../services/integridadeReferencial';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
   User,
@@ -2253,6 +2254,63 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addAuditLog('CONFIGURACOES', 'ALTERACAO', `Cadastro/Permissões do usuário ID ${id} atualizados`);
   };
 
+  // ---------------------------------------------------------------------------
+  // Integridade referencial: nenhum registro usado em outra tabela pode ser
+  // excluído (ver src/services/integridadeReferencial.ts). Para deixar de
+  // usar um cadastro sem perder o histórico, marque-o como inativo.
+  // ---------------------------------------------------------------------------
+  const listasParaVinculos = (): Record<string, unknown> => ({
+    users, cooperados, transacoesCapital, assembleias, mandatos, produtores, produtos, registrosProducao,
+    programas, chamadasPublicas, rateiosChamadas, ofertasPAA, programacoesEntrega, prestacoesContas,
+    pedidosProdutorPAA, ordensCompra, planoContas, lancamentosContabeis, patrimonio, contasPagarReceber,
+    solicitacoesCompra, fornecedores, estoque, movimentacoesEstoque, funcionariosRH, folhaPagamento,
+    escolasPnae, motoristas, contasBancarias, maquinas, locacoesMaquinas, entregasEscola,
+    romaneiosMotorista, notasFiscais, webhooks, extratoBancario
+  });
+
+  const DESCRICAO_ENTIDADE: Record<EntidadeVinculavel, string> = {
+    cooperado: 'este cooperado',
+    produtor: 'este produtor',
+    produto: 'este produto',
+    programa: 'este programa',
+    chamadaPublica: 'esta chamada pública',
+    prestacaoContas: 'esta prestação de contas',
+    ordemCompra: 'esta ordem de compra',
+    planoConta: 'esta conta do plano de contas',
+    lancamentoContabil: 'este lançamento contábil',
+    contaPagarReceber: 'esta conta a pagar/receber',
+    solicitacaoCompra: 'esta solicitação de compra',
+    fornecedor: 'este fornecedor',
+    itemEstoque: 'este item de estoque',
+    funcionario: 'este colaborador',
+    escola: 'esta escola',
+    motorista: 'este motorista',
+    contaBancaria: 'esta conta bancária',
+    maquina: 'esta máquina',
+    webhook: 'este webhook'
+  };
+
+  /** Mostra o aviso e devolve true quando o registro está em uso (exclusão bloqueada). */
+  const bloqueiaExclusaoEmUso = (
+    entidade: EntidadeVinculavel,
+    id: string,
+    descricao?: string,
+    extras: ReferenciaPorValor[] = []
+  ): boolean => {
+    const vinculos = encontrarVinculos(entidade, id, listasParaVinculos(), extras);
+    if (vinculos.length === 0) return false;
+    alert(mensagemExclusaoBloqueada(descricao || DESCRICAO_ENTIDADE[entidade], vinculos));
+    return true;
+  };
+
+  /** Cooperado em uso: referências diretas ou ao produtor rural espelhado dele. */
+  const cooperadoEmUso = (id: string): boolean => {
+    const listas = listasParaVinculos();
+    if (encontrarVinculos('cooperado', id, listas).length > 0) return true;
+    const produtor = produtores.find(p => p.cooperadoId === id);
+    return !!produtor && encontrarVinculos('produtor', produtor.id, listas).length > 0;
+  };
+
   const deleteUser = (id: string) => {
     if (id === currentUser.id) {
       alert('Não é possível excluir o próprio usuário logado na sessão ativa.');
@@ -2506,6 +2564,11 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteCooperado = (id: string) => {
+    if (cooperadoEmUso(id)) {
+      const produtor = produtores.find(p => p.cooperadoId === id);
+      if (!bloqueiaExclusaoEmUso('cooperado', id) && produtor) bloqueiaExclusaoEmUso('produtor', produtor.id, 'este cooperado (cadastro de produtor rural vinculado)');
+      return;
+    }
     const target = cooperados.find(c => c.id === id);
     if (target) {
       setCooperados(prev => prev.filter(c => c.id !== id));
@@ -2515,12 +2578,18 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const deleteAllCooperados = (): number => {
     const targetCooperados = cooperados.filter(c => c.tenantId === currentTenant.id);
-    const total = targetCooperados.length;
+    // Integridade referencial: cooperados em uso em outros cadastros são mantidos.
+    const emUso = new Set(targetCooperados.filter(c => cooperadoEmUso(c.id)).map(c => c.id));
+    const total = targetCooperados.length - emUso.size;
+    if (emUso.size > 0) {
+      alert(`${emUso.size} cooperado(s) não foram excluídos porque estão em uso em outros cadastros (capital, produção, assembleias, pedidos etc.).`);
+    }
     if (total === 0) return 0;
 
-    setCooperados(prev => prev.filter(c => c.tenantId !== currentTenant.id));
-    syncCooperadosWithProdutores(cooperados.filter(c => c.tenantId !== currentTenant.id));
-    addAuditLog('COOPERADOS', 'EXCLUSAO', `Excluiu todos os ${total} cooperados da cooperativa atual.`);
+    const permanece = (c: Cooperado) => c.tenantId !== currentTenant.id || emUso.has(c.id);
+    setCooperados(prev => prev.filter(permanece));
+    syncCooperadosWithProdutores(cooperados.filter(permanece));
+    addAuditLog('COOPERADOS', 'EXCLUSAO', `Excluiu ${total} cooperado(s) da cooperativa atual${emUso.size ? ` (${emUso.size} mantido(s) por estarem em uso)` : ''}.`);
     return total;
   };
 
@@ -3150,6 +3219,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteWebhook = (id: string) => {
+    if (bloqueiaExclusaoEmUso('webhook', id)) return;
     const target = webhooks.find(w => w.id === id);
     if (target) {
       setWebhooks(prev => prev.filter(w => w.id !== id));
@@ -3366,6 +3436,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteProdutor = (id: string) => {
+    if (bloqueiaExclusaoEmUso('produtor', id)) return;
     const alvo = produtores.find(x => x.id === id);
     // Integridade referencial: um produtor com propostas de oferta ou
     // pedidos vinculados não pode ser excluído sem antes remover esses
@@ -3407,6 +3478,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteProduto = (id: string) => {
+    if (bloqueiaExclusaoEmUso('produto', id)) return;
     const alvo = produtos.find(x => x.id === id);
     // Integridade referencial: um produto usado em propostas de oferta ou
     // pedidos ativos não pode ser excluído sem quebrar esses vínculos.
@@ -3469,6 +3541,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deletePrograma = (id: string) => {
+    if (bloqueiaExclusaoEmUso('programa', id)) return;
     const alvo = programas.find(x => x.id === id);
     if (bloqueadoPorStatusFinal(alvo, 'programa', 'excluir')) return;
     // Integridade referencial: um programa com chamadas públicas, propostas
@@ -3508,6 +3581,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteChamadaPublica = (id: string) => {
+    if (bloqueiaExclusaoEmUso('chamadaPublica', id)) return;
     const alvo = chamadasPublicas.find(x => x.id === id);
     if (bloqueadoPorStatusFinal(alvo, 'chamada pública', 'excluir')) return;
     // Integridade referencial: uma chamada pública com propostas de oferta
@@ -3612,7 +3686,8 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addAuditLog('SISGEPA', 'ALTERACAO', `Atualizou prestação de contas ${(alvo?.numeroTermo || alvo?.numeroLote) || id}`);
   };
 
-  const deletePrestacaoContas = (id: string) => {
+  const deletePrestacaoContas = (id: string, ignorarVinculos = false) => {
+    if (!ignorarVinculos && bloqueiaExclusaoEmUso('prestacaoContas', id)) return;
     const alvo = prestacoesContas.find(x => x.id === id);
     if (bloqueadoPorStatusFinal(alvo, 'prestação de contas', 'excluir')) return;
     setPrestacoesContas(prev => prev.filter(p => p.id !== id));
@@ -3698,7 +3773,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const contasRepasse = contasPagarReceber.filter(c =>
       c.categoria === 'REPASSE_PRODUCAO' && c.descricao.includes(pedido.numeroPedido)
     );
-    contasRepasse.forEach(c => deleteContaPagarReceber(c.id));
+    contasRepasse.forEach(c => deleteContaPagarReceber(c.id, true));
 
     // 2) Contábil: remove o lançamento principal gerado para este pedido.
     setLancamentosContabeis(prev => prev.filter(l => l.documentoRef !== pedido.id));
@@ -3759,13 +3834,13 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 2) Prestações de contas vinculadas
     const prestacoesVinculadas = prestacoesContas.filter(pc => pc.pedidoId === id);
-    prestacoesVinculadas.forEach(pc => deletePrestacaoContas(pc.id));
+    prestacoesVinculadas.forEach(pc => deletePrestacaoContas(pc.id, true));
     if (prestacoesVinculadas.length > 0) relatorioExclusao.push(`${prestacoesVinculadas.length} prestação(ões) de contas`);
 
     // 3) Lançamentos financeiros do FUNRURAL e da Taxa Administrativa
     // gerados automaticamente ao salvar este pedido.
     const idsFinanceiros = [alvo.funruralContaPagarId, alvo.taxaAdministrativaContaReceberId].filter(Boolean) as string[];
-    idsFinanceiros.forEach(finId => deleteContaPagarReceber(finId));
+    idsFinanceiros.forEach(finId => deleteContaPagarReceber(finId, true));
     if (idsFinanceiros.length > 0) relatorioExclusao.push(`${idsFinanceiros.length} lançamento(s) financeiro(s) (FUNRURAL/Taxa Adm.)`);
 
     // 4) Notas fiscais vinculadas — só remove as que ainda estão em
@@ -3913,7 +3988,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const contaVinculada = contasPagarReceber.find(c =>
       c.descricao === `Ordem de Compra ${ordem.numeroOrdem} - ${ordem.fornecedorNome}`
     );
-    if (contaVinculada) deleteContaPagarReceber(contaVinculada.id);
+    if (contaVinculada) deleteContaPagarReceber(contaVinculada.id, true);
   };
 
   const updateOrdemCompra = (id: string, oData: Partial<OrdemCompra>) => {
@@ -3929,6 +4004,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteOrdemCompra = (id: string) => {
+    if (bloqueiaExclusaoEmUso('ordemCompra', id)) return;
     const alvo = ordensCompra.find(x => x.id === id);
     if (bloqueadoPorStatusFinal(alvo, 'ordem de compra', 'excluir')) return;
     if (alvo) reverterEfeitosOrdemCompra(alvo);
@@ -3958,6 +4034,13 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deletePlanoConta = (id: string) => {
+    const contaEmUso = planoContas.find(x => x.id === id);
+    if (
+      bloqueiaExclusaoEmUso('planoConta', id, undefined, [
+        { campos: ['contaDebitoCodigo', 'contaCreditoCodigo', 'contaDebito', 'contaCredito'], valor: contaEmUso?.codigo }
+      ])
+    )
+      return;
     const alvo = planoContas.find(x => x.id === id);
     if (bloqueadoPorStatusFinal(alvo, 'conta contábil', 'excluir')) return;
     setPlanoContas(prev => prev.filter(p => p.id !== id));
@@ -4016,6 +4099,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteLancamentoContabil = (id: string) => {
+    if (bloqueiaExclusaoEmUso('lancamentoContabil', id)) return;
     const alvo = lancamentosContabeis.find(x => x.id === id);
     if (bloqueadoPorStatusFinal(alvo, 'lançamento contábil', 'excluir')) return;
     setLancamentosContabeis(prev => prev.filter(l => l.id !== id));
@@ -4262,7 +4346,8 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addAuditLog('SISFIN', 'ALTERACAO', `Atualizou conta a pagar/receber ${alvo?.descricao || id}`);
   };
 
-  const deleteContaPagarReceber = (id: string) => {
+  const deleteContaPagarReceber = (id: string, ignorarVinculos = false) => {
+    if (!ignorarVinculos && bloqueiaExclusaoEmUso('contaPagarReceber', id)) return;
     const alvo = contasPagarReceber.find(x => x.id === id);
     if (bloqueadoPorStatusFinal(alvo, 'lançamento financeiro', 'excluir')) return;
     // Reversão automática no Contábil: remove o lançamento contábil gerado
@@ -4291,6 +4376,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteSolicitacaoCompra = (id: string) => {
+    if (bloqueiaExclusaoEmUso('solicitacaoCompra', id)) return;
     const alvo = solicitacoesCompra.find(x => x.id === id);
     if (bloqueadoPorStatusFinal(alvo, 'solicitação de compra', 'excluir')) return;
     setSolicitacoesCompra(prev => prev.filter(s => s.id !== id));
@@ -4324,6 +4410,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteFornecedor = (id: string) => {
+    if (bloqueiaExclusaoEmUso('fornecedor', id)) return;
     const alvo = fornecedores.find(x => x.id === id);
     if (bloqueadoPorStatusFinal(alvo, 'fornecedor', 'excluir')) return;
     setFornecedores(prev => prev.filter(f => f.id !== id));
@@ -4357,6 +4444,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteItemEstoque = (id: string) => {
+    if (bloqueiaExclusaoEmUso('itemEstoque', id)) return;
     const alvo = estoque.find(x => x.id === id);
     if (bloqueadoPorStatusFinal(alvo, 'item de estoque', 'excluir')) return;
     setEstoque(prev => prev.filter(i => i.id !== id));
@@ -4377,6 +4465,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteFuncionarioRH = (id: string) => {
+    if (bloqueiaExclusaoEmUso('funcionario', id)) return;
     const alvo = funcionariosRH.find(x => x.id === id);
     if (bloqueadoPorStatusFinal(alvo, 'funcionário', 'excluir')) return;
     setFuncionariosRH(prev => prev.filter(f => f.id !== id));
@@ -4471,6 +4560,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteEscolaPnae = (id: string) => {
+    if (bloqueiaExclusaoEmUso('escola', id)) return;
     const alvo = escolasPnae.find(x => x.id === id);
     // Integridade referencial: uma escola com pedidos vinculados (como
     // destino de entrega) não pode ser excluída sem antes remover esse
@@ -4503,6 +4593,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteMotorista = (id: string) => {
+    if (bloqueiaExclusaoEmUso('motorista', id)) return;
     const alvo = motoristas.find(x => x.id === id);
     setMotoristas(prev => prev.filter(m => m.id !== id));
     addAuditLog('CADASTROS', 'EXCLUSAO', `Excluiu motorista ${alvo?.nome || id}`);
@@ -4535,6 +4626,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteContaBancaria = (id: string) => {
+    if (bloqueiaExclusaoEmUso('contaBancaria', id)) return;
     const alvo = contasBancarias.find(b => b.id === id);
     const emUso =
       contasPagarReceber.some(c => c.contaBancariaId === id) ||
@@ -4567,6 +4659,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteMaquina = (id: string) => {
+    if (bloqueiaExclusaoEmUso('maquina', id)) return;
     const alvo = maquinas.find(m => m.id === id);
     const emUso = locacoesMaquinas.some(l => l.maquinaId === id);
     if (emUso) {
