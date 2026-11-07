@@ -94,6 +94,7 @@ export const Sidebar: React.FC<Props> = ({
     'siscont': 'siscont',
     'sisfin': 'sisfin',
     'compras': 'compras',
+    'vendas-relatorios': 'compras',
     'estoque': 'estoque',
     'rh': 'rh',
     'cargos-departamentos': 'rh',
@@ -148,6 +149,7 @@ export const Sidebar: React.FC<Props> = ({
         { id: 'sisgepa', label: 'Comercialização Agrícola (PAA/PNAE)', description: 'Gerencie projetos de venda, contratos e entregas do PAA e PNAE.', action: 'Abrir Comercialização', icon: Landmark },
         { id: 'estoque', label: 'Galpão & Estoque Agrícola', description: 'Consulte e movimente o estoque, evitando perdas e faltas.', action: 'Consultar Estoque', icon: Boxes },
         { id: 'compras', label: 'Compras & Insumos Agrícolas', description: 'Registre compras de insumos e acompanhe pedidos a receber.', action: 'Abrir Compras', icon: ShoppingCart },
+        { id: 'vendas-relatorios', label: 'Vendas & Relatórios', description: 'Revenda de produtos, clientes e relatórios em PDF.', action: 'Abrir Vendas', icon: FileText },
         { id: 'aluguel-maquinas', label: 'Aluguel de Máquinas', description: 'Agende e controle o aluguel de máquinas aos cooperados.', action: 'Abrir Aluguel', icon: Tractor }
       ]
     },
