@@ -15,13 +15,15 @@ import {
   MessageCircle,
   Users,
   Store,
-  FileText
+  FileText,
+  Package
 } from 'lucide-react';
 import { SolicitacaoCompra, Fornecedor, ItemEstoque } from '../types';
 import { DataGrid, GridStatus } from '../components/ui/DataGrid';
 import { ClientesTab } from '../components/ClientesTab';
 import { RevendasTab } from '../components/RevendasTab';
 import { RelatoriosPdfTab } from '../components/RelatoriosPdfTab';
+import { ProdutosTab } from '../components/ProdutosTab';
 import { abrirLinkExterno, montarLinkWhatsApp, montarLinkWhatsAppGenerico, getTelefoneContato } from '../utils/whatsappHelpers';
 import { mensagemOrdemCompra } from '../utils/mensagensWhatsApp';
 import { FORMAS_PAGAMENTO_COMERCIAL, type FormaPagamentoComercial, gerarParcelas, somarDias, hojeISO, dataBR, formatarMoeda, rotuloFormaPagamento } from '../utils/parcelamento';
@@ -105,7 +107,7 @@ export const ComprasView: React.FC = () => {
     alert('Seu perfil de acesso tem permissão apenas de leitura neste módulo. Fale com um administrador para solicitar permissão de edição.');
   };
 
-  const [activeTab, setActiveTab] = useState<'solicitacoes' | 'ordens' | 'fornecedores' | 'revendas' | 'clientes' | 'relatorios'>('solicitacoes');
+  const [activeTab, setActiveTab] = useState<'solicitacoes' | 'ordens' | 'fornecedores' | 'revendas' | 'clientes' | 'relatorios' | 'produtos'>('solicitacoes');
 
   // Editing state
   const [editingSolicitacao, setEditingSolicitacao] = useState<SolicitacaoCompra | null>(null);
@@ -580,6 +582,16 @@ if (f) {
         >
           <ShoppingCart className="w-4 h-4 text-emerald-600" /> Ordens de Compra OC ({ordensCompra.length})
         </button>
+          <button
+            onClick={() => setActiveTab('produtos')}
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
+              activeTab === 'produtos'
+                ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
+                : 'border-transparent text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            <Package className="w-4 h-4" /> Produtos & Insumos ({estoque.length})
+          </button>
         <button
           onClick={() => setActiveTab('fornecedores')}
           className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
@@ -819,6 +831,11 @@ if (f) {
             />
         </div>
       )}
+
+      {/* Tab Produtos & Insumos */}
+
+      {activeTab === 'produtos' && <ProdutosTab canWrite={canWrite} onBlocked={blockWriteAction} />}
+
 
       {/* Tab Revendas de Produtos */}
       {activeTab === 'revendas' && <RevendasTab canWrite={canWrite} onBlocked={blockWriteAction} />}
