@@ -1137,7 +1137,10 @@ export interface Fornecedor {
   tenantId: string;
   razaoSocial: string;
   nomeFantasia?: string;
+  /** CNPJ (pessoa jurídica) ou CPF (pessoa física). */
   cnpj: string;
+  tipoPessoa?: 'PF' | 'PJ';
+  inscricaoEstadual?: string;
   telefone?: string;
   email?: string;
   cidadeUf?: string;
