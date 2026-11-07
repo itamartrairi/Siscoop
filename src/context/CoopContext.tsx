@@ -55,9 +55,13 @@ import {
   SistemaTributarioNFe,
   SefazCeConfig,
   Maquina,
-  LocacaoMaquina
+  LocacaoMaquina,
+  Cliente,
+  VendaRevenda,
+  ParcelamentoLancamento
 } from '../types';
 import { calcularImpostosItem, ALERTA_CRONOGRAMA_TEXTO } from '../utils/tributacaoReforma';
+import { gerarParcelas } from '../utils/parcelamento';
 import { transmitirParaNuvemFiscal } from '../services/nuvemFiscalService';
 import {
   INITIAL_TENANTS,
@@ -736,6 +740,18 @@ interface CoopContextType {
   updateLocacaoMaquina: (id: string, l: Partial<LocacaoMaquina>) => void;
   deleteLocacaoMaquina: (id: string) => void;
   concluirLocacao: (id: string) => void; // Optional helper to conclude rental and process financial/accounting entries
+  // Clientes & Revenda de Produtos
+  clientes: Cliente[];
+  addCliente: (c: Omit<Cliente, 'id' | 'tenantId'>) => string;
+  updateCliente: (id: string, c: Partial<Cliente>) => void;
+  deleteCliente: (id: string) => void;
+  vendasRevenda: VendaRevenda[];
+  addVendaRevenda: (v: Omit<VendaRevenda, 'id' | 'tenantId' | 'status' | 'contasReceberIds'> & { quitarPrimeiraParcela?: boolean }) => string;
+  cancelarVendaRevenda: (id: string) => void;
+  deleteVendaRevenda: (id: string) => void;
+  // Lançamentos integrais/parcelados no Contas a Pagar e Receber
+  lancarParcelasFinanceiras: (p: ParcelamentoLancamento) => string[];
+  lancarChamadaPublicaNoReceber: (chamadaId: string, p: Omit<ParcelamentoLancamento, 'tipo' | 'descricaoBase' | 'pessoaNome' | 'categoria'>) => string[];
 
   // UI / Navigation helpers
   searchQuery: string;
@@ -1169,6 +1185,8 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [contasBancarias, setContasBancarias] = useState<ContaBancaria[]>(() => loadPersistedList('contasBancarias', []));
   const [maquinas, setMaquinas] = useState<Maquina[]>(() => loadPersistedList('maquinas', []));
   const [locacoesMaquinas, setLocacoesMaquinas] = useState<LocacaoMaquina[]>(() => loadPersistedList('locacoesMaquinas', []));
+  const [clientes, setClientes] = useState<Cliente[]>(() => loadPersistedList('clientes', []));
+  const [vendasRevenda, setVendasRevenda] = useState<VendaRevenda[]>(() => loadPersistedList('vendasRevenda', []));
   // Conta contábil do banco (Financeiro → Contas Bancárias); sem definição, usa a padrão.
   const codigoBancoContabil = (contaBancariaId?: string) => {
     const doTenant = contasBancarias.filter(b => pertenceAoTenant(b, currentTenant?.id));
@@ -1541,6 +1559,8 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         contasBancarias,
         maquinas,
         locacoesMaquinas,
+        clientes,
+        vendasRevenda,
         entregasEscola,
         romaneiosMotorista,
         lastSavedAt: new Date().toISOString()
@@ -1556,7 +1576,8 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     programacoesEntrega, prestacoesContas, pedidosProdutorPAA, ordensCompra, planoContas,
     lancamentosContabeis, patrimonio, contasPagarReceber, extratoBancario, solicitacoesCompra,
     fornecedores, estoque, movimentacoesEstoque, funcionariosRH, folhaPagamento, escolasPnae,
-    entregasEscola, romaneiosMotorista, motoristas, contasBancarias, maquinas, locacoesMaquinas
+    entregasEscola, romaneiosMotorista, motoristas, contasBancarias, maquinas, locacoesMaquinas,
+    clientes, vendasRevenda
   ]);
 
   // Mantém users/{uid} no Firestore sincronizado com o tenant do usuário
@@ -3410,6 +3431,8 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const tenantContasBancarias = contasBancarias.filter(b => pertenceAoTenant(b, activeTenantId));
   const tenantMaquinas = (maquinas || []).filter(m => pertenceAoTenant(m, activeTenantId));
   const tenantLocacoesMaquinas = (locacoesMaquinas || []).filter(l => pertenceAoTenant(l, activeTenantId));
+  const tenantClientes = (clientes || []).filter(cl => pertenceAoTenant(cl, activeTenantId)).sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { sensitivity: 'base' }));
+  const tenantVendasRevenda = (vendasRevenda || []).filter(v => pertenceAoTenant(v, activeTenantId));
   const tenantEntregasEscola = entregasEscola.filter(e => pertenceAoTenant(e, activeTenantId));
   const tenantRomaneiosMotorista = romaneiosMotorista.filter(r => pertenceAoTenant(r, activeTenantId));
   const tenantNotasFiscais = notasFiscais.filter(n => pertenceAoTenant(n, activeTenantId));
@@ -3888,23 +3911,24 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: `oc-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
       tenantId: currentTenant.id
     };
-    setOrdensCompra(prev => [newOc, ...prev]);
-
-    // Usa addContaPagarReceber (em vez de mexer direto no estado) para que
-    // esta conta a pagar também dispare automaticamente o lançamento
-    // contábil correspondente no SisCont — antes, a Ordem de Compra criava
-    // a conta a pagar "por fora", sem passar pela integração central.
-    addContaPagarReceber({
+    const ehRevenda = newOc.tipoCompra === 'REVENDA';
+    // Contas a pagar da ordem (integral ou parcelada): cada parcela passa por
+    // addContaPagarReceber e já nasce com o lançamento contábil no SisCont.
+    const contasPagarIds = lancarParcelasFinanceiras({
       tipo: 'PAGAR',
-      descricao: `Ordem de Compra ${newOc.numeroOrdem} - ${newOc.fornecedorNome}`,
+      descricaoBase: `Ordem de Compra ${newOc.numeroOrdem} - ${newOc.fornecedorNome}`,
       pessoaNome: newOc.fornecedorNome,
-      categoria: 'COMPRAS_INSUMOS',
-      valor: newOc.valorTotal,
+      categoria: ehRevenda ? 'COMPRAS_REVENDA' : 'COMPRAS_INSUMOS',
+      subcategoria: ehRevenda ? 'Mercadorias para Revenda' : 'Insumos e Embalagens',
+      valorTotal: newOc.valorTotal,
+      numeroParcelas: newOc.numeroParcelas || 1,
+      primeiroVencimento: newOc.primeiroVencimento || newOc.dataPrevisaoEntrega || newOc.dataEmissao,
+      intervaloDias: newOc.intervaloDias || 30,
+      formaPagamento: newOc.formaPagamento,
       dataEmissao: newOc.dataEmissao,
-      dataVencimento: newOc.dataPrevisaoEntrega || newOc.dataEmissao,
-      status: 'PENDENTE',
       centroCusto: 'Mód. Compras'
     });
+    setOrdensCompra(prev => [{ ...newOc, contasPagarIds }, ...prev]);
 
     // Integração SisEstoque: Registrar entrada automática no estoque para todos os itens da compra
     const rawItems = (newOc.itens && newOc.itens.length > 0)
@@ -3947,7 +3971,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
             tenantId: currentTenant.id,
             codigoSku: `SKU-OC-${Date.now().toString().slice(-4)}${idx}`,
             nomeItem: descItem,
-            categoria: 'Insumos e Embalagens',
+            categoria: ehRevenda ? 'Mercadorias para Revenda' : 'Insumos e Embalagens',
             unidadeMedida: unit,
             quantidadeAtual: qty,
             quantidadeMinima: 10,
@@ -4002,10 +4026,13 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 2) Financeiro + Contábil: remove a conta a pagar gerada para esta
     // ordem (deleteContaPagarReceber já reverte o lançamento vinculado).
-    const contaVinculada = contasPagarReceber.find(c =>
-      c.descricao === `Ordem de Compra ${ordem.numeroOrdem} - ${ordem.fornecedorNome}`
+    const baseDescricaoOc = `Ordem de Compra ${ordem.numeroOrdem} - ${ordem.fornecedorNome}`;
+    const contasVinculadas = contasPagarReceber.filter(c =>
+      (ordem.contasPagarIds || []).includes(c.id) ||
+      c.descricao === baseDescricaoOc ||
+      c.descricao.startsWith(`${baseDescricaoOc} (Parcela `)
     );
-    if (contaVinculada) deleteContaPagarReceber(contaVinculada.id, true);
+    contasVinculadas.forEach(c => deleteContaPagarReceber(c.id, true));
   };
 
   const updateOrdemCompra = (id: string, oData: Partial<OrdemCompra>) => {
@@ -4272,6 +4299,8 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     'COMPRAS_INSUMOS': { ativoPassivoCodigo: '21302.0900', ativoPassivoNome: 'Fornecedores de Insumos', receitaDespesaCodigo: '35601.0009', receitaDespesaNome: 'Aquisição de Produtos de Terceiros' },
     'Impostos e Retenções': { ativoPassivoCodigo: '21401.0025', ativoPassivoNome: 'Outros Tributos a Recolher (FUNRURAL)', receitaDespesaCodigo: '31601.0009', receitaDespesaNome: 'Aquisição da Produção dos Cooperados' },
     'Taxa Administrativa PAA/PNAE': { ativoPassivoCodigo: '11201.9999', ativoPassivoNome: 'Clientes', receitaDespesaCodigo: '31103.0999', receitaDespesaNome: 'Outras Receitas de Atos Cooperativos' },
+    'COMPRAS_REVENDA': { ativoPassivoCodigo: '21302.0900', ativoPassivoNome: 'Fornecedores de Insumos', receitaDespesaCodigo: '35601.0009', receitaDespesaNome: 'Custos das Mercadorias Vendidas – Ato não cooperativo' },
+    'VENDAS_REVENDA': { ativoPassivoCodigo: '11201.9999', ativoPassivoNome: 'Duplicatas a Receber Diversas', receitaDespesaCodigo: '35101.0009', receitaDespesaNome: 'Mercadorias e Produtos Diversos – Ato Não Cooperativo' },
     'DEFAULT_PAGAR': { ativoPassivoCodigo: '21001.0001', ativoPassivoNome: 'Produção a Pagar aos Cooperados', receitaDespesaCodigo: '31601.0009', receitaDespesaNome: 'Aquisição da Produção dos Cooperados' },
     'DEFAULT_RECEBER': { ativoPassivoCodigo: '11201.9999', ativoPassivoNome: 'Clientes', receitaDespesaCodigo: '31101.0009', receitaDespesaNome: 'Venda da Produção dos Cooperados' }
   };
@@ -4347,6 +4376,8 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       moduloOrigem: 'FINANCEIRO',
       documentoRef: newConta.id
     });
+    // Título que já nasce pago (venda/compra à vista): registra a liquidação.
+    if (newConta.status === 'PAGO') registrarLiquidacaoConta(newConta);
 
     return newConta.id;
   };
@@ -4358,6 +4389,11 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // gerado para esta conta — o débito/crédito deixou de valer.
     if (cData.status === 'CANCELADO' && alvo && alvo.status !== 'CANCELADO') {
       setLancamentosContabeis(prev => prev.filter(l => l.documentoRef !== id));
+    }
+    // Baixa pelo formulário (status → PAGO): lança extrato e contábil da liquidação.
+    if (cData.status === 'PAGO' && alvo && alvo.status !== 'PAGO') {
+      cData = { ...cData, dataPagamento: cData.dataPagamento || new Date().toISOString().split('T')[0] };
+      registrarLiquidacaoConta({ ...alvo, ...cData } as ContaPagarReceber);
     }
     setContasPagarReceber(prev => prev.map(c => c.id === id ? { ...c, ...cData } : c));
     addAuditLog('SISFIN', 'ALTERACAO', `Atualizou conta a pagar/receber ${alvo?.descricao || id}`);
@@ -4374,6 +4410,244 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setContasPagarReceber(prev => prev.filter(c => c.id !== id));
     addAuditLog('SISFIN', 'EXCLUSAO', `Excluiu conta a pagar/receber ${alvo?.descricao || id} (e o lançamento contábil vinculado, se existia)`);
   };
+  // ---------------------------------------------------------------------------
+  // Liquidação (baixa) de um título: lança no extrato bancário e gera o
+  // lançamento contábil Caixa/Banco x conta a pagar/receber. Usada pela baixa
+  // manual (pagarReceberConta), por títulos que já nascem pagos (vendas e
+  // compras à vista) e quando o status de um título muda para PAGO.
+  // ---------------------------------------------------------------------------
+  const registrarLiquidacaoConta = (conta: ContaPagarReceber) => {
+    const dataBaixa = conta.dataPagamento || new Date().toISOString().split('T')[0];
+    const isReceber = conta.tipo === 'RECEBER';
+    addLancamentoExtrato({
+      data: dataBaixa,
+      historico: `Baixa Financeira (${conta.tipo}): ${conta.descricao} - ${conta.pessoaNome}`,
+      documento: conta.id,
+      tipo: isReceber ? 'CREDITO' : 'DEBITO',
+      valor: conta.valor,
+      categoria: conta.categoria || 'FINANCEIRO',
+      ...(conta.contaBancariaId ? { contaBancariaId: conta.contaBancariaId } : {})
+    });
+    // Reverte a conta "a pagar/receber" (lançada na criação do título por
+    // gerarLancamentoContabilAutomatico) para o Caixa/Banco, usando a mesma
+    // conta de contrapartida da categoria original.
+    const contasRef = (conta.categoria && CONTAS_POR_CATEGORIA[conta.categoria]) || CONTAS_POR_CATEGORIA[isReceber ? 'DEFAULT_RECEBER' : 'DEFAULT_PAGAR'];
+    const codigoBanco = codigoBancoContabil(conta.contaBancariaId);
+    const contaCaixaBanco = { codigo: codigoBanco, nome: planoContas.find(p => p.codigo === codigoBanco)?.nome || 'Bancos Conta Movimento' };
+    addLancamentoContabil({
+      numeroLancamento: 4000 + Math.floor(Math.random() * 5000),
+      data: dataBaixa,
+      contaDebitoCodigo: isReceber ? contaCaixaBanco.codigo : contasRef.ativoPassivoCodigo,
+      contaDebitoNome: isReceber ? contaCaixaBanco.nome : contasRef.ativoPassivoNome,
+      contaCreditoCodigo: isReceber ? contasRef.ativoPassivoCodigo : contaCaixaBanco.codigo,
+      contaCreditoNome: isReceber ? contasRef.ativoPassivoNome : contaCaixaBanco.nome,
+      valor: conta.valor,
+      historico: `Liquidação de Título (${conta.tipo}) - ${conta.descricao} (${conta.pessoaNome})`,
+      moduloOrigem: 'FINANCEIRO'
+    });
+  };
+
+  // Remove campos vazios/indefinidos antes de gravar (o Firestore rejeita undefined).
+  const semIndefinidos = <T extends object>(obj: T): T =>
+    Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined && v !== '')) as T;
+
+  // Lança um valor no Contas a Pagar/Receber de forma integral (1 parcela)
+  // ou parcelada. Cada parcela passa por addContaPagarReceber, então já
+  // nasce com o lançamento contábil; a 1ª pode ser lançada como quitada.
+  const lancarParcelasFinanceiras = (p: ParcelamentoLancamento): string[] => {
+    const parcelas = gerarParcelas(p.valorTotal, p.numeroParcelas, p.primeiroVencimento, p.intervaloDias);
+    const hoje = new Date().toISOString().split('T')[0];
+    const ids: string[] = [];
+    parcelas.forEach((parc, idx) => {
+      if (parc.valor <= 0) return;
+      const quitar = idx === 0 && !!p.quitarPrimeiraParcela;
+      const id = addContaPagarReceber(semIndefinidos({
+        tipo: p.tipo,
+        descricao: parcelas.length > 1 ? `${p.descricaoBase} (Parcela ${parc.numero}/${parcelas.length})` : p.descricaoBase,
+        pessoaNome: p.pessoaNome,
+        categoria: p.categoria,
+        subcategoria: p.subcategoria,
+        classificacaoDespesa: 'VARIAVEL' as const,
+        valor: parc.valor,
+        dataEmissao: p.dataEmissao || hoje,
+        dataVencimento: parc.vencimento,
+        status: quitar ? ('PAGO' as const) : ('PENDENTE' as const),
+        dataPagamento: quitar ? hoje : undefined,
+        formaPagamento: p.formaPagamento,
+        centroCusto: p.centroCusto
+      }));
+      if (id) ids.push(id);
+    });
+    return ids;
+  };
+
+  // Chamada Pública (PAA/PNAE) → Contas a Receber (integral ou parcelado).
+  const lancarChamadaPublicaNoReceber = (
+    chamadaId: string,
+    p: Omit<ParcelamentoLancamento, 'tipo' | 'descricaoBase' | 'pessoaNome' | 'categoria'>
+  ): string[] => {
+    const chamada = chamadasPublicas.find(c => c.id === chamadaId);
+    if (!chamada) return [];
+    const ids = lancarParcelasFinanceiras({
+      ...p,
+      tipo: 'RECEBER',
+      descricaoBase: `Chamada Pública ${chamada.numeroEdital} (${chamada.programaNome || chamada.programa})`,
+      pessoaNome: chamada.orgaoComprador || 'Órgão comprador',
+      categoria: 'Receitas',
+      subcategoria: 'Venda PNAE/PAA'
+    });
+    if (ids.length) {
+      setChamadasPublicas(prev => prev.map(c => (c.id === chamadaId
+        ? { ...c, contasReceberIds: [...(c.contasReceberIds || []), ...ids], recebivelLancadoEm: new Date().toISOString() }
+        : c)));
+      addAuditLog('SISGEPA', 'INCLUSAO', `Lançou ${ids.length} conta(s) a receber da chamada pública ${chamada.numeroEdital}`);
+    }
+    return ids;
+  };
+
+  // ---------------------------------------------------------------------------
+  // Clientes (Revenda de Produtos)
+  // ---------------------------------------------------------------------------
+  const addCliente = (cData: Omit<Cliente, 'id' | 'tenantId'>): string => {
+    const doc = chaveUnica(cData.documento);
+    if (doc && clientes.some(c => pertenceAoTenant(c, currentTenant.id) && chaveUnica(c.documento) === doc)) {
+      alert('Cadastro não realizado: já existe um cliente com este CPF/CNPJ.');
+      return '';
+    }
+    const novo: Cliente = {
+      ...semIndefinidos(cData),
+      id: `cli-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      tenantId: currentTenant.id
+    };
+    setClientes(prev => [novo, ...prev]);
+    addAuditLog('COMPRAS', 'INCLUSAO', `Cadastrou cliente: ${novo.nome}`);
+    return novo.id;
+  };
+
+  const updateCliente = (id: string, cData: Partial<Cliente>) => {
+    const alvo = clientes.find(c => c.id === id);
+    setClientes(prev => prev.map(c => (c.id === id ? { ...c, ...cData } : c)));
+    addAuditLog('COMPRAS', 'ALTERACAO', `Atualizou cliente ${alvo?.nome || id}`);
+  };
+
+  const deleteCliente = (id: string) => {
+    const alvo = clientes.find(c => c.id === id);
+    if (vendasRevenda.some(v => v.clienteId === id)) {
+      alert('Este cliente tem vendas registradas e não pode ser excluído. Marque-o como inativo.');
+      return;
+    }
+    setClientes(prev => prev.filter(c => c.id !== id));
+    addAuditLog('COMPRAS', 'EXCLUSAO', `Excluiu cliente ${alvo?.nome || id}`);
+  };
+
+  // ---------------------------------------------------------------------------
+  // Revenda de Produtos: baixa no Estoque (com baixa contábil do custo),
+  // contas a receber (parcelas) no Financeiro e lançamento contábil da receita.
+  // ---------------------------------------------------------------------------
+  const addVendaRevenda = (
+    vData: Omit<VendaRevenda, 'id' | 'tenantId' | 'status' | 'contasReceberIds'> & { quitarPrimeiraParcela?: boolean }
+  ): string => {
+    const { quitarPrimeiraParcela, ...dados } = vData;
+    if (!dados.itens.length) return '';
+    const porItem = new Map<string, number>();
+    dados.itens.forEach(i => porItem.set(i.estoqueItemId, (porItem.get(i.estoqueItemId) || 0) + (Number(i.quantidade) || 0)));
+    for (const [itemId, qtd] of porItem) {
+      const est = estoque.find(e => e.id === itemId && pertenceAoTenant(e, currentTenant.id));
+      if (!est) { alert('Produto não encontrado no estoque.'); return ''; }
+      if (est.quantidadeAtual < qtd) {
+        alert(`Estoque insuficiente para "${est.nomeItem}": disponível ${est.quantidadeAtual} ${est.unidadeMedida}, solicitado ${qtd}.`);
+        return '';
+      }
+    }
+    if (vendasRevenda.some(v => pertenceAoTenant(v, currentTenant.id) && chaveUnica(v.numeroVenda) === chaveUnica(dados.numeroVenda))) {
+      alert('Já existe uma venda com este número.');
+      return '';
+    }
+
+    const id = `vnd-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const motivo = `Revenda ${dados.numeroVenda} - ${dados.clienteNome}`;
+    dados.itens.forEach(i => addMovimentacaoEstoque({
+      itemEstoqueId: i.estoqueItemId,
+      itemNome: i.descricao,
+      tipoMovimento: 'SAIDA',
+      quantidade: Number(i.quantidade),
+      motivo,
+      usuarioResponsavel: currentUser?.name || 'Sistema'
+    }));
+
+    const contasReceberIds = lancarParcelasFinanceiras({
+      tipo: 'RECEBER',
+      descricaoBase: `Venda ${dados.numeroVenda} - ${dados.clienteNome}`,
+      pessoaNome: dados.clienteNome,
+      categoria: 'VENDAS_REVENDA',
+      subcategoria: 'Revenda de Produtos',
+      valorTotal: dados.valorTotal,
+      numeroParcelas: dados.numeroParcelas,
+      primeiroVencimento: dados.primeiroVencimento,
+      intervaloDias: dados.intervaloDias,
+      formaPagamento: dados.formaPagamento,
+      dataEmissao: dados.dataVenda,
+      centroCusto: 'Revenda de Produtos',
+      quitarPrimeiraParcela
+    });
+
+    const nova: VendaRevenda = {
+      ...semIndefinidos(dados),
+      id,
+      tenantId: currentTenant.id,
+      status: 'CONCLUIDA',
+      contasReceberIds
+    };
+    setVendasRevenda(prev => [nova, ...prev]);
+    addAuditLog('COMPRAS', 'INCLUSAO', `Registrou a venda ${dados.numeroVenda} para ${dados.clienteNome} (${dados.itens.length} produto(s))`);
+    return id;
+  };
+
+  const cancelarVendaRevenda = (id: string) => {
+    const venda = vendasRevenda.find(v => v.id === id);
+    if (!venda || venda.status === 'CANCELADA') return;
+    const motivo = `Revenda ${venda.numeroVenda} - ${venda.clienteNome}`;
+
+    // 1) Estoque: devolve os produtos e remove a baixa contábil das saídas desta venda.
+    const idsSaidas = new Set(movimentacoesEstoque.filter(m => m.tipoMovimento === 'SAIDA' && m.motivo === motivo).map(m => m.id));
+    if (idsSaidas.size) setLancamentosContabeis(prev => prev.filter(l => !l.documentoRef || !idsSaidas.has(l.documentoRef)));
+    venda.itens.forEach(i => addMovimentacaoEstoque({
+      itemEstoqueId: i.estoqueItemId,
+      itemNome: i.descricao,
+      tipoMovimento: 'ENTRADA',
+      quantidade: Number(i.quantidade),
+      motivo: `Estorno por cancelamento da ${motivo}`,
+      usuarioResponsavel: currentUser?.name || 'Sistema'
+    }));
+
+    // 2) Financeiro + Contábil: cancela as parcelas em aberto (o cancelamento
+    // já remove o lançamento contábil de cada uma).
+    const parcelas = contasPagarReceber.filter(c => (venda.contasReceberIds || []).includes(c.id));
+    const recebidas = parcelas.filter(c => c.status === 'PAGO');
+    parcelas
+      .filter(c => c.status !== 'PAGO' && c.status !== 'CANCELADO')
+      .forEach(c => updateContaPagarReceber(c.id, { status: 'CANCELADO' }));
+
+    setVendasRevenda(prev => prev.map(v => (v.id === id
+      ? { ...v, status: 'CANCELADA' as const, dataCancelamento: new Date().toISOString().split('T')[0] }
+      : v)));
+    addAuditLog('COMPRAS', 'ALTERACAO', `Cancelou a venda ${venda.numeroVenda} (estoque devolvido e parcelas em aberto canceladas)`);
+    if (recebidas.length) {
+      const total = recebidas.reduce((s, c) => s + (Number(c.valor) || 0), 0);
+      alert(`Venda cancelada. Atenção: ${recebidas.length} parcela(s) já recebida(s) (${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}) continuam no Financeiro. Faça a devolução ao cliente e o estorno manualmente.`);
+    }
+  };
+
+  const deleteVendaRevenda = (id: string) => {
+    const venda = vendasRevenda.find(v => v.id === id);
+    if (venda && venda.status !== 'CANCELADA') {
+      alert('Cancele a venda antes de excluir o registro.');
+      return;
+    }
+    setVendasRevenda(prev => prev.filter(v => v.id !== id));
+    addAuditLog('COMPRAS', 'EXCLUSAO', `Excluiu o registro da venda ${venda?.numeroVenda || id}`);
+  };
+
 
   const addSolicitacaoCompra = (sData: Omit<SolicitacaoCompra, 'id' | 'tenantId'>) => {
     const newSol: SolicitacaoCompra = {
@@ -4826,54 +5100,19 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const pagarReceberConta = (id: string) => {
-    let targetConta: ContaPagarReceber | undefined;
-    setContasPagarReceber(prev => prev.map(c => {
-      if (c.id === id) {
-        targetConta = {
-          ...c,
-          status: 'PAGO',
-          dataPagamento: new Date().toISOString().split('T')[0]
-        };
-        return targetConta;
-      }
-      return c;
-    }));
-
-    if (targetConta) {
-      const nowIso = new Date().toISOString().split('T')[0];
-      const isReceber = (targetConta as ContaPagarReceber).tipo === 'RECEBER';
-
-      // 1. Credit / Debit Bank Statement
-      addLancamentoExtrato({
-        data: nowIso,
-        historico: `Baixa Financeira (${(targetConta as ContaPagarReceber).tipo}): ${(targetConta as ContaPagarReceber).descricao} - ${(targetConta as ContaPagarReceber).pessoaNome}`,
-        documento: (targetConta as ContaPagarReceber).id,
-        tipo: isReceber ? 'CREDITO' : 'DEBITO',
-        valor: (targetConta as ContaPagarReceber).valor,
-        categoria: (targetConta as ContaPagarReceber).categoria || 'FINANCEIRO'
-      });
-
-      // 2. Add Accounting entry — reverte a conta "a pagar/receber" (que já
-      // tinha sido lançada certinho na criação, via
-      // gerarLancamentoContabilAutomatico) para o Caixa/Banco, usando a
-      // MESMA conta de contrapartida da categoria original — não códigos
-      // de conta inventados que não existem no Plano de Contas.
-      const contaOriginal = (targetConta as ContaPagarReceber).categoria;
-      const contasRef = (contaOriginal && CONTAS_POR_CATEGORIA[contaOriginal]) || CONTAS_POR_CATEGORIA[isReceber ? 'DEFAULT_RECEBER' : 'DEFAULT_PAGAR'];
-      const contaCaixaBanco = { codigo: '11102.0001', nome: 'Bancos Conta Movimento' };
-      addLancamentoContabil({
-        numeroLancamento: 4000 + Math.floor(Math.random() * 5000),
-        data: nowIso,
-        contaDebitoCodigo: isReceber ? contaCaixaBanco.codigo : contasRef.ativoPassivoCodigo,
-        contaDebitoNome: isReceber ? contaCaixaBanco.nome : contasRef.ativoPassivoNome,
-        contaCreditoCodigo: isReceber ? contasRef.ativoPassivoCodigo : contaCaixaBanco.codigo,
-        contaCreditoNome: isReceber ? contasRef.ativoPassivoNome : contaCaixaBanco.nome,
-        valor: (targetConta as ContaPagarReceber).valor,
-        historico: `Liquidação de Título (${(targetConta as ContaPagarReceber).tipo}) - ${(targetConta as ContaPagarReceber).descricao} (${(targetConta as ContaPagarReceber).pessoaNome})`,
-        moduloOrigem: 'FINANCEIRO'
-      });
-    }
-
+    // Busca o título no estado atual (antes, ele era capturado dentro do
+    // updater do setState, que pode rodar depois — e a baixa no extrato e
+    // no contábil deixava de ser gerada).
+    const conta = contasPagarReceber.find(c => c.id === id);
+    if (!conta || conta.status === 'PAGO' || conta.status === 'CANCELADO') return;
+    const quitada: ContaPagarReceber = {
+      ...conta,
+      status: 'PAGO',
+      dataPagamento: new Date().toISOString().split('T')[0]
+    };
+    setContasPagarReceber(prev => prev.map(c => (c.id === id ? quitada : c)));
+    registrarLiquidacaoConta(quitada);
+    addAuditLog('SISFIN', 'ALTERACAO', `Baixa de título (${conta.tipo === 'RECEBER' ? 'recebido' : 'pago'}): ${conta.descricao}`);
     triggerWebhooks('financeiro.pagamento', { contaId: id });
   };
 
@@ -5582,6 +5821,9 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addContaBancaria,
         maquinas: tenantMaquinas, addMaquina, updateMaquina, deleteMaquina,
         locacoesMaquinas: tenantLocacoesMaquinas, addLocacaoMaquina, updateLocacaoMaquina, deleteLocacaoMaquina, concluirLocacao,
+    clientes: tenantClientes, addCliente, updateCliente, deleteCliente,
+    vendasRevenda: tenantVendasRevenda, addVendaRevenda, cancelarVendaRevenda, deleteVendaRevenda,
+    lancarParcelasFinanceiras, lancarChamadaPublicaNoReceber,
         updateContaBancaria,
         deleteContaBancaria,
         addMotorista,
