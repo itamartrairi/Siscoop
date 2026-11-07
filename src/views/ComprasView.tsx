@@ -733,7 +733,7 @@ if (f) {
       {/* Modal Ordem de Compra */}
       {showOrdemModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-4xl w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-slate-100 my-8">
+          <div className="bg-white rounded-3xl max-w-[70rem] w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-slate-100 my-8">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
                 <ShoppingCart className="w-5 h-5 text-emerald-600" />
