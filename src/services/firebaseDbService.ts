@@ -626,10 +626,23 @@ export interface TenantMember {
   departamento?: string;
   phone?: string;
   authUid?: string;
+  // Permissões personalizadas do usuário (JSON), para valerem em qualquer computador.
+  customPermissionsJson?: string;
   updatedAt?: string;
 }
 
 export const chaveMembro = (email: string) => (email || '').trim().toLowerCase();
+
+/** Converte o campo customPermissionsJson do tenantMembers de volta em objeto. */
+export function lerPermissoesMembro(json?: string): Record<string, any> | undefined {
+  if (!json) return undefined;
+  try {
+    const obj = JSON.parse(json);
+    return obj && typeof obj === 'object' && Object.keys(obj).length > 0 ? obj : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export async function saveTenantMemberToFirestore(member: TenantMember): Promise<{ ok: boolean; error?: string }> {
   const id = chaveMembro(member.email);
