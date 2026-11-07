@@ -277,7 +277,7 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
 
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-4xl w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-slate-100 my-8">
+          <div className="bg-white rounded-3xl max-w-[70rem] w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-slate-100 my-8">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <h2 className="text-xl font-black text-slate-900 flex items-center gap-2"><Store className="w-5 h-5 text-emerald-600" /> Nova Venda (Revenda)</h2>
               <button onClick={() => setShowModal(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl"><X className="w-5 h-5" /></button>
