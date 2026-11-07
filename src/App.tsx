@@ -273,7 +273,7 @@ const MainAppContent: React.FC = () => {
               {activeModule === 'relatorios' && <RelatoriosView />}
               {activeModule === 'backup-sistema' && <ConfiguracoesView initialTab="backup" />}
               {activeModule === 'licenca' && (
-                currentUser?.role === 'ADMIN' ? (
+                isConfigAllowed ? (
                   <LicencaView />
                 ) : (
                   <DashboardView onNavigateModule={setActiveModule} setActiveView={setActiveModule} />
