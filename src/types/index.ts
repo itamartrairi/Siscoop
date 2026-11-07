@@ -342,6 +342,8 @@ export interface SistemaConfig {
   whatsAppInstance: string;
   logoUrl: string;
   themeMode: 'light' | 'dark';
+  /** Configuração tributária da revenda (Compras → Revendas). */
+  tributacaoRevenda?: ConfigTributariaRevenda;
 }
 
 export interface SystemNotification {
@@ -1536,6 +1538,7 @@ export interface ItemVendaRevenda {
   subtotal: number;
   fornecedorId?: string;
   fornecedorNome?: string;
+  tributacaoIcms?: TributacaoIcmsItem;
 }
 
 export interface VendaRevenda {
@@ -1557,6 +1560,8 @@ export interface VendaRevenda {
   /** Contas a receber (parcelas) geradas no Financeiro. */
   contasReceberIds?: string[];
   dataCancelamento?: string;
+  /** Impostos calculados na venda (regras do Ceará). */
+  impostos?: ImpostosVenda;
 }
 
 /** Parâmetros para lançar um valor (integral ou parcelado) no Contas a Pagar/Receber. */
@@ -1575,4 +1580,55 @@ export interface ParcelamentoLancamento {
   centroCusto?: string;
   /** Lança a 1ª parcela já como paga/recebida (venda ou compra à vista). */
   quitarPrimeiraParcela?: boolean;
+}
+
+// ==========================================
+// IMPOSTOS SOBRE VENDAS (REVENDA) — CEARÁ
+// ==========================================
+
+/** Tratamento do ICMS de cada produto vendido. */
+export type TributacaoIcmsItem =
+  | 'TRIBUTADO'        // alíquota interna modal do CE (20%)
+  | 'FECOP'            // alíquota interna + adicional FECOP (2 p.p.)
+  | 'REDUCAO_INSUMO'   // insumo agropecuário com redução de base (Conv. ICMS 100/97)
+  | 'ISENTO'           // isento / não tributado (ex.: hortifrutigranjeiros in natura)
+  | 'ST';              // ICMS já retido por substituição tributária
+
+export type RegimeApuracaoRevenda = 'LUCRO_REAL' | 'LUCRO_PRESUMIDO' | 'SIMPLES_NACIONAL';
+
+export interface ConfigTributariaRevenda {
+  regime: RegimeApuracaoRevenda;
+  aliquotaIcmsInterna: number;
+  aliquotaFecop: number;
+  aliquotaInterestadual: number;
+  reducaoBaseInsumos: number;
+  creditoIcmsCustoPercent: number;
+  pis: number;
+  cofins: number;
+  creditoPisCofinsCusto: boolean;
+  incluirIrpjCsll: boolean;
+  irpjPresumido: number;
+  csllPresumido: number;
+  aliquotaDasEfetiva: number;
+  cbsTeste: number;
+  ibsTeste: number;
+}
+
+export interface ImpostosVenda {
+  regime: RegimeApuracaoRevenda;
+  ufDestino: string;
+  interestadual: boolean;
+  receita: number;
+  icms: number;
+  fecop: number;
+  pis: number;
+  cofins: number;
+  irpj: number;
+  csll: number;
+  das: number;
+  /** Reforma tributária (2026: destaque informativo, sem recolhimento). */
+  cbs: number;
+  ibs: number;
+  totalRecolher: number;
+  observacoes: string[];
 }
