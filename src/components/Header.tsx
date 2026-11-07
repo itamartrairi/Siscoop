@@ -30,7 +30,6 @@ interface Props {
 export const Header: React.FC<Props> = ({ activeView = 'dashboard', setActiveView, onOpenSearch }) => {
   const {
     currentUser,
-    switchUserRole,
     currentTenant,
     setCurrentTenant,
     tenants,
@@ -49,7 +48,7 @@ export const Header: React.FC<Props> = ({ activeView = 'dashboard', setActiveVie
   const [showShareModal, setShowShareModal] = useState(false);
 
   const unreadCount = notifications.filter(n => !n.lida).length;
-  const isSystemCreator = currentUser?.role === 'ADMIN';
+  const isSystemCreator = ['ADMIN', 'PRESIDENTE', 'DIRETOR_FINANCEIRO'].includes(currentUser?.role);
   const isConfigAllowed = ['ADMIN', 'PRESIDENTE', 'DIRETOR_FINANCEIRO'].includes(currentUser?.role);
 
   const handleSearchClick = () => {
@@ -61,14 +60,19 @@ export const Header: React.FC<Props> = ({ activeView = 'dashboard', setActiveVie
     if (setActiveView) setActiveView(view);
   };
 
-  const rolesList: { role: UserRole; label: string; color: string }[] = [
-    { role: 'ADMIN', label: 'Criador do Sistema (Admin)', color: 'bg-purple-900/60 text-purple-300 border border-purple-700/40' },
-    { role: 'GERENTE', label: 'Gerente da Cooperativa', color: 'bg-indigo-900/60 text-indigo-300 border border-indigo-700/40' },
-    { role: 'SECRETARIA', label: 'Secretaria', color: 'bg-amber-900/60 text-amber-300 border border-amber-700/40' },
-    { role: 'FINANCEIRO', label: 'Financeiro', color: 'bg-emerald-900/60 text-emerald-300 border border-emerald-700/40' },
-    { role: 'AUDITORIA', label: 'Auditoria', color: 'bg-rose-900/60 text-rose-300 border border-rose-700/40' },
-    { role: 'CONSULTA', label: 'Consulta', color: 'bg-slate-800 text-slate-300 border border-slate-700/40' }
-  ];
+  // Nome amigável do perfil do usuário logado (definido no cadastro do usuário).
+  const roleLabels: Partial<Record<UserRole, string>> = {
+    ADMIN: 'Administrador',
+    PRESIDENTE: 'Presidente',
+    DIRETOR_FINANCEIRO: 'Diretor Financeiro',
+    GERENTE: 'Gerente da Cooperativa',
+    SECRETARIA: 'Secretaria',
+    FINANCEIRO: 'Financeiro',
+    CONTADOR: 'Contador',
+    TECNICO: 'Técnico',
+    CONSULTA: 'Consulta'
+  };
+  const perfilAtual = roleLabels[currentUser?.role as UserRole] || currentUser?.role;
 
   const viewTitles: Record<string, string> = {
     dashboard: 'Dashboard Executivo',
@@ -261,7 +265,7 @@ export const Header: React.FC<Props> = ({ activeView = 'dashboard', setActiveVie
                 {currentUser.name}
               </div>
               <div className="text-[10px] text-emerald-700 font-semibold flex items-center gap-1">
-                <Shield className="w-3 h-3 text-emerald-600" /> {currentUser.role}
+                <Shield className="w-3 h-3 text-emerald-600" /> {perfilAtual}
               </div>
             </div>
             <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
@@ -269,6 +273,12 @@ export const Header: React.FC<Props> = ({ activeView = 'dashboard', setActiveVie
 
           {showRoleMenu && (
             <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 z-40">
+              <div className="px-3 py-2 border-b border-slate-100 mb-1">
+                <div className="text-xs font-bold text-slate-900 truncate">{currentUser.name}</div>
+                <div className="text-[10px] text-emerald-700 font-semibold flex items-center gap-1 mt-0.5">
+                  <Shield className="w-3 h-3 text-emerald-600" /> {perfilAtual}
+                </div>
+              </div>
               {isConfigAllowed && (
                 <>
                   <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
@@ -296,27 +306,6 @@ export const Header: React.FC<Props> = ({ activeView = 'dashboard', setActiveVie
                   </button>
                 </>
               )}
-
-              <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1 mt-1">
-                <Key className="w-3.5 h-3.5 text-amber-600" /> Simular Perfil de Acesso
-              </div>
-              {rolesList.map(r => (
-                <button
-                  key={r.role}
-                  onClick={() => {
-                    switchUserRole(r.role);
-                    setShowRoleMenu(false);
-                  }}
-                  className={`w-full px-3 py-2 text-left text-xs flex items-center justify-between hover:bg-slate-50 transition-colors ${
-                    currentUser.role === r.role ? 'font-bold bg-slate-100 text-slate-900' : 'text-slate-700'
-                  }`}
-                >
-                  <span>{r.label}</span>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-md font-mono font-medium ${r.color}`}>
-                    {r.role}
-                  </span>
-                </button>
-              ))}
 
               <div className="border-t border-slate-100 mt-1 pt-1 px-1">
                 <button
