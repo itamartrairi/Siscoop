@@ -14,12 +14,14 @@ import {
   ExternalLink,
   MessageCircle,
   Users,
-  Store
+  Store,
+  FileText
 } from 'lucide-react';
 import { SolicitacaoCompra, Fornecedor, ItemEstoque } from '../types';
 import { DataGrid, GridStatus } from '../components/ui/DataGrid';
 import { ClientesTab } from '../components/ClientesTab';
 import { RevendasTab } from '../components/RevendasTab';
+import { RelatoriosPdfTab } from '../components/RelatoriosPdfTab';
 import { abrirLinkExterno, montarLinkWhatsApp, montarLinkWhatsAppGenerico, getTelefoneContato } from '../utils/whatsappHelpers';
 import { mensagemOrdemCompra } from '../utils/mensagensWhatsApp';
 import { FORMAS_PAGAMENTO_COMERCIAL, type FormaPagamentoComercial, gerarParcelas, somarDias, hojeISO, dataBR, formatarMoeda, rotuloFormaPagamento } from '../utils/parcelamento';
@@ -103,7 +105,7 @@ export const ComprasView: React.FC = () => {
     alert('Seu perfil de acesso tem permissão apenas de leitura neste módulo. Fale com um administrador para solicitar permissão de edição.');
   };
 
-  const [activeTab, setActiveTab] = useState<'solicitacoes' | 'ordens' | 'fornecedores' | 'revendas' | 'clientes'>('solicitacoes');
+  const [activeTab, setActiveTab] = useState<'solicitacoes' | 'ordens' | 'fornecedores' | 'revendas' | 'clientes' | 'relatorios'>('solicitacoes');
 
   // Editing state
   const [editingSolicitacao, setEditingSolicitacao] = useState<SolicitacaoCompra | null>(null);
@@ -608,6 +610,16 @@ if (f) {
           >
             <Users className="w-4 h-4" /> Clientes
           </button>
+        <button
+          onClick={() => setActiveTab('relatorios')}
+          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
+            activeTab === 'relatorios'
+              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <FileText className="w-4 h-4" /> Relatórios PDF
+        </button>
       </div>
 
       {/* Tab Solicitacoes */}
@@ -813,6 +825,13 @@ if (f) {
 
       {/* Tab Clientes */}
       {activeTab === 'clientes' && <ClientesTab canWrite={canWrite} onBlocked={blockWriteAction} />}
+
+      
+{/* Tab Relatórios PDF */}
+
+      
+{activeTab === 'relatorios' && <RelatoriosPdfTab tipoInicial="COMPRAS" />}
+
 
       
 {/* Tab Fornecedores */}
