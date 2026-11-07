@@ -277,7 +277,7 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
 
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-[70rem] w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-slate-100 my-8">
+          <div className="bg-white rounded-3xl max-w-[80.5rem] w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-slate-100 my-8">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <h2 className="text-xl font-black text-slate-900 flex items-center gap-2"><Store className="w-5 h-5 text-emerald-600" /> Nova Venda (Revenda)</h2>
               <button onClick={() => setShowModal(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl"><X className="w-5 h-5" /></button>
@@ -303,15 +303,15 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
                   <button type="button" onClick={() => setItens([...itens, itemVazio()])} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold">+ Adicionar produto</button>
                 </div>
                 <div className="max-h-64 overflow-auto rounded-xl border border-slate-200 bg-white">
-                  <table className="w-full min-w-[660px] text-xs">
+                  <table className="w-full min-w-[760px] text-xs">
                     <thead className="sticky top-0 z-10 bg-slate-100 text-[10px] uppercase tracking-wide text-slate-500">
                       <tr>
                         <th className="px-2 py-2 text-left font-bold w-8">#</th>
                         <th className="px-2 py-2 text-left font-bold">Produto / insumo</th>
                         <th className="px-2 py-2 text-left font-bold w-36">ICMS</th>
-                        <th className="px-2 py-2 text-right font-bold w-20">Qtd.</th>
-                        <th className="px-2 py-2 text-right font-bold w-24">Preço unit.</th>
-                        <th className="px-2 py-2 text-right font-bold w-24">Subtotal</th>
+                        <th className="px-2 py-2 text-right font-bold w-28">Qtd.</th>
+                        <th className="px-2 py-2 text-right font-bold w-36">Preço unit.</th>
+                        <th className="px-2 py-2 text-right font-bold w-36">Subtotal</th>
                         <th className="px-2 py-2 w-8"></th>
                       </tr>
                     </thead>
