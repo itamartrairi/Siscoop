@@ -1,30 +1,37 @@
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   onSnapshot,
-  query,
   setDoc,
-  where,
   Unsubscribe
 } from 'firebase/firestore';
 import { db } from './firebase';
 
 /**
- * Cadastros de Cargos e Departamentos da cooperativa.
+ * Cadastros de Cargos e Departamentos — COMUNS a todas as cooperativas.
  *
- * Ficam no Firestore nas coleções `departamentos` e `cargos`, sempre com o
- * campo `tenantId` (as regras em firestore.rules isolam os documentos por
- * cooperativa, igual a `cooperados`). Sem sessão no Firebase Auth (modo
- * demonstração / contingência) os mesmos dados ficam só no navegador, em
- * localStorage, para a tela continuar funcionando.
+ * Ficam no Firestore nas coleções `departamentos` e `cargos`. Qualquer
+ * cooperativa que usa o sistema lê e edita a mesma lista; o campo
+ * `tenantId` só registra qual cooperativa cadastrou o item.
+ *
+ * Integridade: um cargo/departamento em uso não pode ser excluído. Como uma
+ * cooperativa não enxerga os usuários e colaboradores das outras, cada uma
+ * publica o próprio uso em `usoCadastrosRH/{colecao}__{itemId}` (mapa
+ * `tenants: { [tenantId]: quantidade }`). As regras do Firestore negam a
+ * exclusão enquanto houver uso registrado.
+ *
+ * Sem sessão no Firebase Auth (modo demonstração / contingência) os dados
+ * ficam só no navegador, em localStorage, para a tela continuar funcionando.
  */
 
 export type ColecaoCadastroRH = 'departamentos' | 'cargos';
 
 export interface Departamento {
   id: string;
-  tenantId: string;
+  /** Cooperativa que cadastrou o item (a lista é comum a todas). */
+  tenantId?: string;
   nome: string;
   sigla?: string;
   responsavel?: string;
@@ -36,7 +43,8 @@ export interface Departamento {
 
 export interface Cargo {
   id: string;
-  tenantId: string;
+  /** Cooperativa que cadastrou o item (a lista é comum a todas). */
+  tenantId?: string;
   nome: string;
   /** Departamento ao qual o cargo pertence (opcional: vazio = qualquer setor). */
   departamentoId?: string;
@@ -49,13 +57,19 @@ export interface Cargo {
 
 type DocumentoCadastro = Departamento | Cargo;
 
+/** Uso de cada item por cooperativa: chave `${colecao}__${itemId}`. */
+export type MapaUsoCadastrosRH = Record<string, Record<string, number>>;
+
+export const COLECAO_USO = 'usoCadastrosRH';
+export const chaveUso = (colecao: ColecaoCadastroRH, itemId: string) => `${colecao}__${itemId}`;
+
 export const gerarIdCadastro = (prefixo: 'dep' | 'cargo') =>
   `${prefixo}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 export const normalizarNome = (s: string) =>
   (s || '')
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .trim()
     .toLowerCase();
 
@@ -70,15 +84,14 @@ const semIndefinidos = <T extends object>(obj: T): T =>
 // Firestore
 // ---------------------------------------------------------------------------
 
+/** Ouve a lista inteira (comum a todas as cooperativas). */
 export function ouvirCadastrosRH<T extends DocumentoCadastro>(
   colecao: ColecaoCadastroRH,
-  tenantId: string,
   aoReceber: (lista: T[]) => void,
   aoFalhar: (erro: Error & { code?: string }) => void
 ): Unsubscribe {
-  const alvo = query(collection(db, colecao), where('tenantId', '==', tenantId));
   return onSnapshot(
-    alvo,
+    collection(db, colecao),
     snap => {
       const lista = snap.docs.map(d => ({ ...(d.data() as T), id: d.id }));
       aoReceber(ordenarPorNome(lista));
@@ -100,15 +113,48 @@ export async function excluirCadastroRHNoFirestore(colecao: ColecaoCadastroRH, i
   await deleteDoc(doc(db, colecao, id));
 }
 
+/** Ouve o uso registrado por todas as cooperativas. */
+export function ouvirUsoCadastrosRH(
+  aoReceber: (mapa: MapaUsoCadastrosRH) => void,
+  aoFalhar: (erro: Error & { code?: string }) => void
+): Unsubscribe {
+  return onSnapshot(
+    collection(db, COLECAO_USO),
+    snap => {
+      const mapa: MapaUsoCadastrosRH = {};
+      snap.docs.forEach(d => {
+        const tenants = (d.data().tenants || {}) as Record<string, number>;
+        mapa[d.id] = tenants;
+      });
+      aoReceber(mapa);
+    },
+    erro => aoFalhar(erro as Error & { code?: string })
+  );
+}
+
+/** Grava quantos usuários/colaboradores desta cooperativa usam o item (0 = remove o registro de uso). */
+export async function registrarUsoCadastroRH(
+  colecao: ColecaoCadastroRH,
+  itemId: string,
+  tenantId: string,
+  quantidade: number
+): Promise<void> {
+  await setDoc(
+    doc(db, COLECAO_USO, chaveUso(colecao, itemId)),
+    { colecao, itemId, tenants: { [tenantId]: quantidade > 0 ? quantidade : deleteField() } },
+    { merge: true }
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Cache / contingência local
 // ---------------------------------------------------------------------------
 
-const chaveLocal = (colecao: ColecaoCadastroRH, tenantId: string) => `siscoop_${colecao}_${tenantId || 'sem-tenant'}`;
+const chaveLocal = (colecao: ColecaoCadastroRH) => `siscoop_${colecao}_comum`;
 
-export function lerCadastrosRHLocais<T extends DocumentoCadastro>(colecao: ColecaoCadastroRH, tenantId: string): T[] {
+export function lerCadastrosRHLocais<T extends DocumentoCadastro>(colecao: ColecaoCadastroRH): T[] {
   try {
-    const bruto = localStorage.getItem(chaveLocal(colecao, tenantId));
+    const bruto = localStorage.getItem(chaveLocal(colecao));
     const lista = bruto ? (JSON.parse(bruto) as T[]) : [];
     return Array.isArray(lista) ? ordenarPorNome(lista) : [];
   } catch {
@@ -116,9 +162,9 @@ export function lerCadastrosRHLocais<T extends DocumentoCadastro>(colecao: Colec
   }
 }
 
-export function gravarCadastrosRHLocais<T extends DocumentoCadastro>(colecao: ColecaoCadastroRH, tenantId: string, lista: T[]): void {
+export function gravarCadastrosRHLocais<T extends DocumentoCadastro>(colecao: ColecaoCadastroRH, lista: T[]): void {
   try {
-    localStorage.setItem(chaveLocal(colecao, tenantId), JSON.stringify(lista));
+    localStorage.setItem(chaveLocal(colecao), JSON.stringify(lista));
   } catch {
     // localStorage cheio ou bloqueado: o Firestore continua sendo a fonte principal.
   }
@@ -128,7 +174,7 @@ export function traduzirErroFirestore(erro: unknown): string {
   const code = (erro as { code?: string })?.code || '';
   switch (code) {
     case 'permission-denied':
-      return 'O Firestore recusou a operação (permission-denied). Publique o firestore.rules atualizado e confira se o seu usuário está vinculado à cooperativa.';
+      return 'O Firestore recusou a operação (permission-denied). Publique o firestore.rules atualizado e confira se o seu usuário está vinculado à cooperativa. Itens em uso não podem ser excluídos.';
     case 'unavailable':
       return 'Sem conexão com o Firestore no momento. Verifique a internet e tente de novo.';
     case 'failed-precondition':
