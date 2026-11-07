@@ -302,45 +302,68 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
                   </div>
                   <button type="button" onClick={() => setItens([...itens, itemVazio()])} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold">+ Adicionar produto</button>
                 </div>
-                {itens.map((item, idx) => {
-                  const est = estoque.find(e => e.id === item.estoqueItemId);
-                  const semSaldo = !!est && Number(item.quantidade) > est.quantidadeAtual;
-                  return (
-                    <div key={idx} className="grid grid-cols-1 md:grid-cols-[1fr_150px_150px_70px_100px_90px_32px] gap-2 items-end">
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 mb-1">Produto / insumo</label>
-                        <select required value={item.estoqueItemId} onChange={e => escolherProduto(idx, e.target.value)} className={`${inputCls} bg-white`}>
-                          <option value="">Selecione</option>
-                          {produtosVenda.map(p => <option key={p.id} value={p.id}>{p.nomeItem} — saldo {p.quantidadeAtual} {p.unidadeMedida}{p.precoVenda ? ` — ${formatarMoeda(p.precoVenda)}` : ''}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 mb-1">Fornecedor (origem)</label>
-                        <select value={item.fornecedorId || ''} onChange={e => atualizarItem(idx, { fornecedorId: e.target.value || undefined })} className={`${inputCls} bg-white`}>
-                          <option value="">—</option>
-                          {fornecedores.map(f => <option key={f.id} value={f.id}>{f.nomeFantasia || f.razaoSocial}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 mb-1">ICMS</label>
-                        <select value={item.tributacaoIcms || 'TRIBUTADO'} onChange={e => atualizarItem(idx, { tributacaoIcms: e.target.value as TributacaoIcmsItem })} className={`${inputCls} bg-white`}>
-                          {OPCOES_TRIBUTACAO_ICMS.map(o => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 mb-1">Qtd.</label>
-                        <input type="number" min="0.01" step="any" required value={item.quantidade} onChange={e => atualizarItem(idx, { quantidade: Number(e.target.value) || 0 })} className={`${inputCls} ${semSaldo ? 'border-rose-400 bg-rose-50' : ''}`} />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 mb-1">Preço unit.</label>
-                        <input type="number" min="0" step="0.01" required value={item.precoUnitario} onChange={e => atualizarItem(idx, { precoUnitario: Number(e.target.value) || 0 })} className={inputCls} />
-                      </div>
-                      <div className="text-right font-bold text-slate-700 pb-2.5">{formatarMoeda((Number(item.quantidade) || 0) * (Number(item.precoUnitario) || 0))}</div>
-                      <button type="button" onClick={() => setItens(itens.filter((_, i) => i !== idx))} className="p-2.5 rounded-xl text-rose-500 hover:bg-rose-50">×</button>
-                      {semSaldo && <div className="md:col-span-7 text-rose-600 font-bold">Saldo insuficiente: disponível {est?.quantidadeAtual} {est?.unidadeMedida}.</div>}
-                    </div>
-                  );
-                })}
+                <div className="max-h-64 overflow-auto rounded-xl border border-slate-200 bg-white">
+                  <table className="w-full min-w-[820px] text-xs">
+                    <thead className="sticky top-0 z-10 bg-slate-100 text-[10px] uppercase tracking-wide text-slate-500">
+                      <tr>
+                        <th className="px-2 py-2 text-left font-bold w-8">#</th>
+                        <th className="px-2 py-2 text-left font-bold">Produto / insumo</th>
+                        <th className="px-2 py-2 text-left font-bold w-40">Fornecedor (origem)</th>
+                        <th className="px-2 py-2 text-left font-bold w-36">ICMS</th>
+                        <th className="px-2 py-2 text-right font-bold w-20">Qtd.</th>
+                        <th className="px-2 py-2 text-right font-bold w-24">Preço unit.</th>
+                        <th className="px-2 py-2 text-right font-bold w-24">Subtotal</th>
+                        <th className="px-2 py-2 w-8"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {itens.map((item, idx) => {
+                        const est = estoque.find(e => e.id === item.estoqueItemId);
+                        const semSaldo = !!est && Number(item.quantidade) > est.quantidadeAtual;
+                        return (
+                          <tr key={idx} className={semSaldo ? 'bg-rose-50/60 align-top' : 'align-top'}>
+                            <td className="px-2 py-1.5 font-bold text-slate-400">{idx + 1}</td>
+                            <td className="px-2 py-1.5">
+                              <select required value={item.estoqueItemId} onChange={e => escolherProduto(idx, e.target.value)} className="w-full p-1.5 border border-slate-200 rounded-lg bg-white">
+                                <option value="">Selecione</option>
+                                {produtosVenda.map(p => <option key={p.id} value={p.id}>{p.nomeItem} — saldo {p.quantidadeAtual} {p.unidadeMedida}{p.precoVenda ? ` — ${formatarMoeda(p.precoVenda)}` : ''}</option>)}
+                              </select>
+                              {semSaldo && <div className="mt-0.5 text-[10px] font-bold text-rose-600">Saldo insuficiente: disponível {est?.quantidadeAtual} {est?.unidadeMedida}.</div>}
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <select value={item.fornecedorId || ''} onChange={e => atualizarItem(idx, { fornecedorId: e.target.value || undefined })} className="w-full p-1.5 border border-slate-200 rounded-lg bg-white">
+                                <option value="">—</option>
+                                {fornecedores.map(f => <option key={f.id} value={f.id}>{f.nomeFantasia || f.razaoSocial}</option>)}
+                              </select>
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <select value={item.tributacaoIcms || 'TRIBUTADO'} onChange={e => atualizarItem(idx, { tributacaoIcms: e.target.value as TributacaoIcmsItem })} className="w-full p-1.5 border border-slate-200 rounded-lg bg-white">
+                                {OPCOES_TRIBUTACAO_ICMS.map(o => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
+                              </select>
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <input type="number" min="0.01" step="any" required value={item.quantidade} onChange={e => atualizarItem(idx, { quantidade: Number(e.target.value) || 0 })} className={`w-full p-1.5 border rounded-lg text-right ${semSaldo ? 'border-rose-400 bg-rose-50' : 'border-slate-200'}`} />
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <input type="number" min="0" step="0.01" required value={item.precoUnitario} onChange={e => atualizarItem(idx, { precoUnitario: Number(e.target.value) || 0 })} className="w-full p-1.5 border border-slate-200 rounded-lg text-right" />
+                            </td>
+                            <td className="px-2 py-1.5 pt-3 text-right font-bold text-slate-700 whitespace-nowrap">{formatarMoeda((Number(item.quantidade) || 0) * (Number(item.precoUnitario) || 0))}</td>
+                            <td className="px-1 py-1.5 text-center">
+                              <button type="button" title="Remover produto" onClick={() => setItens(itens.filter((_, i) => i !== idx))} className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50">×</button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {itens.length === 0 && (
+                        <tr><td colSpan={8} className="px-2 py-4 text-center text-slate-400">Nenhum produto. Clique em “+ Adicionar produto”.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex justify-between text-[11px]">
+                  <span className="text-slate-500">{itens.length} produto(s)</span>
+                  <span className="font-black text-emerald-700">Total dos produtos: {formatarMoeda(totalBruto)}</span>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
