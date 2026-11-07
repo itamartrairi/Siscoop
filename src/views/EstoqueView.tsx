@@ -61,7 +61,7 @@ export const EstoqueView: React.FC = () => {
     nomeItem: '',
     categoria: 'HORTIFRUTI' as any,
     unidadeMedida: 'KG',
-    quantidadeAtual: 100,
+    quantidadeAtual: 0,
     estoqueMinimo: 20,
     localizacaoGalpao: 'Galpão A - Prateleira 1'
   });
@@ -69,7 +69,7 @@ export const EstoqueView: React.FC = () => {
   const [novaMov, setNovaMov] = useState({
     itemEstoqueId: estoque[0]?.id || '',
     tipoMovimento: 'ENTRADA' as 'ENTRADA' | 'SAIDA',
-    quantidade: 100,
+    quantidade: 0,
     motivo: 'Recebimento de Lote de Produtos dos Cooperados',
     responsavel: 'Operador do Galpão'
   });
@@ -149,8 +149,8 @@ export const EstoqueView: React.FC = () => {
       (estoque || []).forEach(item => {
         mapaProdutos[item.nomeItem] = {
           nome: item.nomeItem,
-          quantidade: item.quantidadeAtual || 100,
-          valorTotal: (item.quantidadeAtual || 100) * (item.valorUnitarioMedio || 5),
+          quantidade: item.quantidadeAtual || 0,
+          valorTotal: (item.quantidadeAtual || 0) * (item.valorUnitarioMedio || 0),
           unidade: item.unidadeMedida || 'KG'
         };
       });
@@ -187,7 +187,7 @@ if (item) {
         nomeItem: '',
         categoria: 'HORTIFRUTI',
         unidadeMedida: 'KG',
-        quantidadeAtual: 100,
+        quantidadeAtual: 0,
         estoqueMinimo: 20,
         localizacaoGalpao: 'Galpão Principal'
       });
@@ -200,7 +200,8 @@ if (item) {
     if (!canWrite) { blockWriteAction(); return; }
     if (!itemForm.nomeItem) return;
     if (editingItem) {
-      updateItemEstoque(editingItem.id, itemForm);
+      const { quantidadeAtual: _saldo, ...dadosSemSaldo } = itemForm; // saldo muda só por movimentação
+      updateItemEstoque(editingItem.id, dadosSemSaldo);
     } else {
       addItemEstoque(itemForm);
     }
@@ -210,7 +211,7 @@ if (item) {
   const handleAddMov = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canWrite) { blockWriteAction(); return; }
-    if (!novaMov.quantidade) return;
+    if (!novaMov.itemEstoqueId || !(novaMov.quantidade > 0)) { alert('Selecione o item e informe uma quantidade maior que zero.'); return; }
     addMovimentacaoEstoque(novaMov);
     setShowMovModal(false);
   };
@@ -239,7 +240,7 @@ if (item) {
           )}
           {activeTab === 'movimentacoes' && (
             <button
-              onClick={() => setShowMovModal(true)}
+              onClick={() => { if (!canWrite) { blockWriteAction(); return; } setNovaMov({ itemEstoqueId: estoque[0]?.id || '', tipoMovimento: 'ENTRADA', quantidade: 0, motivo: '', responsavel: 'Operador do Galpão' }); setShowMovModal(true); }}
               className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2"
             >
               <Plus className="w-4 h-4" /> Lançar Movimentação
@@ -523,7 +524,7 @@ if (item) {
                   value: m => Number(m.quantidade) || 0,
                   render: m => (Number(m.quantidade) || 0).toLocaleString('pt-BR'),
                 },
-                { key: 'motivo', header: 'Motivo / Origem', width: 260 },
+                { key: 'motivo', header: 'Motivo / Origem', width: 260, value: m => m.motivo || m.motivoHist || '' },
                 { key: 'responsavel', header: 'Responsável', width: 160 },
               ]}
               actions={[
@@ -533,7 +534,7 @@ if (item) {
                   tone: 'danger',
                   onClick: m => {
                     if (!canWrite) { blockWriteAction(); return; }
-                    if (confirm('Deseja excluir este registro de movimentação?')) deleteMovimentacaoEstoque(m.id);
+                    if (confirm('Deseja excluir esta movimentação? O saldo do item será ajustado (a quantidade volta ao estoque ou é retirada).')) deleteMovimentacaoEstoque(m.id);
                   },
                 },
               ]}
@@ -568,12 +569,15 @@ if (item) {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-700 font-bold mb-1">Quantidade Inicial</label>
+                  <label className="block text-slate-700 font-bold mb-1">{editingItem ? 'Saldo atual (altere por movimentação)' : 'Quantidade Inicial'}</label>
                   <input
                     type="number"
                     value={itemForm.quantidadeAtual}
+                    min="0"
+                    step="any"
+                    disabled={!!editingItem}
                     onChange={e => setItemForm({ ...itemForm, quantidadeAtual: parseFloat(e.target.value) || 0 })}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl"
+                    className="w-full p-2.5 border border-slate-200 rounded-xl disabled:bg-slate-100"
                   />
                 </div>
                 <div>
