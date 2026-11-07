@@ -83,7 +83,7 @@ export const Sidebar: React.FC<Props> = ({
 
   const MODULE_ID_MAP: Record<string, any> = {
     'dashboard': 'dashboard',
-    'cadastro-cooperativa': 'cooperativa',
+    'cadastro-cooperativa': 'cadastro-cooperativa',
     'cadastros': 'cadastros',
     'cooperados': 'cooperados',
     'capital': 'capital',
@@ -104,7 +104,7 @@ export const Sidebar: React.FC<Props> = ({
     'app-produtor': 'app-produtor',
     'app-motorista': 'app-motorista',
     'relatorios': 'relatorios',
-    'backup-sistema': 'backup',
+    'backup-sistema': 'backup-sistema',
     'licenca': 'licenca',
     'configuracoes': 'configuracoes'
   };
