@@ -322,6 +322,24 @@ service cloud.firestore {
       );
       allow delete: if isAdmin();
     }
+    // Todos os dados da cooperativa (cadastros, financeiro, contábil, estoque,
+    // compras, vendas, PAA/PNAE, RH...), um documento por registro, gravados
+    // automaticamente pelo app (src/services/firestoreSync.ts).
+    // id = <tenantId>__<colecao>__<registroId>
+    match /dadosCooperativa/{docId} {
+      allow read, delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
+      allow create: if (isAdmin() || belongsToTenant(request.resource.data.tenantId)) &&
+        request.resource.data.colecao is string &&
+        request.resource.data.registroId is string &&
+        request.resource.data.json is string &&
+        docId == request.resource.data.tenantId + '__' + request.resource.data.colecao + '__' + request.resource.data.registroId;
+      allow update: if (isAdmin() || belongsToTenant(resource.data.tenantId)) &&
+        request.resource.data.tenantId == resource.data.tenantId &&
+        request.resource.data.colecao == resource.data.colecao &&
+        request.resource.data.registroId == resource.data.registroId &&
+        request.resource.data.json is string;
+    }
+
 
     // Assinaturas e logs de webhook são gravados pelo backend com credencial de
     // serviço (que ignora estas regras). Nenhum cliente precisa de acesso.
