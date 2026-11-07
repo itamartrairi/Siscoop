@@ -294,13 +294,6 @@ const MainAppContent: React.FC = () => {
         </main>
       </div>
 
-      {/* Global Search Modal Triggerable from Header or Ctrl+K */}
-      <GlobalSearchModal
-        isOpen={isSearchOpen}
-        onClose={() => setIsSearchOpen(false)}
-        onSelectModule={setActiveModule}
-      />
-
       {/* Banner / Prompt de Instalação do Aplicativo com Ícone do Cooperativismo */}
       <PwaInstallPrompt />
     </div>
