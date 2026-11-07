@@ -60,6 +60,10 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
 
   const cooperativa = currentTenant?.name || currentTenant?.razaoSocial || 'Cooperativa';
   const clientesAtivos = clientes.filter(c => c.ativo !== false);
+  // Produtos ativos; os marcados "para revenda" (Compras → Produtos & Insumos) aparecem primeiro.
+  const produtosVenda = estoque
+    .filter(p => p.ativo !== false)
+    .sort((a, b) => Number(!!b.paraRevenda) - Number(!!a.paraRevenda) || a.nomeItem.localeCompare(b.nomeItem, 'pt-BR'));
 
   const linhas = useMemo(
     () => vendasRevenda.filter(v => filtroStatus === 'TODAS' || v.status === filtroStatus),
@@ -100,8 +104,9 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
       descricao: p?.nomeItem || '',
       unidade: p?.unidadeMedida || 'UN',
       custoUnitario: p?.valorUnitarioMedio || 0,
-      precoUnitario: itens[idx]?.precoUnitario || p?.valorUnitarioMedio || 0,
-      tributacaoIcms: sugerirTributacaoIcms(p?.nomeItem, p?.categoria),
+      precoUnitario: p?.precoVenda || itens[idx]?.precoUnitario || p?.valorUnitarioMedio || 0,
+      tributacaoIcms: p?.tributacaoIcms || sugerirTributacaoIcms(p?.nomeItem, p?.categoria),
+      fornecedorId: p?.fornecedorPadraoId || itens[idx]?.fornecedorId,
     });
   };
 
@@ -293,7 +298,7 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-xs font-extrabold text-slate-800">Produtos vendidos</div>
-                    <div className="text-[10px] text-slate-500">Itens do Galpão & Estoque. A quantidade vendida sai do estoque.</div>
+                    <div className="text-[10px] text-slate-500">Cadastre os produtos em Compras → Produtos & Insumos. A quantidade vendida sai do estoque.</div>
                   </div>
                   <button type="button" onClick={() => setItens([...itens, itemVazio()])} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold">+ Adicionar produto</button>
                 </div>
@@ -306,7 +311,7 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
                         <label className="block text-[10px] font-bold text-slate-500 mb-1">Produto / insumo</label>
                         <select required value={item.estoqueItemId} onChange={e => escolherProduto(idx, e.target.value)} className={`${inputCls} bg-white`}>
                           <option value="">Selecione</option>
-                          {estoque.map(p => <option key={p.id} value={p.id}>{p.nomeItem} — saldo {p.quantidadeAtual} {p.unidadeMedida}</option>)}
+                          {produtosVenda.map(p => <option key={p.id} value={p.id}>{p.nomeItem} — saldo {p.quantidadeAtual} {p.unidadeMedida}{p.precoVenda ? ` — ${formatarMoeda(p.precoVenda)}` : ''}</option>)}
                         </select>
                       </div>
                       <div>
