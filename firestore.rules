@@ -82,6 +82,18 @@ service cloud.firestore {
       return data.nome is string && data.nome.size() > 0 && data.nome.size() <= 120;
     }
 
+    // Cargos e Departamentos são comuns a todas as cooperativas. O uso de
+    // cada item por cooperativa fica em usoCadastrosRH/{colecao}__{itemId};
+    // enquanto houver uso registrado, ninguém (exceto admin) exclui o item.
+    function vinculadoAAlgumaCooperativa() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        myTenantId() is string && myTenantId() != '';
+    }
+    function semUsoRegistradoRH(colecao, itemId) {
+      return !exists(/databases/$(database)/documents/usoCadastrosRH/$(colecao + '__' + itemId)) ||
+        get(/databases/$(database)/documents/usoCadastrosRH/$(colecao + '__' + itemId)).data.get('tenants', {}).size() == 0;
+    }
+
 
     // Default: negado. Nada é liberado por padrão — cada coleção usada pelo
     // app precisa de uma regra explícita abaixo.
@@ -211,25 +223,47 @@ service cloud.firestore {
       allow delete: if isAdmin() || gestorDoTenant(resource.data.tenantId);
     }
 
-    // Cadastros de RH: Departamentos e Cargos, isolados por cooperativa.
+        // Cadastros de RH: Departamentos e Cargos — COMUNS a todas as cooperativas.
+    // Qualquer cooperativa vinculada lê e edita a mesma lista; tenantId só
+    // registra quem cadastrou (não pode ser trocado). Exclusão só sem uso.
     match /departamentos/{departamentoId} {
-      allow read, delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
+      allow read: if isSignedIn();
       allow create: if isAdmin() ||
         (belongsToTenant(request.resource.data.tenantId) && cadastroRHValido(request.resource.data));
       allow update: if isAdmin() ||
-        (belongsToTenant(resource.data.tenantId) &&
-         request.resource.data.tenantId == resource.data.tenantId &&
+        (vinculadoAAlgumaCooperativa() &&
+         request.resource.data.get('tenantId', null) == resource.data.get('tenantId', null) &&
          cadastroRHValido(request.resource.data));
+      allow delete: if isAdmin() || (vinculadoAAlgumaCooperativa() && semUsoRegistradoRH('departamentos', departamentoId));
     }
 
     match /cargos/{cargoId} {
-      allow read, delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
+      allow read: if isSignedIn();
       allow create: if isAdmin() ||
         (belongsToTenant(request.resource.data.tenantId) && cadastroRHValido(request.resource.data));
       allow update: if isAdmin() ||
-        (belongsToTenant(resource.data.tenantId) &&
-         request.resource.data.tenantId == resource.data.tenantId &&
+        (vinculadoAAlgumaCooperativa() &&
+         request.resource.data.get('tenantId', null) == resource.data.get('tenantId', null) &&
          cadastroRHValido(request.resource.data));
+      allow delete: if isAdmin() || (vinculadoAAlgumaCooperativa() && semUsoRegistradoRH('cargos', cargoId));
+    }
+
+    // Uso de cada cargo/departamento por cooperativa: { colecao, itemId,
+    // tenants: { <tenantId>: quantidade } }. Cada cooperativa só mexe na
+    // própria chave do mapa tenants.
+    match /usoCadastrosRH/{usoId} {
+      allow read: if isSignedIn();
+      allow create: if vinculadoAAlgumaCooperativa() &&
+        request.resource.data.keys().hasOnly(['colecao', 'itemId', 'tenants']) &&
+        request.resource.data.colecao in ['departamentos', 'cargos'] &&
+        usoId == request.resource.data.colecao + '__' + request.resource.data.itemId &&
+        request.resource.data.tenants.keys().hasOnly([myTenantId()]);
+      allow update: if vinculadoAAlgumaCooperativa() &&
+        request.resource.data.keys().hasOnly(['colecao', 'itemId', 'tenants']) &&
+        request.resource.data.colecao == resource.data.colecao &&
+        request.resource.data.itemId == resource.data.itemId &&
+        request.resource.data.tenants.diff(resource.data.get('tenants', {})).affectedKeys().hasOnly([myTenantId()]);
+      allow delete: if isAdmin();
     }
 
     // Diagnóstico de conexão (Configurações → Integrações → testar Firestore):
