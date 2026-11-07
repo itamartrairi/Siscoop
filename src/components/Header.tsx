@@ -103,22 +103,6 @@ export const Header: React.FC<Props> = ({ activeView = 'dashboard', setActiveVie
         </div>
       </div>
 
-      {/* Middle Global Search Button */}
-      <div className="hidden md:flex items-center flex-1 max-w-md mx-6">
-        <button
-          onClick={handleSearchClick}
-          className="w-full h-9 px-4 bg-slate-50 hover:bg-slate-100 rounded-full text-xs text-slate-500 flex items-center justify-between border border-slate-200 transition-all hover:border-emerald-500/40 focus:outline-none focus:ring-1 focus:ring-emerald-500 overflow-hidden shadow-xs"
-        >
-          <span className="flex items-center gap-2 truncate whitespace-nowrap min-w-0">
-            <Search className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-            <span className="truncate whitespace-nowrap">Pesquisar Nome, CPF, Matrícula, Capital...</span>
-          </span>
-          <kbd className="px-1.5 py-0.5 rounded bg-slate-200/80 text-slate-600 font-mono text-[10px] border border-slate-300/60 shrink-0 ml-2">
-            Ctrl + K
-          </kbd>
-        </button>
-      </div>
-
       {/* Right Controls */}
       <div className="flex items-center gap-3">
         {/* License & Subscription Status Quick Button - visible only for System Creator (ADMIN) */}
