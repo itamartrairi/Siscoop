@@ -83,6 +83,7 @@ export const Sidebar: React.FC<Props> = ({
 
   const MODULE_ID_MAP: Record<string, any> = {
     'dashboard': 'dashboard',
+    'agenda-atividades': 'dashboard',
     'cadastro-cooperativa': 'cadastro-cooperativa',
     'cadastros': 'cadastros',
     'cooperados': 'cooperados',
@@ -120,6 +121,17 @@ export const Sidebar: React.FC<Props> = ({
       tip: 'O painel resume produção, financeiro e quadro social.',
       items: [
         { id: 'dashboard', label: 'Painel da Cooperativa', description: 'Visão consolidada dos principais indicadores da cooperativa.', action: 'Abrir Painel', icon: LayoutDashboard }
+      ]
+    },
+    {
+      key: 'agenda',
+      title: 'Agenda & Atividades',
+      shortLabel: 'Agenda',
+      icon: CalendarDays,
+      subtitle: 'Sua Google Agenda e as atividades da equipe em um só lugar.',
+      tip: 'Defina um responsável e um prazo para cada atividade e acompanhe o status.',
+      items: [
+        { id: 'agenda-atividades', label: 'Agenda & Atividades', description: 'Google Agenda do usuário e atividades com status e responsável.', action: 'Abrir Agenda', icon: CalendarDays }
       ]
     },
     {
