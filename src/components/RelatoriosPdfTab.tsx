@@ -4,14 +4,16 @@ import { FileDown, Filter, RotateCcw, FileText } from 'lucide-react';
 import { useCoop } from '../context/CoopContext';
 import { ContaPagarReceber, OrdemCompra, VendaRevenda } from '../types';
 import { dataBR, formatarMoeda, hojeISO, rotuloFormaPagamento } from '../utils/parcelamento';
+import { ehContaDeImposto, nomeTributo } from '../utils/impostosRevenda';
 
 /**
  * Relatórios em PDF de Contas a Pagar e Receber, Compras (ordens de compra) e
- * Vendas (revenda de produtos), com filtros de período (intervalo de datas,
- * mês e ano), cliente, fornecedor e status.
+ * Vendas (revenda de produtos) e Impostos pagos pela cooperativa, com filtros
+ * de período (intervalo de datas, mês e ano), cliente, fornecedor e status.
+ * PDF em A4 retrato.
  */
 
-type TipoRelatorio = 'CONTAS' | 'COMPRAS' | 'VENDAS';
+type TipoRelatorio = 'CONTAS' | 'COMPRAS' | 'VENDAS' | 'IMPOSTOS';
 type BaseDataContas = 'VENCIMENTO' | 'EMISSAO' | 'PAGAMENTO';
 
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
@@ -53,7 +55,7 @@ interface Relatorio {
 
 export const RelatoriosPdfTab: React.FC<{ tipoInicial?: TipoRelatorio; tiposPermitidos?: TipoRelatorio[] }> = ({
   tipoInicial = 'CONTAS',
-  tiposPermitidos = ['CONTAS', 'COMPRAS', 'VENDAS'],
+  tiposPermitidos = ['CONTAS', 'COMPRAS', 'VENDAS', 'IMPOSTOS'],
 }) => {
   const { contasPagarReceber, ordensCompra, vendasRevenda, clientes, fornecedores, currentTenant } = useCoop();
 
@@ -144,6 +146,54 @@ export const RelatoriosPdfTab: React.FC<{ tipoInicial?: TipoRelatorio; tiposPerm
       };
     }
 
+    if (tipo === 'IMPOSTOS') {
+      const lista = contasPagarReceber
+        .filter(c => {
+          if (c.tipo !== 'PAGAR' || !ehContaDeImposto(c)) return false;
+          const data = baseData === 'EMISSAO' ? c.dataEmissao : baseData === 'PAGAMENTO' ? c.dataPagamento : c.dataVencimento;
+          if (!naData(data)) return false;
+          if (status !== 'TODOS') {
+            const s = situacaoConta(c);
+            if (status === 'ABERTO' ? !(s === 'ABERTO' || s === 'VENCIDO') : s !== status) return false;
+          }
+          return true;
+        })
+        .sort((a, b) => (a.dataVencimento || '').localeCompare(b.dataVencimento || ''));
+      const soma = (f: (c: ContaPagarReceber) => boolean) => lista.filter(f).reduce((s, c) => s + (Number(c.valor) || 0), 0);
+      const pagoPorTributo = new Map<string, number>();
+      lista.filter(c => c.status === 'PAGO').forEach(c => {
+        const t = nomeTributo(c);
+        pagoPorTributo.set(t, (pagoPorTributo.get(t) || 0) + (Number(c.valor) || 0));
+      });
+      // Impostos calculados nas vendas do período (data da venda)
+      const vendasPeriodo = vendasRevenda.filter(v => v.status !== 'CANCELADA' && v.impostos && naData(v.dataVenda));
+      const apurado = (k: 'icms' | 'fecop' | 'pis' | 'cofins' | 'irpj' | 'csll' | 'das') => vendasPeriodo.reduce((s, v) => s + (Number(v.impostos?.[k]) || 0), 0);
+      const apurados: [string, number][] = ([
+        ['ICMS', apurado('icms')], ['FECOP', apurado('fecop')], ['PIS', apurado('pis')], ['COFINS', apurado('cofins')],
+        ['IRPJ', apurado('irpj')], ['CSLL', apurado('csll')], ['DAS', apurado('das')],
+      ] as [string, number][]).filter(([, v]) => v > 0);
+      return {
+        titulo: 'Relatório de Impostos Pagos pela Cooperativa',
+        colunas: [
+          { titulo: 'Vencimento', largura: 20 }, { titulo: 'Tributo', largura: 18 }, { titulo: 'Descrição', largura: 62 },
+          { titulo: 'Órgão', largura: 36 }, { titulo: 'Situação', largura: 18 }, { titulo: 'Pago em', largura: 20 },
+          { titulo: 'Valor', largura: 24, direita: true },
+        ],
+        linhas: lista.map(c => [
+          dataBR(c.dataVencimento), nomeTributo(c), c.descricao, c.pessoaNome, rotuloSituacao(c),
+          c.dataPagamento ? dataBR(c.dataPagamento) : '—', formatarMoeda(c.valor),
+        ]),
+        totais: [
+          ['Guias / títulos', String(lista.length)],
+          ['Total pago', formatarMoeda(soma(c => c.status === 'PAGO'))],
+          ['Em aberto', formatarMoeda(soma(c => c.status !== 'PAGO' && c.status !== 'CANCELADO'))],
+          ['Vencido (em aberto)', formatarMoeda(soma(c => situacaoConta(c) === 'VENCIDO'))],
+          ...[...pagoPorTributo.entries()].sort((a, b) => b[1] - a[1]).map(([t, v]) => [`Pago — ${t}`, formatarMoeda(v)] as [string, string]),
+          ...apurados.map(([t, v]) => [`Apurado nas vendas — ${t}`, formatarMoeda(v)] as [string, string]),
+        ],
+      };
+    }
+
     if (tipo === 'COMPRAS') {
       const lista = ordensCompra
         .filter(o => {
@@ -226,11 +276,11 @@ export const RelatoriosPdfTab: React.FC<{ tipoInicial?: TipoRelatorio; tiposPerm
     if (dataInicio || dataFim) partes.push(`Período: ${dataInicio ? dataBR(dataInicio) : 'início'} a ${dataFim ? dataBR(dataFim) : 'hoje'}`);
     if (mes !== 'TODOS') partes.push(`Mês: ${MESES[Number(mes) - 1]}`);
     if (ano !== 'TODOS') partes.push(`Ano: ${ano}`);
-    if (tipo === 'CONTAS') partes.push(`Data base: ${baseData === 'EMISSAO' ? 'emissão' : baseData === 'PAGAMENTO' ? 'pagamento' : 'vencimento'}`);
+    if (tipo === 'CONTAS' || tipo === 'IMPOSTOS') partes.push(`Data base: ${baseData === 'EMISSAO' ? 'emissão' : baseData === 'PAGAMENTO' ? 'pagamento' : 'vencimento'}`);
     if (tipo === 'CONTAS' && tipoConta !== 'TODOS') partes.push(tipoConta === 'PAGAR' ? 'Somente a pagar' : 'Somente a receber');
     if (cliente) partes.push(`Cliente: ${cliente.nome}`);
     if (fornecedor) partes.push(`Fornecedor: ${fornecedor.nomeFantasia || fornecedor.razaoSocial}`);
-    const listaStatus = tipo === 'CONTAS' ? STATUS_CONTAS : tipo === 'COMPRAS' ? STATUS_COMPRAS : STATUS_VENDAS;
+    const listaStatus = tipo === 'CONTAS' || tipo === 'IMPOSTOS' ? STATUS_CONTAS : tipo === 'COMPRAS' ? STATUS_COMPRAS : STATUS_VENDAS;
     if (status !== 'TODOS') partes.push(`Status: ${listaStatus.find(s => s.v === status)?.r || status}`);
     return partes.length ? partes.join(' · ') : 'Sem filtros (todos os registros)';
   };
@@ -241,7 +291,7 @@ export const RelatoriosPdfTab: React.FC<{ tipoInicial?: TipoRelatorio; tiposPerm
   };
 
   const gerarPdf = () => {
-    const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const largura = pdf.internal.pageSize.getWidth();
     const altura = pdf.internal.pageSize.getHeight();
     const margem = 10;
@@ -298,24 +348,30 @@ export const RelatoriosPdfTab: React.FC<{ tipoInicial?: TipoRelatorio; tiposPerm
     };
 
     let y = cabecalho(true);
-    pdf.setFontSize(7.5);
+    pdf.setFontSize(7);
+    const alturaTexto = 3.1;
     relatorio.linhas.forEach((linha, idx) => {
-      if (y + alturaLinha > altura - 14) {
+      // Quebra o texto de cada célula em até 3 linhas (retrato tem colunas estreitas)
+      const celulas = cols.map((c, i) => {
+        const partes = pdf.splitTextToSize(String(linha[i] ?? ''), c.largura - 2) as string[];
+        return partes.length > 3 ? [...partes.slice(0, 2), cortar(partes.slice(2).join(' '), c.largura - 2)] : partes;
+      });
+      const alturaRow = Math.max(1, ...celulas.map(l => l.length)) * alturaTexto + 2.6;
+      if (y + alturaRow > altura - 14) {
         pdf.addPage();
         y = cabecalho(false);
-        pdf.setFontSize(7.5);
+        pdf.setFontSize(7);
       }
       if (idx % 2 === 1) {
         pdf.setFillColor(241, 245, 249);
-        pdf.rect(margem, y, larguraUtil, alturaLinha, 'F');
+        pdf.rect(margem, y, larguraUtil, alturaRow, 'F');
       }
       let x = margem;
       cols.forEach((c, i) => {
-        const texto = cortar(String(linha[i] ?? ''), c.largura - 2);
-        pdf.text(texto, c.direita ? x + c.largura - 1 : x + 1, y + 4, c.direita ? { align: 'right' } : undefined);
+        pdf.text(celulas[i], c.direita ? x + c.largura - 1 : x + 1, y + 3.6, c.direita ? { align: 'right' } : undefined);
         x += c.largura;
       });
-      y += alturaLinha;
+      y += alturaRow;
     });
     if (!relatorio.linhas.length) {
       pdf.setFontSize(9);
@@ -351,11 +407,11 @@ export const RelatoriosPdfTab: React.FC<{ tipoInicial?: TipoRelatorio; tiposPerm
       pdf.text(`${relatorio.titulo} — página ${p} de ${paginas}`, largura - margem, altura - 6, { align: 'right' });
     }
 
-    const nome = `${tipo === 'CONTAS' ? 'contas-pagar-receber' : tipo === 'COMPRAS' ? 'compras' : 'vendas'}-${hojeISO()}.pdf`;
+    const nome = `${tipo === 'CONTAS' ? 'contas-pagar-receber' : tipo === 'COMPRAS' ? 'compras' : tipo === 'VENDAS' ? 'vendas' : 'impostos'}-${hojeISO()}.pdf`;
     pdf.save(nome);
   };
 
-  const listaStatus = tipo === 'CONTAS' ? STATUS_CONTAS : tipo === 'COMPRAS' ? STATUS_COMPRAS : STATUS_VENDAS;
+  const listaStatus = tipo === 'CONTAS' || tipo === 'IMPOSTOS' ? STATUS_CONTAS : tipo === 'COMPRAS' ? STATUS_COMPRAS : STATUS_VENDAS;
   const sel = 'p-2 border border-slate-200 rounded-xl text-xs font-semibold bg-white';
   const lbl = 'block text-[10px] font-bold text-slate-500 mb-1';
 
@@ -382,7 +438,7 @@ export const RelatoriosPdfTab: React.FC<{ tipoInicial?: TipoRelatorio; tiposPerm
               onClick={() => { setTipo(t); setStatus('TODOS'); }}
               className={`px-3 py-2 rounded-xl border text-xs font-bold ${tipo === t ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
             >
-              {t === 'CONTAS' ? 'Contas a Pagar e Receber' : t === 'COMPRAS' ? 'Compras' : 'Vendas'}
+              {t === 'CONTAS' ? 'Contas a Pagar e Receber' : t === 'COMPRAS' ? 'Compras' : t === 'VENDAS' ? 'Vendas' : 'Impostos'}
             </button>
           ))}
         </div>
@@ -390,7 +446,7 @@ export const RelatoriosPdfTab: React.FC<{ tipoInicial?: TipoRelatorio; tiposPerm
 
       <div className="flex flex-wrap items-end gap-3 pb-4 border-b border-slate-100">
         <div className="flex items-center gap-1.5 text-xs font-bold text-slate-500"><Filter className="w-3.5 h-3.5" /> Filtros</div>
-        {tipo === 'CONTAS' && (
+        {(tipo === 'CONTAS' || tipo === 'IMPOSTOS') && (
           <div>
             <label className={lbl}>Data base</label>
             <select value={baseData} onChange={e => setBaseData(e.target.value as BaseDataContas)} className={sel}>
@@ -426,7 +482,7 @@ export const RelatoriosPdfTab: React.FC<{ tipoInicial?: TipoRelatorio; tiposPerm
             </select>
           </div>
         )}
-        {tipo !== 'COMPRAS' && (
+        {(tipo === 'CONTAS' || tipo === 'VENDAS') && (
           <div>
             <label className={lbl}>Cliente</label>
             <select value={clienteId} onChange={e => setClienteId(e.target.value)} className={`${sel} max-w-[200px]`}>
@@ -435,13 +491,15 @@ export const RelatoriosPdfTab: React.FC<{ tipoInicial?: TipoRelatorio; tiposPerm
             </select>
           </div>
         )}
-        <div>
-          <label className={lbl}>Fornecedor</label>
-          <select value={fornecedorId} onChange={e => setFornecedorId(e.target.value)} className={`${sel} max-w-[200px]`}>
-            <option value="TODOS">Todos</option>
-            {fornecedores.map(f => <option key={f.id} value={f.id}>{f.nomeFantasia || f.razaoSocial}</option>)}
-          </select>
-        </div>
+        {tipo !== 'IMPOSTOS' && (
+          <div>
+            <label className={lbl}>Fornecedor</label>
+            <select value={fornecedorId} onChange={e => setFornecedorId(e.target.value)} className={`${sel} max-w-[200px]`}>
+              <option value="TODOS">Todos</option>
+              {fornecedores.map(f => <option key={f.id} value={f.id}>{f.nomeFantasia || f.razaoSocial}</option>)}
+            </select>
+          </div>
+        )}
         <div>
           <label className={lbl}>Status</label>
           <select value={status} onChange={e => setStatus(e.target.value)} className={sel}>

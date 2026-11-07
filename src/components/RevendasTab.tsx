@@ -1,13 +1,15 @@
 import React, { useMemo, useState } from 'react';
-import { Plus, X, Store, MessageCircle, BadgeDollarSign, Ban, Trash2, Eye } from 'lucide-react';
+import { Plus, X, Store, MessageCircle, BadgeDollarSign, Ban, Trash2, Eye, Landmark, Settings2 } from 'lucide-react';
 import { useCoop } from '../context/CoopContext';
-import { VendaRevenda, ItemVendaRevenda, FormaPagamentoComercial } from '../types';
+import { VendaRevenda, ItemVendaRevenda, FormaPagamentoComercial, TributacaoIcmsItem, ImpostosVenda } from '../types';
 import { DataGrid, GridStatus } from './ui/DataGrid';
 import { abrirLinkExterno, montarLinkWhatsApp, getTelefoneContato } from '../utils/whatsappHelpers';
 import { mensagemCobranca, mensagemComprovanteVenda } from '../utils/mensagensWhatsApp';
 import {
   FORMAS_PAGAMENTO_COMERCIAL, dataBR, descreverParcelamento, formatarMoeda, gerarParcelas, hojeISO, rotuloFormaPagamento,
 } from '../utils/parcelamento';
+import { OPCOES_TRIBUTACAO_ICMS, calcularImpostosVenda, configTributaria, sugerirTributacaoIcms } from '../utils/impostosRevenda';
+import { ConfigTributariaModal, ApuracaoImpostosModal } from './ImpostosRevendaModais';
 
 const inputCls = 'w-full p-2.5 border border-slate-200 rounded-xl';
 const labelCls = 'block text-slate-700 font-bold mb-1';
@@ -43,8 +45,11 @@ const itemVazio = (): ItemVendaRevenda => ({ estoqueItemId: '', descricao: '', u
 export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }> = ({ canWrite, onBlocked }) => {
   const {
     vendasRevenda, addVendaRevenda, cancelarVendaRevenda, deleteVendaRevenda,
-    clientes, estoque, fornecedores, contasPagarReceber, currentTenant,
+    clientes, estoque, fornecedores, contasPagarReceber, currentTenant, config,
   } = useCoop();
+  const cfgTrib = configTributaria(config?.tributacaoRevenda);
+  const [showConfigTrib, setShowConfigTrib] = useState(false);
+  const [showApuracao, setShowApuracao] = useState(false);
 
   const [filtroStatus, setFiltroStatus] = useState<'TODAS' | 'CONCLUIDA' | 'CANCELADA'>('TODAS');
   const [showModal, setShowModal] = useState(false);
@@ -68,6 +73,14 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
   const totalVenda = Math.max(0, totalBruto - (Number(form.desconto) || 0));
   const previa = gerarParcelas(totalVenda, form.numeroParcelas, form.primeiroVencimento, form.intervaloDias);
 
+  // Impostos da venda (regras do Ceará) conforme o cliente e os produtos
+  const clienteForm = clientes.find(c => c.id === form.clienteId);
+  const ufCliente = (clienteForm?.uf || 'CE').toUpperCase();
+  const clienteContribuinte = !!clienteForm?.inscricaoEstadual && !/isento/i.test(clienteForm.inscricaoEstadual);
+  const impostosPrevia: ImpostosVenda = calcularImpostosVenda(
+    itens.filter(i => i.estoqueItemId), Number(form.desconto) || 0, ufCliente, clienteContribuinte, cfgTrib
+  );
+
   const abrirNova = () => {
     if (!canWrite) { onBlocked(); return; }
     if (!clientesAtivos.length) { alert('Cadastre um cliente na aba Clientes antes de lançar uma venda.'); return; }
@@ -88,6 +101,7 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
       unidade: p?.unidadeMedida || 'UN',
       custoUnitario: p?.valorUnitarioMedio || 0,
       precoUnitario: itens[idx]?.precoUnitario || p?.valorUnitarioMedio || 0,
+      tributacaoIcms: sugerirTributacaoIcms(p?.nomeItem, p?.categoria),
     });
   };
 
@@ -109,6 +123,7 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
           precoUnitario: Number(i.precoUnitario) || 0,
           custoUnitario: Number(i.custoUnitario) || 0,
           subtotal: Number(((Number(i.quantidade) || 0) * (Number(i.precoUnitario) || 0)).toFixed(2)),
+          tributacaoIcms: i.tributacaoIcms || 'TRIBUTADO',
         };
         if (forn) { item.fornecedorId = forn.id; item.fornecedorNome = forn.nomeFantasia || forn.razaoSocial; }
         return item;
@@ -128,6 +143,7 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
       intervaloDias: Math.max(0, Number(form.intervaloDias) || 0),
       primeiroVencimento: form.primeiroVencimento || form.dataVenda,
       observacoes: form.observacoes,
+      impostos: calcularImpostosVenda(validos, Number(form.desconto) || 0, ufCliente, clienteContribuinte, cfgTrib),
       quitarPrimeiraParcela: form.quitarPrimeiraParcela,
     });
     if (id) setShowModal(false);
@@ -155,6 +171,12 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
           <option value="CONCLUIDA">Concluídas</option>
           <option value="CANCELADA">Canceladas</option>
         </select>
+        <button onClick={() => { if (!canWrite) { onBlocked(); return; } setShowConfigTrib(true); }} className="px-3 py-2.5 border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl text-xs font-bold flex items-center gap-2" title="Regime e alíquotas usados no cálculo dos impostos">
+          <Settings2 className="w-4 h-4" /> Configuração tributária
+        </button>
+        <button onClick={() => setShowApuracao(true)} className="px-3 py-2.5 border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl text-xs font-bold flex items-center gap-2" title="Soma os impostos das vendas do mês e gera as guias no Contas a Pagar">
+          <Landmark className="w-4 h-4" /> Apurar impostos do mês
+        </button>
         <button onClick={abrirNova} className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-2">
           <Plus className="w-4 h-4" /> Nova Venda
         </button>
@@ -182,6 +204,7 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
           { key: 'clienteNome', header: 'Cliente', width: 220 },
           { key: 'itens', header: 'Produtos', width: 220, value: v => v.itens.map(i => `${i.quantidade} ${i.unidade} ${i.descricao}`).join('; ') },
           { key: 'formaPagamento', header: 'Pagamento', width: 140, value: v => `${rotuloFormaPagamento(v.formaPagamento)} ${v.numeroParcelas > 1 ? `${v.numeroParcelas}x` : 'à vista'}` },
+          { key: 'impostos', header: 'Impostos', width: 110, align: 'right', value: v => v.impostos?.totalRecolher ?? 0, render: v => (v.impostos ? formatarMoeda(v.impostos.totalRecolher) : '—') },
           { key: 'valorTotal', header: 'Total', width: 120, align: 'right', value: v => v.valorTotal, render: v => formatarMoeda(v.valorTotal) },
         ]}
         actions={[
@@ -229,6 +252,7 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
             </table>
             {!!detalhe.desconto && <div className="text-right">Desconto: {formatarMoeda(detalhe.desconto)}</div>}
             <div className="text-right font-black text-emerald-700 text-sm">Total: {formatarMoeda(detalhe.valorTotal)}</div>
+            {detalhe.impostos && <QuadroImpostos impostos={detalhe.impostos} />}
             <div>
               <div className="font-bold text-slate-700 mb-1">Parcelas no Contas a Receber</div>
               {parcelasDaVenda(detalhe).sort((a, b) => a.dataVencimento.localeCompare(b.dataVencimento)).map(c => (
@@ -242,6 +266,9 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
           </div>
         </div>
       )}
+
+      {showConfigTrib && <ConfigTributariaModal onClose={() => setShowConfigTrib(false)} />}
+      {showApuracao && <ApuracaoImpostosModal canWrite={canWrite} onBlocked={onBlocked} onClose={() => setShowApuracao(false)} />}
 
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
@@ -274,7 +301,7 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
                   const est = estoque.find(e => e.id === item.estoqueItemId);
                   const semSaldo = !!est && Number(item.quantidade) > est.quantidadeAtual;
                   return (
-                    <div key={idx} className="grid grid-cols-1 md:grid-cols-[1fr_170px_80px_110px_100px_32px] gap-2 items-end">
+                    <div key={idx} className="grid grid-cols-1 md:grid-cols-[1fr_150px_150px_70px_100px_90px_32px] gap-2 items-end">
                       <div>
                         <label className="block text-[10px] font-bold text-slate-500 mb-1">Produto / insumo</label>
                         <select required value={item.estoqueItemId} onChange={e => escolherProduto(idx, e.target.value)} className={`${inputCls} bg-white`}>
@@ -290,6 +317,12 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
                         </select>
                       </div>
                       <div>
+                        <label className="block text-[10px] font-bold text-slate-500 mb-1">ICMS</label>
+                        <select value={item.tributacaoIcms || 'TRIBUTADO'} onChange={e => atualizarItem(idx, { tributacaoIcms: e.target.value as TributacaoIcmsItem })} className={`${inputCls} bg-white`}>
+                          {OPCOES_TRIBUTACAO_ICMS.map(o => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
+                        </select>
+                      </div>
+                      <div>
                         <label className="block text-[10px] font-bold text-slate-500 mb-1">Qtd.</label>
                         <input type="number" min="0.01" step="any" required value={item.quantidade} onChange={e => atualizarItem(idx, { quantidade: Number(e.target.value) || 0 })} className={`${inputCls} ${semSaldo ? 'border-rose-400 bg-rose-50' : ''}`} />
                       </div>
@@ -299,7 +332,7 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
                       </div>
                       <div className="text-right font-bold text-slate-700 pb-2.5">{formatarMoeda((Number(item.quantidade) || 0) * (Number(item.precoUnitario) || 0))}</div>
                       <button type="button" onClick={() => setItens(itens.filter((_, i) => i !== idx))} className="p-2.5 rounded-xl text-rose-500 hover:bg-rose-50">×</button>
-                      {semSaldo && <div className="md:col-span-6 text-rose-600 font-bold">Saldo insuficiente: disponível {est?.quantidadeAtual} {est?.unidadeMedida}.</div>}
+                      {semSaldo && <div className="md:col-span-7 text-rose-600 font-bold">Saldo insuficiente: disponível {est?.quantidadeAtual} {est?.unidadeMedida}.</div>}
                     </div>
                   );
                 })}
@@ -341,6 +374,8 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
                 <div className="text-emerald-700 pt-1">Ao salvar: baixa no estoque, {previa.length} conta(s) a receber no Financeiro e lançamento contábil automático.</div>
               </div>
 
+              <QuadroImpostos impostos={impostosPrevia} titulo={`Impostos estimados (${ufCliente === 'CE' ? 'venda dentro do Ceará' : `CE → ${ufCliente}`})`} />
+
               {erro && <p className="text-rose-600 font-bold">{erro}</p>}
 
               <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
@@ -351,6 +386,32 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+/** Quadro com o detalhamento dos impostos de uma venda. */
+export const QuadroImpostos: React.FC<{ impostos: ImpostosVenda; titulo?: string }> = ({ impostos, titulo = 'Impostos da venda' }) => {
+  const linhas: [string, number][] = ([
+    ['ICMS', impostos.icms], ['FECOP', impostos.fecop], ['PIS', impostos.pis], ['COFINS', impostos.cofins],
+    ['IRPJ', impostos.irpj], ['CSLL', impostos.csll], ['Simples Nacional (DAS)', impostos.das],
+  ] as [string, number][]).filter(([, v]) => v > 0);
+  return (
+    <div className="bg-amber-50/60 p-3.5 rounded-xl border border-amber-200 text-[11px] text-slate-700 space-y-1">
+      <div className="font-extrabold text-slate-800">{titulo}</div>
+      {linhas.length === 0 && <div className="text-slate-500">Sem impostos a recolher nesta venda.</div>}
+      {linhas.map(([n, v]) => (
+        <div key={n} className="flex justify-between"><span>{n}</span><span className="font-bold">{formatarMoeda(v)}</span></div>
+      ))}
+      <div className="flex justify-between border-t border-amber-200 pt-1 font-black text-amber-800">
+        <span>Total a recolher</span><span>{formatarMoeda(impostos.totalRecolher)}</span>
+      </div>
+      {(impostos.cbs > 0 || impostos.ibs > 0) && (
+        <div className="flex justify-between text-slate-500"><span>CBS / IBS (informativo 2026)</span><span>{formatarMoeda(impostos.cbs)} / {formatarMoeda(impostos.ibs)}</span></div>
+      )}
+      <ul className="list-disc list-inside text-[10px] text-slate-500 pt-1">
+        {impostos.observacoes.map((o, i) => <li key={i}>{o}</li>)}
+      </ul>
     </div>
   );
 };
