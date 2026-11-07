@@ -41,6 +41,7 @@ const SisGepaView = carregar(() => import('./views/SisGepaView'), 'SisGepaView')
 const SisContView = carregar(() => import('./views/SisContView'), 'SisContView');
 const SisFinView = carregar(() => import('./views/SisFinView'), 'SisFinView');
 const ComprasView = carregar(() => import('./views/ComprasView'), 'ComprasView');
+const VendasRelatoriosView = carregar(() => import('./views/VendasRelatoriosView'), 'VendasRelatoriosView');
 const AluguelMaquinasView = carregar(() => import('./views/AluguelMaquinasView'), 'AluguelMaquinasView');
 const EstoqueView = carregar(() => import('./views/EstoqueView'), 'EstoqueView');
 const RhView = carregar(() => import('./views/RhView'), 'RhView');
@@ -258,6 +259,7 @@ const MainAppContent: React.FC = () => {
               {activeModule === 'siscont' && <SisContView />}
               {activeModule === 'sisfin' && <SisFinView />}
               {activeModule === 'compras' && <ComprasView />}
+              {activeModule === 'vendas-relatorios' && <VendasRelatoriosView />}
               {activeModule === 'aluguel-maquinas' && <AluguelMaquinasView />}
               {activeModule === 'estoque' && <EstoqueView />}
               {activeModule === 'rh' && <RhView />}
