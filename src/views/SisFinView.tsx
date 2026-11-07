@@ -96,6 +96,24 @@ export const SisFinView: React.FC = () => {
   const [filtroCategoria, setFiltroCategoria] = useState('TODAS');
   const [filtroConta, setFiltroConta] = useState('TODAS');
   const [filtroBanco, setFiltroBanco] = useState('TODAS');
+  // Contas a Pagar e Receber: filtros de tipo e situação (em aberto / pago)
+  const [filtroSituacao, setFiltroSituacao] = useState<'TODAS' | 'ABERTO' | 'VENCIDO' | 'PAGO' | 'CANCELADO'>('TODAS');
+  const [filtroTipoConta, setFiltroTipoConta] = useState<'TODOS' | 'PAGAR' | 'RECEBER'>('TODOS');
+  const hojeContas = new Date().toISOString().split('T')[0];
+  const situacaoConta = (c: ContaPagarReceber): 'ABERTO' | 'VENCIDO' | 'PAGO' | 'CANCELADO' =>
+    c.status === 'PAGO' ? 'PAGO' : c.status === 'CANCELADO' ? 'CANCELADO' : (c.dataVencimento && c.dataVencimento < hojeContas ? 'VENCIDO' : 'ABERTO');
+  const rotuloSituacao = (c: ContaPagarReceber) => {
+    const s = situacaoConta(c);
+    return s === 'PAGO' ? (c.tipo === 'RECEBER' ? 'Recebido' : 'Pago') : s === 'VENCIDO' ? 'Vencido' : s === 'CANCELADO' ? 'Cancelado' : 'Em aberto';
+  };
+  const contasFiltradas = contasPagarReceber.filter(c =>
+    (filtroBanco === 'TODAS' || (c.contaBancariaId || '') === filtroBanco) &&
+    (filtroTipoConta === 'TODOS' || c.tipo === filtroTipoConta) &&
+    (filtroSituacao === 'TODAS' || situacaoConta(c) === filtroSituacao || (filtroSituacao === 'ABERTO' && situacaoConta(c) === 'VENCIDO'))
+  );
+  const somaContas = (tipo: 'PAGAR' | 'RECEBER', aberto: boolean) => contasFiltradas
+    .filter(c => c.tipo === tipo && (aberto ? (c.status !== 'PAGO' && c.status !== 'CANCELADO') : c.status === 'PAGO'))
+    .reduce((s, c) => s + (Number(c.valor) || 0), 0);
   // Filtro de conta bancária: vale para Dashboard, DRE, Fluxo de Caixa, Contas e Extrato.
   const noBanco = (id?: string) => filtroBanco === 'TODAS' || (id || '') === filtroBanco;
   const [fluxoAnoCompleto, setFluxoAnoCompleto] = useState(true);
@@ -371,7 +389,7 @@ if (c) {
               : 'border-transparent text-slate-500 hover:text-slate-900'
           }`}
         >
-          <CircleDollarSign className="w-4 h-4" /> Títulos & Lançamentos ({contasPagarReceber.length})
+          <CircleDollarSign className="w-4 h-4" /> Contas a Pagar e Receber ({contasPagarReceber.length})
         </button>
         <button
           onClick={() => setActiveTab('extrato')}
@@ -835,13 +853,40 @@ if (c) {
 
       {activeTab === 'contas' && (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-4">
-          <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-black text-slate-900">Contas a Pagar e Receber</h2><p className="text-xs text-slate-500 mt-1">Títulos financeiros registrados no período.</p></div><button onClick={() => gerarRelatorioGerencialPdf('PAGAR_RECEBER')} className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold">Exportar PDF</button></div>
-          <div className="flex items-center gap-2 mb-3 text-xs">
-            <span className="font-bold text-slate-600">Conta bancária:</span>
-            <SelectContaBancaria value={filtroBanco} onChange={setFiltroBanco} contas={contasBancarias} todasLabel="Todas as contas" className="p-2 border border-slate-200 rounded-xl" />
-          </div>
+          <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-black text-slate-900">Contas a Pagar e Receber</h2><p className="text-xs text-slate-500 mt-1">Compras, vendas, chamadas públicas e demais títulos. Use o filtro de situação para ver o que está em aberto ou pago.</p></div><button onClick={() => gerarRelatorioGerencialPdf('PAGAR_RECEBER')} className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold">Exportar PDF</button></div>
+          <div className="flex flex-wrap items-center gap-2 mb-3 text-xs">
+              <span className="font-bold text-slate-600">Conta bancária:</span>
+              <SelectContaBancaria value={filtroBanco} onChange={setFiltroBanco} contas={contasBancarias} todasLabel="Todas as contas" className="p-2 border border-slate-200 rounded-xl" />
+              <span className="font-bold text-slate-600 ml-2">Tipo:</span>
+              <select value={filtroTipoConta} onChange={e => setFiltroTipoConta(e.target.value as 'TODOS' | 'PAGAR' | 'RECEBER')} className="p-2 border border-slate-200 rounded-xl bg-white">
+                <option value="TODOS">Pagar e Receber</option>
+                <option value="PAGAR">A Pagar</option>
+                <option value="RECEBER">A Receber</option>
+              </select>
+              <span className="font-bold text-slate-600 ml-2">Situação:</span>
+              <select value={filtroSituacao} onChange={e => setFiltroSituacao(e.target.value as 'TODAS' | 'ABERTO' | 'VENCIDO' | 'PAGO' | 'CANCELADO')} className="p-2 border border-slate-200 rounded-xl bg-white">
+                <option value="TODAS">Todas</option>
+                <option value="ABERTO">Em aberto</option>
+                <option value="VENCIDO">Vencidas</option>
+                <option value="PAGO">Pagas / Recebidas</option>
+                <option value="CANCELADO">Canceladas</option>
+              </select>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3 text-xs">
+              {([
+                ['A pagar em aberto', somaContas('PAGAR', true), 'text-rose-700'],
+                ['A receber em aberto', somaContas('RECEBER', true), 'text-emerald-700'],
+                ['Pago', somaContas('PAGAR', false), 'text-slate-700'],
+                ['Recebido', somaContas('RECEBER', false), 'text-slate-700']
+              ] as [string, number, string][]).map(([rotulo, valor, cor]) => (
+                <div key={rotulo} className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="text-[10px] font-bold uppercase text-slate-500">{rotulo}</div>
+                  <div className={`text-sm font-black ${cor}`}>{valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+                </div>
+              ))}
+            </div>
           <DataGrid
-              rows={contasPagarReceber.filter(c => filtroBanco === 'TODAS' || (c.contaBancariaId || '') === filtroBanco)}
+              rows={contasFiltradas}
               getRowId={c => c.id}
               pageSize={20}
               onRowDoubleClick={c => handleOpenModal(c)}
@@ -853,7 +898,11 @@ if (c) {
                   key: 'status',
                   header: 'Status',
                   width: 110,
-                  render: c => <GridStatus tone={c.status === 'PAGO' ? 'success' : 'warning'} label={c.status === 'PAGO' ? 'Pago' : c.status === 'PENDENTE' ? 'Pendente' : c.status} />,
+                  value: c => rotuloSituacao(c),
+                render: c => {
+                  const s = situacaoConta(c);
+                  return <GridStatus tone={s === 'PAGO' ? 'success' : s === 'VENCIDO' ? 'danger' : s === 'CANCELADO' ? 'neutral' : 'warning'} label={rotuloSituacao(c)} />;
+                },
                 },
                 {
                   key: 'tipo',
@@ -872,6 +921,7 @@ if (c) {
                 },
                 { key: 'pessoaNome', header: 'Pessoa / Favorecido', width: 200 },
                 { key: 'dataVencimento', header: 'Vencimento', width: 110, value: c => c.dataVencimento, render: c => formatarData(c.dataVencimento) },
+              { key: 'dataPagamento', header: 'Pago/Recebido em', width: 130, value: c => c.dataPagamento || '', render: c => (c.dataPagamento ? formatarData(c.dataPagamento) : null) },
                 { key: 'conta', header: 'Conta Bancária', width: 170, value: c => nomeConta(c.contaBancariaId) },
                 {
                   key: 'valor',
@@ -884,9 +934,9 @@ if (c) {
               ]}
               actions={[
                 {
-                  label: 'Dar baixa',
+                  label: 'Dar baixa (marcar como pago/recebido)',
                   icon: CheckCircle2,
-                  hidden: c => c.status !== 'PENDENTE',
+                  hidden: c => c.status === 'PAGO' || c.status === 'CANCELADO',
                   onClick: c => { if (!canWrite) { blockWriteAction(); return; } pagarReceberConta(c.id); },
                 },
                 { label: 'Editar', icon: Pencil, onClick: c => handleOpenModal(c) },
