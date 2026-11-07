@@ -15,8 +15,16 @@ export interface Atividade {
   prioridade: PrioridadeAtividade;
   /** Prazo no formato AAAA-MM-DD. */
   prazo?: string;
+  /** E-mail do responsável, usado para o convite da Google Agenda. */
+  responsavelEmail?: string;
+  /** Quando true (padrão), o prazo vai para a Google Agenda. */
+  sincronizarAgenda?: boolean;
   /** Evento criado na Google Agenda de quem lançou a atividade. */
   googleEventId?: string;
+  /** Conta Google em cuja agenda o evento fica (dono do evento). */
+  agendaDonoEmail?: string;
+  /** Alteração ainda não enviada à Google Agenda (agenda desconectada). */
+  agendaPendente?: boolean;
   criadoPor?: string;
   criadoEm: string;
   atualizadoEm?: string;
