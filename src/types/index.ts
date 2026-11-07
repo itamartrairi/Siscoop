@@ -1174,7 +1174,16 @@ export interface ItemEstoque {
   valorUnitarioMedio?: number;
   localizacaoAlmoxarifado?: string;
   localizacaoGalpao?: string;
-  lotes?: {
+  /** Preço de venda sugerido na revenda. */
+  precoVenda?: number;
+  /** Tratamento do ICMS na venda (regras do Ceará). */
+  tributacaoIcms?: TributacaoIcmsItem;
+  ncm?: string;
+  fornecedorPadraoId?: string;
+  /** Produto disponível na aba Revendas de Produtos. */
+  paraRevenda?: boolean;
+  ativo?: boolean;
+  descricao?: string;  lotes?: {
     numeroLote: string;
     quantidade: number;
     dataValidade: string;
