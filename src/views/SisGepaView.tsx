@@ -84,6 +84,7 @@ import { expandirItensHistoricoProducao } from '../utils/registroProducaoHelpers
 import { playActionCompleteSound } from '../utils/actionSound';
 import { poloEquivale } from '../utils/poloHelpers';
 import { abrirLinkExterno, montarLinkWhatsApp } from '../utils/whatsappHelpers';
+import { LancarChamadaReceberModal } from '../components/LancarChamadaReceberModal';
 import {
   baixarModeloPlanilhaChamadaPublica,
   parsePlanilhaChamadaPublica,
@@ -212,6 +213,8 @@ export const SisGepaView: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'chamadas' | 'ofertas' | 'rateio' | 'pedidos' | 'entregas' | 'relatorios'>('chamadas');
   const [relatorioSubTab, setRelatorioSubTab] = useState<'pedidos' | 'entregas'>('pedidos');
+  // Chamada pública cujo valor está sendo lançado no Contas a Receber
+  const [chamadaParaReceber, setChamadaParaReceber] = useState<(typeof chamadasPublicas)[number] | null>(null);
 
   // Specific filters for Relatórios de Pedidos e Entregas
   const [relFilterProdutor, setRelFilterProdutor] = useState('TODOS');
@@ -3887,6 +3890,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {chamadaParaReceber && <LancarChamadaReceberModal chamada={chamadaParaReceber} onClose={() => setChamadaParaReceber(null)} />}
             {filteredChamadas.length === 0 ? (
               <div className="lg:col-span-2 p-12 text-center bg-white rounded-2xl border border-slate-200 text-slate-400 text-xs space-y-3">
                 <Building className="w-10 h-10 text-slate-300 mx-auto" />
@@ -3944,6 +3948,14 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                             {cp.status}
                           </span>
                           <button
+                          onClick={() => { if (!canWrite) { blockWriteAction(); return; } setChamadaParaReceber(cp); }}
+                          className={`px-2 py-1 rounded-lg text-[10px] font-black flex items-center gap-1 transition-all ${(cp.contasReceberIds || []).length ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100'}`}
+                          title="Lançar o valor da chamada no Contas a Receber (integral ou parcelado)"
+                        >
+                          <Coins className="w-3 h-3" />
+                          {(cp.contasReceberIds || []).length ? 'No Contas a Receber' : 'Lançar a Receber'}
+                        </button>
+                        <button
                             onClick={() => handleOpenChamada(cp)}
                             className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-emerald-700 transition-all"
                             title="Editar Edital"
