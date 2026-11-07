@@ -458,7 +458,7 @@ export const DashboardView: React.FC<Props> = ({ setActiveView, onNavigateModule
   const activeMandato = mandatos.find(m => m.status === 'VIGENTE');
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-[104rem] mx-auto">
       {/* Top Banner: Firestore Live Sync Status & Actions */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xs transition-all">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
