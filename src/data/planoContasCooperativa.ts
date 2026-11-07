@@ -224,6 +224,16 @@ const CONTAS_INCLUIDAS: LinhaPlano[] = [
   ['31901.0060', 'Depreciações e Amortizações'],
   ['35101.0009', 'Mercadorias e Produtos Diversos – Ato Não Cooperativo'],
   ['35103.0999', 'Outras Receitas Operacionais – Ato Não Cooperativo'],
+  ['21401.0320', 'ICMS a Recolher'],
+  ['21401.0321', 'Simples Nacional (DAS) a Recolher'],
+  ['21401.0322', 'IRPJ a Recolher'],
+  ['35903', 'DESPESAS TRIBUTÁRIAS – ATO NÃO COOPERATIVO'],
+  ['35903.0001', 'ICMS sobre Vendas – Ato Não Cooperativo'],
+  ['35903.0002', 'PIS sobre Vendas – Ato Não Cooperativo'],
+  ['35903.0003', 'COFINS sobre Vendas – Ato Não Cooperativo'],
+  ['35903.0004', 'Simples Nacional (DAS) – Ato Não Cooperativo'],
+  ['35903.0005', 'IRPJ – Ato Não Cooperativo'],
+  ['35903.0006', 'CSLL – Ato Não Cooperativo'],
 ];
 
 export const CODIGOS_INCLUIDOS_PELO_SISTEMA = new Set(CONTAS_INCLUIDAS.map(([c]) => c));
