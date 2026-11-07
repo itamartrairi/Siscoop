@@ -2,6 +2,7 @@ import { formatarData } from '../utils/dateHelpers';
 import React, { useState } from 'react';
 import { useCoop } from '../context/CoopContext';
 import { ContasBancariasTab, SelectContaBancaria, nomeContaBancaria } from '../components/ContasBancariasTab';
+import { RelatoriosPdfTab } from '../components/RelatoriosPdfTab';
 import {
   CircleDollarSign,
   Plus,
@@ -90,7 +91,7 @@ export const SisFinView: React.FC = () => {
     alert('Seu perfil de acesso tem permissão apenas de leitura neste módulo. Fale com um administrador para solicitar permissão de edição.');
   };
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'dre' | 'fluxo' | 'contas' | 'estoque' | 'custos' | 'extrato' | 'balanco' | 'bancos'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'dre' | 'fluxo' | 'contas' | 'estoque' | 'custos' | 'extrato' | 'balanco' | 'bancos' | 'relatorios'>('dashboard');
   const [filtroMes, setFiltroMes] = useState(String(new Date().getMonth() + 1).padStart(2, '0'));
   const [filtroAno, setFiltroAno] = useState(String(new Date().getFullYear()));
   const [filtroCategoria, setFiltroCategoria] = useState('TODAS');
@@ -390,6 +391,16 @@ if (c) {
           }`}
         >
           <CircleDollarSign className="w-4 h-4" /> Contas a Pagar e Receber ({contasPagarReceber.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('relatorios')}
+          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
+            activeTab === 'relatorios'
+              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <FileText className="w-4 h-4" /> Relatórios PDF
         </button>
         <button
           onClick={() => setActiveTab('extrato')}
@@ -954,6 +965,9 @@ if (c) {
             />
         </div>
       )}
+
+      {activeTab === 'relatorios' && <RelatoriosPdfTab tipoInicial="CONTAS" />}
+
 
       {/* Tab Extrato */}
       {activeTab === 'extrato' && (
