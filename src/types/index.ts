@@ -184,7 +184,7 @@ export type TipoTransacaoCapital =
   | 'BAIXA' 
   | 'CORRECAO';
 
-export type FormaPagamento = 'PIX' | 'BOLETO' | 'TRANSFERENCIA' | 'DINHEIRO' | 'DESCONTO_FOLHA';
+export type FormaPagamento = 'PIX' | 'BOLETO' | 'TRANSFERENCIA' | 'DINHEIRO' | 'DESCONTO_FOLHA' | 'CARTAO';
 
 export interface ParcelaCapital {
   id: string;
@@ -562,6 +562,9 @@ export interface ChamadaPublica {
   observacoes?: string;
   arquivoEditalNome?: string;
   itensSolicitados: ItemChamadaPublica[];
+  /** Parcelas lançadas no Contas a Receber a partir desta chamada. */
+  contasReceberIds?: string[];
+  recebivelLancadoEm?: string;
 }
 
 // ==========================================
@@ -1443,6 +1446,14 @@ export interface OrdemCompra {
     subtotal: number;
   }[];
   condicaoPagamento: string;
+  /** INSUMOS (uso próprio) ou REVENDA (mercadorias para revender). */
+  tipoCompra?: 'INSUMOS' | 'REVENDA';
+  formaPagamento?: FormaPagamentoComercial;
+  numeroParcelas?: number;
+  intervaloDias?: number;
+  primeiroVencimento?: string;
+  /** Parcelas geradas no Contas a Pagar. */
+  contasPagarIds?: string[];
   observacoes?: string;
 }
 
@@ -1478,4 +1489,90 @@ export interface LocacaoMaquina {
   observacoes?: string;
   financeiroLancamentoId?: string; // vínculo com o financeiro
   contabilLancamentoId?: string; // vínculo com o contábil
+}
+
+// ==========================================
+// REVENDA DE PRODUTOS & CLIENTES
+// ==========================================
+
+export type FormaPagamentoComercial = 'DINHEIRO' | 'PIX' | 'CARTAO';
+
+export interface Cliente {
+  id: string;
+  tenantId: string;
+  tipoPessoa: 'PF' | 'PJ';
+  /** Nome completo (PF) ou razão social (PJ). */
+  nome: string;
+  nomeFantasia?: string;
+  /** CPF (PF) ou CNPJ (PJ). */
+  documento: string;
+  inscricaoEstadual?: string;
+  rg?: string;
+  dataNascimento?: string;
+  contatoNome?: string;
+  telefone?: string;
+  whatsapp?: string;
+  email?: string;
+  cep?: string;
+  logradouro?: string;
+  numero?: string;
+  complemento?: string;
+  bairro?: string;
+  cidade?: string;
+  uf?: string;
+  limiteCredito?: number;
+  observacoes?: string;
+  ativo: boolean;
+  dataCadastro: string;
+}
+
+export interface ItemVendaRevenda {
+  estoqueItemId: string;
+  descricao: string;
+  unidade: string;
+  quantidade: number;
+  precoUnitario: number;
+  custoUnitario?: number;
+  subtotal: number;
+  fornecedorId?: string;
+  fornecedorNome?: string;
+}
+
+export interface VendaRevenda {
+  id: string;
+  tenantId: string;
+  numeroVenda: string;
+  dataVenda: string;
+  clienteId: string;
+  clienteNome: string;
+  itens: ItemVendaRevenda[];
+  desconto?: number;
+  valorTotal: number;
+  formaPagamento: FormaPagamentoComercial;
+  numeroParcelas: number;
+  intervaloDias: number;
+  primeiroVencimento: string;
+  status: 'CONCLUIDA' | 'CANCELADA';
+  observacoes?: string;
+  /** Contas a receber (parcelas) geradas no Financeiro. */
+  contasReceberIds?: string[];
+  dataCancelamento?: string;
+}
+
+/** Parâmetros para lançar um valor (integral ou parcelado) no Contas a Pagar/Receber. */
+export interface ParcelamentoLancamento {
+  tipo: 'PAGAR' | 'RECEBER';
+  descricaoBase: string;
+  pessoaNome: string;
+  categoria: string;
+  subcategoria?: string;
+  valorTotal: number;
+  numeroParcelas: number;
+  primeiroVencimento: string;
+  intervaloDias: number;
+  formaPagamento?: FormaPagamento;
+  dataEmissao?: string;
+  centroCusto?: string;
+  /** Lança a 1ª parcela já como paga/recebida (venda ou compra à vista). */
+  quitarPrimeiraParcela?: boolean;
 }
