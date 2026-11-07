@@ -61,9 +61,12 @@ const CAMPOS_DE_VINCULO: Record<EntidadeVinculavel, string[]> = {
  * - cooperado × produtores: o produtor rural é um espelho gerado a partir do
  *   cooperado (syncCooperadosWithProdutores); quem verifica o uso do produtor
  *   é o próprio CoopContext, separadamente.
+ * - chamada pública × rateios: o rateio é parte da própria chamada
+ *   (configuração dela), não um cadastro que a utiliza.
  */
 const LISTAS_IGNORADAS: Partial<Record<EntidadeVinculavel, string[]>> = {
-  cooperado: ['produtores']
+  cooperado: ['produtores'],
+  chamadaPublica: ['rateiosChamadas']
 };
 
 /** Nome amigável de cada lista do CoopContext, para a mensagem ao usuário. */
