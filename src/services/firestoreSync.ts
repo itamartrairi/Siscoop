@@ -36,7 +36,7 @@ export const LISTAS_SINCRONIZADAS = [
   'programacoesEntrega', 'prestacoesContas', 'pedidosProdutorPAA', 'ordensCompra', 'planoContas',
   'lancamentosContabeis', 'patrimonio', 'contasPagarReceber', 'solicitacoesCompra', 'fornecedores', 'estoque',
   'movimentacoesEstoque', 'funcionariosRH', 'folhaPagamento', 'escolasPnae', 'motoristas', 'contasBancarias',
-  'maquinas', 'locacoesMaquinas', 'clientes', 'vendasRevenda', 'entregasEscola', 'romaneiosMotorista',
+  'maquinas', 'locacoesMaquinas', 'clientes', 'vendasRevenda', 'entregasEscola', 'romaneiosMotorista', 'atividades',
 ] as const;
 
 /** Objetos únicos (configurações) gravados como um documento cada. */
