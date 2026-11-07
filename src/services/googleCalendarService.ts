@@ -36,6 +36,10 @@ export interface NovoEventoGoogle {
   /** HH:MM; vazio = evento de dia inteiro */
   horaInicio?: string;
   horaFim?: string;
+  /** E-mails convidados (o Google envia o convite). undefined = não mexe nos convidados. */
+  convidados?: string[];
+  /** Cor do evento no Google Agenda ("1" a "11"). */
+  corId?: string;
 }
 
 interface TokenAgenda { token: string; expira: number; email?: string | null }
@@ -118,7 +122,9 @@ const chamar = async (url: string, init: RequestInit = {}) => {
     if (resp.status === 403 && /has not been used|is disabled|accessNotConfigured/i.test(detalhe)) {
       throw new Error('A Google Calendar API não está ativada no projeto do Google Cloud. Ative-a e tente de novo.');
     }
-    throw new Error(`Google Agenda: ${detalhe || `erro ${resp.status}`}`);
+    const erro: any = new Error(`Google Agenda: ${detalhe || `erro ${resp.status}`}`);
+    erro.status = resp.status;
+    throw erro;
   }
   return resp.status === 204 ? null : resp.json();
 };
@@ -152,20 +158,27 @@ const corpoEvento = (ev: NovoEventoGoogle) => {
     const total = Math.min(h * 60 + m + 60, 23 * 60 + 59);
     fim = `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
   }
-  return {
+  const corpo: Record<string, unknown> = {
     summary: ev.titulo,
-    description: ev.descricao || undefined,
-    location: ev.local || undefined,
-    start: diaInteiro ? { date: ev.data } : { dateTime: `${ev.data}T${ev.horaInicio}:00`, timeZone: fuso },
-    end: diaInteiro ? { date: somarDia(ev.data) } : { dateTime: `${ev.data}T${fim}:00`, timeZone: fuso }
+    description: ev.descricao || '',
+    location: ev.local || '',
+    start: diaInteiro ? { date: ev.data, dateTime: null } : { dateTime: `${ev.data}T${ev.horaInicio}:00`, timeZone: fuso, date: null },
+    end: diaInteiro ? { date: somarDia(ev.data), dateTime: null } : { dateTime: `${ev.data}T${fim}:00`, timeZone: fuso, date: null }
   };
+  if (ev.convidados) corpo.attendees = ev.convidados.map(email => ({ email }));
+  if (ev.corId) corpo.colorId = ev.corId;
+  return corpo;
 };
 
+// Com convidados, o Google envia o convite/atualização por e-mail.
+const sufixoConvite = (ev: NovoEventoGoogle) => (ev.convidados && ev.convidados.length ? '?sendUpdates=all' : '');
+
 export const criarEventoGoogle = async (ev: NovoEventoGoogle): Promise<EventoGoogle> =>
-  chamar(API, { method: 'POST', body: JSON.stringify(corpoEvento(ev)) });
+  // Na criação não há campo antigo a limpar: os null são removidos do corpo.
+  chamar(`${API}${sufixoConvite(ev)}`, { method: 'POST', body: JSON.stringify(corpoEvento(ev), (_k, v) => (v === null ? undefined : v)) });
 
 export const atualizarEventoGoogle = async (id: string, ev: NovoEventoGoogle): Promise<EventoGoogle> =>
-  chamar(`${API}/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(corpoEvento(ev)) });
+  chamar(`${API}/${encodeURIComponent(id)}${sufixoConvite(ev)}`, { method: 'PATCH', body: JSON.stringify(corpoEvento(ev)) });
 
 export const excluirEventoGoogle = async (id: string): Promise<void> => {
   await chamar(`${API}/${encodeURIComponent(id)}`, { method: 'DELETE' });
