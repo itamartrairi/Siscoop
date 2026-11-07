@@ -2,7 +2,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
+    // Funções auxiliares
     function isSignedIn() {
       return request.auth != null;
     }
@@ -12,37 +12,25 @@ service cloud.firestore {
         request.auth.token.email_verified == true ||
         request.auth.token.firebase.sign_in_provider == 'google.com' ||
         request.auth.token.firebase.sign_in_provider == 'password'
-      );
+        );
     }
 
     function isCurrentUser(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // Admin é definido exclusivamente pela existência de um documento em
-    // /admins/{uid}. Os dois e-mails que estavam embutidos aqui foram removidos:
-    // e-mail em regra é frágil (basta trocar o endereço da conta ou registrar o
-    // domínio para virar admin) e obrigava um deploy de regras a cada mudança.
-    //
-    // Para promover alguém, crie /admins/{uid} pelo console do Firebase.
+    // Admin = existe /admins/{uid} (criado pelo console do Firebase).
     function isAdmin() {
       return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    // Tenant (cooperativa) do usuário autenticado, lido do documento
-    // users/{uid} — mantido sincronizado pelo app a cada login
-    // (ver src/services/firebaseDbService.ts -> saveUserTenantMappingToFirestore).
-    // Sem esse documento (ex.: usuário acabou de se cadastrar e ainda não
-    // concluiu o cadastro da cooperativa), a função falha e o acesso aos
-    // dados de outras coleções é negado por padrão (fail-closed).
+    // Cooperativa (tenant) do usuário, lida de users/{uid}.
     function myTenantId() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tenantId;
     }
 
     function belongsToTenant(dataTenantId) {
-      // Além do users/{uid}, exige que a pessoa ainda seja dona da cooperativa
-      // ou membro ATIVO da equipe (tenantMembers). Assim, usuário desativado ou
-      // excluído em Configurações → Usuários perde o acesso ao banco na hora.
+      // Exige ser dono da cooperativa ou membro ATIVO da equipe.
       return isSignedIn() && dataTenantId == myTenantId() &&
         (donoDoTenant(dataTenantId) || membroDoTenant(dataTenantId));
     }
@@ -55,11 +43,7 @@ service cloud.firestore {
         get(/databases/$(database)/documents/tenantOwners/$(tenantId)).data.ownerUid == request.auth.uid;
     }
 
-    // Equipe: tenantMembers/{email} é gravado pelo dono (ou gestor) da
-    // cooperativa em Configurações → Usuários. Quem entra com Google ou com
-    // e-mail/senha usando esse e-mail pode se vincular à cooperativa.
-    // Exige e-mail verificado (Google) OU que a conta seja exatamente a criada
-    // pelo administrador (authUid), para ninguém "reservar" o e-mail de outro.
+    // Equipe: tenantMembers/{email} gravado pelo dono/gestor em Configurações → Usuários.
     function emailDoLogin() {
       return request.auth.token.email.lower();
     }
@@ -86,9 +70,7 @@ service cloud.firestore {
       return data.nome is string && data.nome.size() > 0 && data.nome.size() <= 120;
     }
 
-    // Cargos e Departamentos são comuns a todas as cooperativas. O uso de
-    // cada item por cooperativa fica em usoCadastrosRH/{colecao}__{itemId};
-    // enquanto houver uso registrado, ninguém (exceto admin) exclui o item.
+    // Cargos e Departamentos são comuns a todas as cooperativas.
     function vinculadoAAlgumaCooperativa() {
       return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
         myTenantId() is string && myTenantId() != '';
@@ -98,123 +80,108 @@ service cloud.firestore {
         get(/databases/$(database)/documents/usoCadastrosRH/$(colecao + '__' + itemId)).data.get('tenants', {}).size() == 0;
     }
 
-
-    // Default: negado. Nada é liberado por padrão — cada coleção usada pelo
-    // app precisa de uma regra explícita abaixo.
+    // Padrão: tudo negado. Cada coleção usada pelo app tem regra explícita abaixo.
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Admins collection — cada usuário só consegue verificar o próprio status.
-    // Antes, qualquer conta autenticada podia LISTAR a coleção inteira e
-    // descobrir exatamente quais UIDs atacar.
-    // A escrita fica fora do app: promover admin é operação de console.
-    // Portal do Cooperado: resumo de cada cooperado publicado pela cooperativa.
+    // Portal do Cooperado
     match /portalCooperados/{docId} {
       allow read: if (isSignedIn() && request.auth.token.email_verified == true &&
-                      resource.data.cooperadoEmail == request.auth.token.email.lower()) ||
-                     isAdmin() || belongsToTenant(resource.data.tenantId);
+        resource.data.cooperadoEmail == request.auth.token.email.lower()) ||
+        isAdmin() || belongsToTenant(resource.data.tenantId);
       allow create, update: if (isAdmin() || belongsToTenant(request.resource.data.tenantId)) &&
-                               docId == request.resource.data.tenantId + '__' + request.resource.data.cooperadoId;
+        docId == request.resource.data.tenantId + '__' + request.resource.data.cooperadoId;
       allow delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
     }
 
-    // App do Produtor: resumo de cada produtor publicado pela cooperativa.
+    // App do Produtor
     match /portalProdutores/{docId} {
       allow read: if (isSignedIn() && request.auth.token.email_verified == true &&
-                      resource.data.produtorEmail == request.auth.token.email.lower()) ||
-                     isAdmin() || belongsToTenant(resource.data.tenantId);
+        resource.data.produtorEmail == request.auth.token.email.lower()) ||
+        isAdmin() || belongsToTenant(resource.data.tenantId);
       allow create, update: if (isAdmin() || belongsToTenant(request.resource.data.tenantId)) &&
-                               docId == request.resource.data.tenantId + '__' + request.resource.data.produtorId;
+        docId == request.resource.data.tenantId + '__' + request.resource.data.produtorId;
       allow delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
     }
 
-    // Ofertas feitas pelo produtor. Alteração só em ofertas que já são dele.
+    // Ofertas feitas pelo produtor
     match /portalProdutoresOfertas/{docId} {
       allow create: if isSignedIn() && request.auth.token.email_verified == true &&
-                       request.resource.data.keys().hasOnly(['tenantId', 'produtorId', 'produtorEmail', 'tipo', 'ofertaId', 'dados', 'criadoEm']) &&
-                       request.resource.data.produtorEmail == request.auth.token.email.lower() &&
-                       get(/databases/$(database)/documents/portalProdutores/$(request.resource.data.tenantId + '__' + request.resource.data.produtorId)).data.produtorEmail == request.auth.token.email.lower() &&
-                       (request.resource.data.tipo == 'nova' ||
-                        (request.resource.data.tipo == 'alterar' && request.resource.data.ofertaId in get(/databases/$(database)/documents/portalProdutores/$(request.resource.data.tenantId + '__' + request.resource.data.produtorId)).data.ofertaIds));
+        request.resource.data.keys().hasOnly(['tenantId', 'produtorId', 'produtorEmail', 'tipo', 'ofertaId', 'dados', 'criadoEm']) &&
+        request.resource.data.produtorEmail == request.auth.token.email.lower() &&
+        get(/databases/$(database)/documents/portalProdutores/$(request.resource.data.tenantId + '__' + request.resource.data.produtorId)).data.produtorEmail == request.auth.token.email.lower() &&
+        (request.resource.data.tipo == 'nova' ||
+        (request.resource.data.tipo == 'alterar' && request.resource.data.ofertaId in get(/databases/$(database)/documents/portalProdutores/$(request.resource.data.tenantId + '__' + request.resource.data.produtorId)).data.ofertaIds));
       allow read, delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
       allow update: if false;
     }
 
-    // Portal do Motorista: rotas de cada motorista publicadas pela cooperativa.
+    // Portal do Motorista
     match /portalMotoristas/{docId} {
       allow read: if (isSignedIn() && request.auth.token.email_verified == true &&
-                      resource.data.motoristaEmail == request.auth.token.email.lower()) ||
-                     isAdmin() || belongsToTenant(resource.data.tenantId);
+        resource.data.motoristaEmail == request.auth.token.email.lower()) ||
+        isAdmin() || belongsToTenant(resource.data.tenantId);
       allow create, update: if (isAdmin() || belongsToTenant(request.resource.data.tenantId)) &&
-                               docId == request.resource.data.tenantId + '__' + request.resource.data.motoristaId;
+        docId == request.resource.data.tenantId + '__' + request.resource.data.motoristaId;
       allow delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
     }
 
-    // Entregas confirmadas pelo motorista, só em rotas atribuídas a ele.
+    // Entregas confirmadas pelo motorista
     match /portalMotoristasAtualizacoes/{docId} {
       allow create: if isSignedIn() && request.auth.token.email_verified == true &&
-                       request.resource.data.keys().hasOnly(['tenantId', 'motoristaId', 'motoristaEmail', 'programacaoId', 'alteracoes', 'criadoEm']) &&
-                       request.resource.data.motoristaEmail == request.auth.token.email.lower() &&
-                       get(/databases/$(database)/documents/portalMotoristas/$(request.resource.data.tenantId + '__' + request.resource.data.motoristaId)).data.motoristaEmail == request.auth.token.email.lower() &&
-                       request.resource.data.programacaoId in get(/databases/$(database)/documents/portalMotoristas/$(request.resource.data.tenantId + '__' + request.resource.data.motoristaId)).data.rotaIds;
+        request.resource.data.keys().hasOnly(['tenantId', 'motoristaId', 'motoristaEmail', 'programacaoId', 'alteracoes', 'criadoEm']) &&
+        request.resource.data.motoristaEmail == request.auth.token.email.lower() &&
+        get(/databases/$(database)/documents/portalMotoristas/$(request.resource.data.tenantId + '__' + request.resource.data.motoristaId)).data.motoristaEmail == request.auth.token.email.lower() &&
+        request.resource.data.programacaoId in get(/databases/$(database)/documents/portalMotoristas/$(request.resource.data.tenantId + '__' + request.resource.data.motoristaId)).data.rotaIds;
       allow read, delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
       allow update: if false;
     }
 
-    // Portal da Escola: resumo por escola publicado pela cooperativa.
-    // A escola entra por link de e-mail (sem senha) e lê só o documento com o seu e-mail.
+    // Portal da Escola
     match /portalEscolas/{docId} {
       allow read: if (isSignedIn() && request.auth.token.email_verified == true &&
-                      resource.data.escolaEmail == request.auth.token.email.lower()) ||
-                     isAdmin() || belongsToTenant(resource.data.tenantId);
+        resource.data.escolaEmail == request.auth.token.email.lower()) ||
+        isAdmin() || belongsToTenant(resource.data.tenantId);
       allow create, update: if (isAdmin() || belongsToTenant(request.resource.data.tenantId)) &&
-                               docId == request.resource.data.tenantId + '__' + request.resource.data.escolaId;
+        docId == request.resource.data.tenantId + '__' + request.resource.data.escolaId;
       allow delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
     }
 
-    // Comprovantes de entrega registrados pela escola. A cooperativa importa e apaga.
+    // Comprovantes de entrega registrados pela escola
     match /portalEscolasComprovantes/{docId} {
       allow create: if isSignedIn() && request.auth.token.email_verified == true &&
-                       request.resource.data.keys().hasOnly(['tenantId', 'escolaId', 'escolaEmail', 'entrega', 'criadoEm']) &&
-                       request.resource.data.escolaEmail == request.auth.token.email.lower() &&
-                       get(/databases/$(database)/documents/portalEscolas/$(request.resource.data.tenantId + '__' + request.resource.data.escolaId)).data.escolaEmail == request.auth.token.email.lower();
+        request.resource.data.keys().hasOnly(['tenantId', 'escolaId', 'escolaEmail', 'entrega', 'criadoEm']) &&
+        request.resource.data.escolaEmail == request.auth.token.email.lower() &&
+        get(/databases/$(database)/documents/portalEscolas/$(request.resource.data.tenantId + '__' + request.resource.data.escolaId)).data.escolaEmail == request.auth.token.email.lower();
       allow read, delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
       allow update: if false;
     }
 
+    // Admins: cada usuário só verifica o próprio status
     match /admins/{userId} {
       allow read: if isCurrentUser(userId);
       allow write: if false;
     }
 
-    // users/{uid}: mapeamento usuário -> tenantId, usado pelas regras acima.
-    //
-    // O usuário pode criar o próprio documento uma vez (no primeiro login),
-    // mas NÃO pode trocar o tenantId depois. Como esse campo é a base de todo
-    // o isolamento entre cooperativas, permitir a edição livre significava que
-    // qualquer usuário podia reescrever o próprio tenantId e passar a ler os
-    // dados de outra cooperativa.
-    // Dono de cada cooperativa, registrado uma única vez pelo próprio dono.
+    // Dono de cada cooperativa, registrado uma única vez pelo próprio dono
     match /tenantOwners/{tenantId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
       allow update, delete: if isAdmin();
     }
 
+    // users/{uid}: vínculo usuário → cooperativa (o tenantId não pode ser trocado)
     match /users/{userId} {
       allow read: if isCurrentUser(userId) || isAdmin();
-      // Só é possível se vincular (tenantId) a uma cooperativa da qual você é o
-      // dono registrado em /tenantOwners — antes qualquer conta podia gravar o
-      // tenantId de outra cooperativa e ler os dados dela.
       allow create: if isAdmin() || (isCurrentUser(userId) && tenantLiberado(request.resource.data));
       allow update: if isAdmin() ||
-                    (isCurrentUser(userId) && request.resource.data.tenantId == resource.data.tenantId) ||
-                    (isCurrentUser(userId) && semTenant(resource.data) && tenantLiberado(request.resource.data));
+        (isCurrentUser(userId) && request.resource.data.tenantId == resource.data.tenantId) ||
+        (isCurrentUser(userId) && semTenant(resource.data) && tenantLiberado(request.resource.data));
       allow delete: if isAdmin();
     }
 
-    // Equipe da cooperativa: vínculo e-mail → cooperativa (Configurações → Usuários).
+    // Equipe da cooperativa (Configurações → Usuários)
     match /tenantMembers/{email} {
       allow read: if (isSignedIn() && ('email' in request.auth.token) && emailDoLogin() == email) ||
         isAdmin() || belongsToTenant(resource.data.tenantId) || donoDoTenant(resource.data.tenantId);
@@ -222,39 +189,36 @@ service cloud.firestore {
         (email == request.resource.data.email && gestorDoTenant(request.resource.data.tenantId));
       allow update: if isAdmin() ||
         (email == request.resource.data.email &&
-         request.resource.data.tenantId == resource.data.tenantId &&
-         gestorDoTenant(resource.data.tenantId));
+        request.resource.data.tenantId == resource.data.tenantId &&
+        gestorDoTenant(resource.data.tenantId));
       allow delete: if isAdmin() || gestorDoTenant(resource.data.tenantId);
     }
 
-        // Cadastros de RH: Departamentos e Cargos — COMUNS a todas as cooperativas.
-    // Qualquer cooperativa vinculada lê e edita a mesma lista; tenantId só
-    // registra quem cadastrou (não pode ser trocado). Exclusão só sem uso.
+    // Departamentos (comuns a todas as cooperativas)
     match /departamentos/{departamentoId} {
       allow read: if isSignedIn();
       allow create: if isAdmin() ||
         (belongsToTenant(request.resource.data.tenantId) && cadastroRHValido(request.resource.data));
       allow update: if isAdmin() ||
         (vinculadoAAlgumaCooperativa() &&
-         request.resource.data.get('tenantId', null) == resource.data.get('tenantId', null) &&
-         cadastroRHValido(request.resource.data));
+        request.resource.data.get('tenantId', null) == resource.data.get('tenantId', null) &&
+        cadastroRHValido(request.resource.data));
       allow delete: if isAdmin() || (vinculadoAAlgumaCooperativa() && semUsoRegistradoRH('departamentos', departamentoId));
     }
 
+    // Cargos (comuns a todas as cooperativas)
     match /cargos/{cargoId} {
       allow read: if isSignedIn();
       allow create: if isAdmin() ||
         (belongsToTenant(request.resource.data.tenantId) && cadastroRHValido(request.resource.data));
       allow update: if isAdmin() ||
         (vinculadoAAlgumaCooperativa() &&
-         request.resource.data.get('tenantId', null) == resource.data.get('tenantId', null) &&
-         cadastroRHValido(request.resource.data));
+        request.resource.data.get('tenantId', null) == resource.data.get('tenantId', null) &&
+        cadastroRHValido(request.resource.data));
       allow delete: if isAdmin() || (vinculadoAAlgumaCooperativa() && semUsoRegistradoRH('cargos', cargoId));
     }
 
-    // Uso de cada cargo/departamento por cooperativa: { colecao, itemId,
-    // tenants: { <tenantId>: quantidade } }. Cada cooperativa só mexe na
-    // própria chave do mapa tenants.
+    // Uso de cada cargo/departamento por cooperativa
     match /usoCadastrosRH/{usoId} {
       allow read: if isSignedIn();
       allow create: if vinculadoAAlgumaCooperativa() &&
@@ -270,13 +234,12 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Diagnóstico de conexão (Configurações → Integrações → testar Firestore):
-    // cada usuário grava e lê só o próprio documento.
+    // Diagnóstico de conexão: cada usuário grava e lê só o próprio documento
     match /diagnostico/{userId} {
       allow read, write: if isCurrentUser(userId);
     }
 
-    // Cooperados collection — isolado por cooperativa (tenantId)
+    // Cooperados
     match /cooperados/{cooperadoId} {
       allow read, update, delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
       allow create: if isAdmin() || belongsToTenant(request.resource.data.tenantId);
@@ -300,32 +263,26 @@ service cloud.firestore {
       allow create: if isAdmin() || belongsToTenant(request.resource.data.tenantId);
     }
 
-    // Histórico de Backups — apenas leitura/criação pela própria cooperativa;
-    // alterar/apagar backup é ação só de admin
+    // Histórico de Backups
     match /backups/{backupId} {
       allow read: if isAdmin() || belongsToTenant(resource.data.tenantId);
       allow create: if isAdmin() || belongsToTenant(request.resource.data.tenantId);
       allow update, delete: if isAdmin();
     }
 
-    // Cooperativa / Tenants — o próprio registro da cooperativa só pode ser
-    // lido/editado por quem pertence a ela (ou admin)
+    // Cadastro da cooperativa
     match /tenants/{tenantId} {
       allow read, update: if isAdmin() || belongsToTenant(tenantId);
-      // Criação acontece no cadastro inicial, antes de o usuário ter tenantId.
-      // A condição extra impede que uma conta crie cooperativas em massa: ela
-      // só pode criar o tenant que já está registrado no próprio /users/{uid},
-      // ou um primeiro tenant se ainda não tiver nenhum vínculo.
       allow create: if isSignedIn() && (
         !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
         tenantId == myTenantId()
-      );
+        );
       allow delete: if isAdmin();
     }
-    // Todos os dados da cooperativa (cadastros, financeiro, contábil, estoque,
-    // compras, vendas, PAA/PNAE, RH...), um documento por registro, gravados
-    // automaticamente pelo app (src/services/firestoreSync.ts).
-    // id = <tenantId>__<colecao>__<registroId>
+
+    // NOVO — Todos os dados da cooperativa (cadastros, financeiro, contábil,
+    // estoque, compras, vendas, PAA/PNAE, RH...), um documento por registro,
+    // gravados automaticamente pelo app. id = <tenantId>__<colecao>__<registroId>
     match /dadosCooperativa/{docId} {
       allow read, delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
       allow create: if (isAdmin() || belongsToTenant(request.resource.data.tenantId)) &&
@@ -340,9 +297,7 @@ service cloud.firestore {
         request.resource.data.json is string;
     }
 
-
-    // Assinaturas e logs de webhook são gravados pelo backend com credencial de
-    // serviço (que ignora estas regras). Nenhum cliente precisa de acesso.
+    // Assinaturas e logs de webhook: só o backend (credencial de serviço)
     match /assinaturas/{email} {
       allow read, write: if false;
     }
@@ -351,9 +306,7 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // A coleção /test era gravável por qualquer usuário autenticado — uma
-    // porta aberta para inflar a conta de escrita do projeto. O teste de
-    // conexão agora só lê um documento fixo e público de diagnóstico.
+    // Teste de conexão: só leitura
     match /test/connection {
       allow read: if isSignedIn();
       allow write: if false;
