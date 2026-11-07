@@ -3966,42 +3966,36 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setOrdensCompra(prev => [{ ...newOc, contasPagarIds }, ...prev]);
 
     // Integração SisEstoque: Registrar entrada automática no estoque para todos os itens da compra
-    const rawItems = (newOc.itens && newOc.itens.length > 0)
-      ? newOc.itens
-      : [{
-          descricao: newOc.observacoes || 'Item de Compra Geral',
-          quantidade: 100,
-          unidade: 'UN',
-          precoUnitario: newOc.valorTotal / 100,
-          subtotal: newOc.valorTotal
-        }];
+    const rawItems = newOc.itens || [];
 
+    const novosItensEstoque: ItemEstoque[] = [];
+    const incrementosEstoque = new Map<string, { qtd: number; precoUnitario: number }>();
+    const novasMovsOc: MovimentacaoEstoque[] = [];
+    const nowStrOc = new Date().toISOString().replace('T', ' ').substring(0, 16);
     rawItems.forEach((item, idx) => {
       const descItem = item.descricao || (item as any).descricaoItem || 'Insumos / Embalagens Solicitadas';
-      const qty = Number(item.quantidade) || 1;
+      const qty = Number(item.quantidade) || 0;
+      if (qty <= 0) return;
       const unit = item.unidade || 'UN';
-      const unitPrice = Number(item.precoUnitario) || (qty > 0 ? newOc.valorTotal / qty : 0);
-
-      setEstoque(prevEst => {
-        const requestedId = (item as any).estoqueItemId;
-        const existingIdx = requestedId
-          ? prevEst.findIndex(e => e.id === requestedId)
-          : prevEst.findIndex(e => e.nomeItem.toLowerCase().trim() === descItem.toLowerCase().trim());
-
-        let targetItemId = '';
-        let updatedEst = [...prevEst];
-
-        if (existingIdx >= 0) {
-          const existing = updatedEst[existingIdx];
-          targetItemId = existing.id;
-          updatedEst[existingIdx] = {
-            ...existing,
-            quantidadeAtual: existing.quantidadeAtual + qty,
-            valorUnitarioMedio: unitPrice > 0 ? unitPrice : existing.valorUnitarioMedio
-          };
+      const unitPrice = Number(item.precoUnitario) || 0;
+      const requestedId = (item as any).estoqueItemId;
+      const mesmoNome = (e: ItemEstoque) => (e.nomeItem || '').toLowerCase().trim() === descItem.toLowerCase().trim();
+      const existente = requestedId ? estoque.find(e => e.id === requestedId) : estoque.find(mesmoNome);
+      let targetItemId = '';
+      if (existente) {
+        targetItemId = existente.id;
+        const inc = incrementosEstoque.get(existente.id) || { qtd: 0, precoUnitario: 0 };
+        inc.qtd += qty;
+        if (unitPrice > 0) inc.precoUnitario = unitPrice;
+        incrementosEstoque.set(existente.id, inc);
+      } else {
+        const jaCriado = novosItensEstoque.find(mesmoNome);
+        if (jaCriado) {
+          targetItemId = jaCriado.id;
+          jaCriado.quantidadeAtual += qty;
         } else {
           targetItemId = `est-oc-${Date.now()}-${idx}`;
-          const newItem: ItemEstoque = {
+          novosItensEstoque.push({
             id: targetItemId,
             tenantId: currentTenant.id,
             codigoSku: `SKU-OC-${Date.now().toString().slice(-4)}${idx}`,
@@ -4012,28 +4006,32 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
             quantidadeMinima: 10,
             valorUnitarioMedio: unitPrice,
             localizacaoGalpao: 'Galpão Central - Depósito de Compras'
-          };
-          updatedEst = [newItem, ...updatedEst];
+          });
         }
-
-        // Registrar Histórico de Movimentação no SisEstoque
-        const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
-        const newMov: MovimentacaoEstoque = {
-          id: `mov-oc-${Date.now()}-${idx}`,
-          tenantId: currentTenant.id,
-          itemEstoqueId: targetItemId,
-          itemNome: descItem,
-          tipoMovimento: 'ENTRADA',
-          quantidade: qty,
-          motivo: `Compra Registrada no SisCompras (Ordem OC #${newOc.numeroOrdem} - ${newOc.fornecedorNome})`,
-          dataHora: nowStr,
-          responsavel: currentUser?.name || 'SisCompras'
-        };
-        setMovimentacoesEstoque(prevMov => [newMov, ...prevMov]);
-
-        return updatedEst;
+      }
+      // Histórico de Movimentação no SisEstoque (fora do setEstoque para não duplicar)
+      novasMovsOc.push({
+        id: `mov-oc-${Date.now()}-${idx}`,
+        tenantId: currentTenant.id,
+        itemEstoqueId: targetItemId,
+        itemNome: descItem,
+        tipoMovimento: 'ENTRADA',
+        quantidade: qty,
+        motivo: `Compra Registrada no SisCompras (Ordem OC #${newOc.numeroOrdem} - ${newOc.fornecedorNome})`,
+        dataHora: nowStrOc,
+        responsavel: currentUser?.name || 'SisCompras'
       });
     });
+    setEstoque(prevEst => [
+      ...novosItensEstoque,
+      ...prevEst.map(e => {
+        const inc = incrementosEstoque.get(e.id);
+        return inc
+          ? { ...e, quantidadeAtual: (Number(e.quantidadeAtual) || 0) + inc.qtd, valorUnitarioMedio: inc.precoUnitario > 0 ? inc.precoUnitario : e.valorUnitarioMedio }
+          : e;
+      })
+    ]);
+    if (novasMovsOc.length) setMovimentacoesEstoque(prevMov => [...novasMovsOc, ...prevMov]);
 
     addAuditLog('CONFIGURACOES', 'INCLUSAO', `Criou Ordem de Compra #${newOc.numeroOrdem} para ${newOc.fornecedorNome} e creditou no SisEstoque`);
   };
@@ -4045,15 +4043,24 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // 1) Estoque: estorna (saída) as entradas geradas por esta ordem. Usa
     // addMovimentacaoEstoque para que a baixa contábil correspondente
     // também seja gerada automaticamente.
-    const entradasDaOrdem = movimentacoesEstoque.filter(m =>
-      m.tipoMovimento === 'ENTRADA' && (m.motivo || '').includes(`OC #${ordem.numeroOrdem}`)
-    );
-    entradasDaOrdem.forEach(mov => {
+    // Saldo líquido que a ordem ainda tem no estoque (entradas da compra
+    // menos ajustes de saída feitos na edição da ordem).
+    const tagOc = `OC #${ordem.numeroOrdem} - `;
+    const saldoOcPorItem = new Map<string, { nome?: string; qtd: number }>();
+    movimentacoesEstoque
+      .filter(m => (m.motivo || '').includes(tagOc))
+      .forEach(m => {
+        const s = saldoOcPorItem.get(m.itemEstoqueId) || { nome: m.itemNome, qtd: 0 };
+        s.qtd += m.tipoMovimento === 'ENTRADA' ? (Number(m.quantidade) || 0) : -(Number(m.quantidade) || 0);
+        saldoOcPorItem.set(m.itemEstoqueId, s);
+      });
+    saldoOcPorItem.forEach((s, itemId) => {
+      if (s.qtd <= 0) return;
       addMovimentacaoEstoque({
-        itemEstoqueId: mov.itemEstoqueId,
-        itemNome: mov.itemNome,
+        itemEstoqueId: itemId,
+        itemNome: s.nome,
         tipoMovimento: 'SAIDA',
-        quantidade: mov.quantidade,
+        quantidade: s.qtd,
         motivo: `Estorno por exclusão/cancelamento da Ordem de Compra #${ordem.numeroOrdem}`,
         usuarioResponsavel: currentUser?.name
       } as any);
@@ -4077,6 +4084,39 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // — só uma vez, na transição para CANCELADA.
     if (oData.status === 'CANCELADA' && alvo && alvo.status !== 'CANCELADA') {
       reverterEfeitosOrdemCompra(alvo);
+    }
+    // Edição dos itens: ajusta no estoque apenas a diferença de quantidade.
+    if (alvo && oData.itens && alvo.status !== 'CANCELADA' && oData.status !== 'CANCELADA') {
+      const chaveItem = (i: any) => i.estoqueItemId || (i.descricao || '').toLowerCase().trim();
+      const somarItens = (lista: any[]) => {
+        const m = new Map<string, { qtd: number; item: any }>();
+        (lista || []).forEach(i => {
+          const k = chaveItem(i);
+          const a = m.get(k) || { qtd: 0, item: i };
+          a.qtd += Number(i.quantidade) || 0;
+          m.set(k, a);
+        });
+        return m;
+      };
+      const antes = somarItens(alvo.itens);
+      const depois = somarItens(oData.itens);
+      new Set([...antes.keys(), ...depois.keys()]).forEach(k => {
+        const delta = (depois.get(k)?.qtd || 0) - (antes.get(k)?.qtd || 0);
+        if (!delta) return;
+        const ref = (depois.get(k) || antes.get(k))!.item;
+        const est = ref.estoqueItemId
+          ? estoque.find(e => e.id === ref.estoqueItemId)
+          : estoque.find(e => (e.nomeItem || '').toLowerCase().trim() === (ref.descricao || '').toLowerCase().trim());
+        if (!est) return;
+        addMovimentacaoEstoque({
+          itemEstoqueId: est.id,
+          itemNome: est.nomeItem,
+          tipoMovimento: delta > 0 ? 'ENTRADA' : 'SAIDA',
+          quantidade: Math.abs(delta),
+          motivo: `Ajuste da Ordem OC #${alvo.numeroOrdem} - ${alvo.fornecedorNome}`,
+          usuarioResponsavel: currentUser?.name
+        } as any);
+      });
     }
     setOrdensCompra(prev => prev.map(o => o.id === id ? { ...o, ...oData } : o));
     addAuditLog('COMPRAS', 'ALTERACAO', `Atualizou ordem de compra ${alvo?.numeroOrdem || id}`);
@@ -4765,12 +4805,43 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       tenantId: currentTenant.id
     };
     setEstoque(prev => [newItem, ...prev]);
+    const saldoInicial = Number(newItem.quantidadeAtual) || 0;
+    newItem.quantidadeAtual = saldoInicial;
+    if (saldoInicial > 0) {
+      const movInicial: MovimentacaoEstoque = {
+        id: `mov-ini-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
+        tenantId: currentTenant.id,
+        itemEstoqueId: newItem.id,
+        itemNome: newItem.nomeItem,
+        tipoMovimento: 'ENTRADA',
+        quantidade: saldoInicial,
+        motivo: 'Saldo inicial no cadastro do produto',
+        dataHora: new Date().toISOString().replace('T', ' ').substring(0, 16),
+        responsavel: currentUser?.name || 'Sistema'
+      };
+      setMovimentacoesEstoque(prev => [movInicial, ...prev]);
+    }
     addAuditLog('ESTOQUE', 'INCLUSAO', `Cadastrou item de estoque: ${newItem.nomeItem || newItem.id}`);
   };
 
   const updateItemEstoque = (id: string, iData: Partial<ItemEstoque>) => {
     const alvo = estoque.find(x => x.id === id);
     if (bloqueadoPorStatusFinal(alvo, 'item de estoque')) return;
+    if (alvo && iData.quantidadeAtual !== undefined && Number(iData.quantidadeAtual) !== (Number(alvo.quantidadeAtual) || 0)) {
+      const deltaAjuste = (Number(iData.quantidadeAtual) || 0) - (Number(alvo.quantidadeAtual) || 0);
+      const movAjuste: MovimentacaoEstoque = {
+        id: `mov-aj-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
+        tenantId: currentTenant.id,
+        itemEstoqueId: id,
+        itemNome: alvo.nomeItem,
+        tipoMovimento: deltaAjuste > 0 ? 'ENTRADA' : 'SAIDA',
+        quantidade: Math.abs(deltaAjuste),
+        motivo: 'Ajuste manual de saldo no cadastro do item',
+        dataHora: new Date().toISOString().replace('T', ' ').substring(0, 16),
+        responsavel: currentUser?.name || 'Sistema'
+      };
+      setMovimentacoesEstoque(prev => [movAjuste, ...prev]);
+    }
     setEstoque(prev => prev.map(i => i.id === id ? { ...i, ...iData } : i));
     addAuditLog('ESTOQUE', 'ALTERACAO', `Atualizou item de estoque ${alvo?.nomeItem || id}`);
   };
@@ -4786,6 +4857,16 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deleteMovimentacaoEstoque = (id: string) => {
     const alvo = movimentacoesEstoque.find(x => x.id === id);
     setMovimentacoesEstoque(prev => prev.filter(m => m.id !== id));
+    // Desfaz o efeito da movimentação excluída no saldo do item.
+    if (alvo) {
+      const qtdMov = Number(alvo.quantidade) || 0;
+      const deltaEstorno = alvo.tipoMovimento === 'ENTRADA' ? -qtdMov : (alvo.tipoMovimento === 'SAIDA' || alvo.tipoMovimento === 'PERDA') ? qtdMov : 0;
+      if (deltaEstorno) {
+        setEstoque(prev => prev.map(i => i.id === alvo.itemEstoqueId
+          ? { ...i, quantidadeAtual: Math.max(0, (Number(i.quantidadeAtual) || 0) + deltaEstorno) }
+          : i));
+      }
+    }
     addAuditLog('ESTOQUE', 'EXCLUSAO', `Excluiu movimentação de estoque ${alvo?.itemNome || id}`);
   };
 
