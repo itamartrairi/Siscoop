@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useCoop } from '../context/CoopContext';
-import { useCargosDepartamentos } from '../hooks/useCargosDepartamentos';
+import { useCargosDepartamentos, type UsoCadastroRH } from '../hooks/useCargosDepartamentos';
 import { Cargo, Departamento, normalizarNome } from '../services/cargosDepartamentosService';
 import {
   Briefcase,
@@ -25,6 +25,10 @@ const inputCls =
 const DEP_VAZIO = { nome: '', sigla: '', responsavel: '', descricao: '', ativo: true };
 const CARGO_VAZIO = { nome: '', departamentoId: '', cbo: '', descricao: '', ativo: true };
 
+/** "3" ou "3 (+5 em outras cooperativas)". */
+const textoUso = (u: UsoCadastroRH) =>
+  u.outrasCooperativas ? `${u.nestaCooperativa} (+${u.outrasCooperativas} em outras)` : String(u.nestaCooperativa);
+
 /**
  * Tela de cadastro de Departamentos e Cargos (gravados no Firestore).
  * Esses cadastros alimentam as listas de seleção de Cargo/Função e
@@ -45,7 +49,8 @@ export const CargosDepartamentosView: React.FC = () => {
     salvarCargo,
     excluirDepartamento,
     excluirCargo,
-    nomeDoDepartamento
+    nomeDoDepartamento,
+    usoDoItem
   } = useCargosDepartamentos();
 
   const [aba, setAba] = useState<Aba>('departamentos');
@@ -63,13 +68,10 @@ export const CargosDepartamentosView: React.FC = () => {
     alert('Seu perfil de acesso tem permissão apenas de leitura neste módulo. Fale com um administrador para solicitar permissão de edição.');
   };
 
-  // Quantos usuários/colaboradores usam cada nome (ajuda a decidir antes de excluir).
-  const usoDepartamento = (nome: string) =>
-    users.filter(u => normalizarNome(u.departamento || '') === normalizarNome(nome)).length +
-    funcionariosRH.filter(f => normalizarNome(f.departamento || '') === normalizarNome(nome)).length;
-  const usoCargo = (nome: string) =>
-    users.filter(u => normalizarNome(u.cargo || '') === normalizarNome(nome)).length +
-    funcionariosRH.filter(f => normalizarNome(f.cargo || '') === normalizarNome(nome)).length;
+  // Uso de cada item: usuários/colaboradores desta e das outras cooperativas
+  // (a lista é comum a todas) e, para departamentos, cargos vinculados.
+  const usoDepartamento = (d: Departamento) => usoDoItem('departamentos', d);
+  const usoCargo = (c: Cargo) => usoDoItem('cargos', c);
 
   const termo = normalizarNome(busca);
   const depsFiltrados = useMemo(
@@ -125,23 +127,17 @@ export const CargosDepartamentosView: React.FC = () => {
 
   const apagarDep = async (d: Departamento) => {
     if (!canWrite) return bloquear();
-    const emUso = usoDepartamento(d.nome);
-    const cargosVinculados = cargos.filter(c => c.departamentoId === d.id).length;
-    const aviso = [
-      `Excluir o departamento "${d.nome}"?`,
-      emUso ? `\n• ${emUso} usuário(s)/colaborador(es) usam este departamento: o texto continua nos cadastros deles.` : '',
-      cargosVinculados ? `\n• ${cargosVinculados} cargo(s) vinculados ficarão sem departamento.` : ''
-    ].join('');
-    if (!window.confirm(aviso)) return;
-    const r = await excluirDepartamento(d.id);
+    // Em uso: o hook recusa e devolve a explicação (sem perguntar antes).
+    if (
+      usoDepartamento(d).total === 0 &&
+      !window.confirm(`Excluir o departamento "${d.nome}"?\n\nA lista é comum a todas as cooperativas: ele deixa de existir para todas.`)
+    )
+      return;
+    const r = await excluirDepartamento(d);
     if (!r.ok) {
       setMsg({ tipo: 'erro', texto: r.erro || 'Não foi possível excluir.' });
       return;
     }
-    // Desvincula os cargos que apontavam para este departamento.
-    await Promise.all(
-      cargos.filter(c => c.departamentoId === d.id).map(c => salvarCargo({ ...c, departamentoId: undefined }))
-    );
     addAuditLog('RH', 'EXCLUSAO', `Departamento ${d.nome} excluído`);
     setMsg({ tipo: 'ok', texto: `Departamento "${d.nome}" excluído.` });
   };
@@ -183,9 +179,12 @@ export const CargosDepartamentosView: React.FC = () => {
 
   const apagarCargo = async (c: Cargo) => {
     if (!canWrite) return bloquear();
-    const emUso = usoCargo(c.nome);
-    if (!window.confirm(`Excluir o cargo "${c.nome}"?${emUso ? `\n• ${emUso} usuário(s)/colaborador(es) usam este cargo: o texto continua nos cadastros deles.` : ''}`)) return;
-    const r = await excluirCargo(c.id);
+    if (
+      usoCargo(c).total === 0 &&
+      !window.confirm(`Excluir o cargo "${c.nome}"?\n\nA lista é comum a todas as cooperativas: ele deixa de existir para todas.`)
+    )
+      return;
+    const r = await excluirCargo(c);
     if (!r.ok) {
       setMsg({ tipo: 'erro', texto: r.erro || 'Não foi possível excluir.' });
       return;
@@ -268,7 +267,7 @@ export const CargosDepartamentosView: React.FC = () => {
             <Briefcase className="w-6 h-6 text-emerald-600" /> Cargos & Departamentos
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Cadastre os setores e as funções da cooperativa. Eles aparecem como lista de seleção no cadastro de usuários e de colaboradores do RH.
+            Lista comum a todas as cooperativas que usam o sistema: o que for cadastrado ou alterado aqui vale para todas. Ela aparece como lista de seleção no cadastro de usuários e de colaboradores do RH. Itens em uso não podem ser excluídos — marque como inativo.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -368,7 +367,7 @@ export const CargosDepartamentosView: React.FC = () => {
                     <td className="p-3 text-slate-600">{d.sigla || '—'}</td>
                     <td className="p-3 text-slate-600">{d.responsavel || '—'}</td>
                     <td className="p-3 text-center text-slate-600">{cargos.filter(c => c.departamentoId === d.id).length}</td>
-                    <td className="p-3 text-center text-slate-600">{usoDepartamento(d.nome)}</td>
+                    <td className="p-3 text-center text-slate-600">{textoUso(usoDepartamento(d))}</td>
                     <td className="p-3">
                       <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${d.ativo !== false ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'}`}>
                         {d.ativo !== false ? 'Ativo' : 'Inativo'}
@@ -416,7 +415,7 @@ export const CargosDepartamentosView: React.FC = () => {
                     </td>
                     <td className="p-3 text-slate-600">{nomeDoDepartamento(c.departamentoId) || 'Todos os setores'}</td>
                     <td className="p-3 text-slate-600 font-mono">{c.cbo || '—'}</td>
-                    <td className="p-3 text-center text-slate-600">{usoCargo(c.nome)}</td>
+                    <td className="p-3 text-center text-slate-600">{textoUso(usoCargo(c))}</td>
                     <td className="p-3">
                       <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${c.ativo !== false ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'}`}>
                         {c.ativo !== false ? 'Ativo' : 'Inativo'}
