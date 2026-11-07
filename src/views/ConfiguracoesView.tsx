@@ -180,7 +180,7 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
     canWriteModule
   } = useCoop();
 
-  const isSystemCreator = currentUser?.role === 'ADMIN';
+  const isSystemCreator = ['ADMIN', 'PRESIDENTE', 'DIRETOR_FINANCEIRO'].includes(currentUser?.role);
   // Nível de permissão do usuário logado para o módulo Configurações.
   // Sem essa checagem, qualquer usuário com acesso de leitura à página (só
   // para VISUALIZAR) conseguia mesmo assim editar cargo/permissões de
