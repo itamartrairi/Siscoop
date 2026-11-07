@@ -733,7 +733,7 @@ if (f) {
       {/* Modal Ordem de Compra */}
       {showOrdemModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-[70rem] w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-slate-100 my-8">
+          <div className="bg-white rounded-3xl max-w-[80.5rem] w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-slate-100 my-8">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
                 <ShoppingCart className="w-5 h-5 text-emerald-600" />
@@ -778,15 +778,15 @@ if (f) {
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-3">
                 <div className="flex items-center justify-between"><div><div className="text-xs font-extrabold text-slate-800">Itens da ordem de compra</div><div className="text-[10px] text-slate-500">Os produtos são sempre selecionados do SisEstoque.</div></div><button type="button" onClick={() => setOrdemItens([...ordemItens, { descricao: '', quantidade: 1, unidade: 'UN', precoUnitario: 0, subtotal: 0 }])} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold">+ Adicionar item</button></div>
                 <div className="max-h-64 overflow-auto rounded-xl border border-slate-200 bg-white">
-                  <table className="w-full min-w-[620px] text-xs">
+                  <table className="w-full min-w-[720px] text-xs">
                     <thead className="sticky top-0 z-10 bg-slate-100 text-[10px] uppercase tracking-wide text-slate-500">
                       <tr>
                         <th className="px-2 py-2 text-left font-bold w-8">#</th>
                         <th className="px-2 py-2 text-left font-bold">Produto do estoque</th>
-                        <th className="px-2 py-2 text-right font-bold w-20">Qtd.</th>
+                        <th className="px-2 py-2 text-right font-bold w-28">Qtd.</th>
                         <th className="px-2 py-2 text-left font-bold w-16">Unid.</th>
-                        <th className="px-2 py-2 text-right font-bold w-28">Preço unitário</th>
-                        <th className="px-2 py-2 text-right font-bold w-28">Subtotal</th>
+                        <th className="px-2 py-2 text-right font-bold w-36">Preço unitário</th>
+                        <th className="px-2 py-2 text-right font-bold w-36">Subtotal</th>
                         <th className="px-2 py-2 w-8"></th>
                       </tr>
                     </thead>
