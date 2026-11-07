@@ -78,7 +78,7 @@ export const Sidebar: React.FC<Props> = ({
   const [showShareModal, setShowShareModal] = useState(false);
   const { currentTenant, licenseInfo, trialDaysRemaining, isTrialExpired, currentUser, canAccessModule } = useCoop();
 
-  const isSystemCreator = currentUser?.role === 'ADMIN';
+  const isSystemCreator = ['ADMIN', 'PRESIDENTE', 'DIRETOR_FINANCEIRO'].includes(currentUser?.role);
   const currentActive = activeModule || activeView || 'dashboard';
 
   const MODULE_ID_MAP: Record<string, any> = {
