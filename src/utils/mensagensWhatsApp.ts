@@ -74,6 +74,7 @@ export const mensagemComprovanteVenda = (cooperativa: string, venda: VendaRevend
     ordenadas.length > 1
       ? '\n*Parcelas:*\n' + ordenadas.map((c, i) => `${i + 1}/${ordenadas.length} — ${formatarMoeda(c.valor)} — venc. ${dataBR(c.dataVencimento)} — ${situacaoParcela(c)}`).join('\n')
       : (ordenadas[0] ? `Situação: ${situacaoParcela(ordenadas[0])}` : ''),
+    venda.impostos ? `Tributos aproximados (Lei 12.741/2012): ${formatarMoeda(venda.impostos.totalRecolher)}` : '',
     venda.status === 'CANCELADA' ? '\n*VENDA CANCELADA*' : '',
     '',
     'Obrigado pela preferência!',
