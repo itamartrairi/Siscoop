@@ -44,6 +44,13 @@
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "geolocation=(self), camera=(), microphone=()"
 
+# O service worker precisa ser revalidado sempre, senão celulares ficam presos
+# numa versão antiga dele.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
 # Os assets com hash no nome podem ser cacheados para sempre.
 [[headers]]
   for = "/assets/*"
