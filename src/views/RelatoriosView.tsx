@@ -89,11 +89,23 @@ export const RelatoriosView: React.FC = () => {
         });
 
       case 'MANDATOS':
-        return mandatos.filter(m => {
-          const matchSearch = !term || m.nome.toLowerCase().includes(term) || m.cargo.toLowerCase().includes(term);
-          const matchSituacao = filterSituacao === 'TODOS' || m.status === filterSituacao;
-          return matchSearch && matchSituacao;
-        });
+        // Cada mandato guarda a diretoria em `membros`; o relatório lista uma
+        // linha por membro (cargo, nome, posse, fim e status do mandato).
+        return mandatos
+          .flatMap(m => (m.membros || []).map(mb => ({
+            id: `${m.id}-${mb.id}`,
+            cargo: mb.cargo || '',
+            nome: mb.cooperadoNome || '',
+            inicioMandato: mb.dataPosse || m.periodoInicio,
+            fimMandato: mb.dataFimMandato || m.periodoFim,
+            status: m.status,
+            gestaoTitulo: m.gestaoTitulo
+          })))
+          .filter(m => {
+            const matchSearch = !term || m.nome.toLowerCase().includes(term) || String(m.cargo).toLowerCase().includes(term) || (m.gestaoTitulo || '').toLowerCase().includes(term);
+            const matchSituacao = filterSituacao === 'TODOS' || m.status === filterSituacao;
+            return matchSearch && matchSituacao;
+          });
 
       case 'ANIVERSARIANTES':
         return cooperados.filter(c => {
@@ -103,10 +115,13 @@ export const RelatoriosView: React.FC = () => {
         });
 
       case 'AUDITORIA':
-        return auditoriaLogs.filter(log => {
-          const matchSearch = !term || log.acao.toLowerCase().includes(term) || log.usuario.toLowerCase().includes(term) || log.detalhes.toLowerCase().includes(term);
-          return matchSearch;
-        });
+        // AuditoriaLog usa dataHora/usuarioNome; o relatório lê data/usuario.
+        return auditoriaLogs
+          .map(log => ({ ...log, data: log.dataHora, usuario: log.usuarioNome || '' }))
+          .filter(log => {
+            const matchSearch = !term || String(log.acao || '').toLowerCase().includes(term) || log.usuario.toLowerCase().includes(term) || (log.detalhes || '').toLowerCase().includes(term);
+            return matchSearch;
+          });
 
       case 'PEDIDOS_ENTREGAS':
         // Cada pedido tem vários itens (um por produtor/produto); a tabela mostra

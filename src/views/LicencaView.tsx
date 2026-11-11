@@ -67,8 +67,8 @@ export const LicencaView: React.FC = () => {
     setIsActivating(true);
     setActivationMessage(null);
 
-    setTimeout(() => {
-      const result = activateLicense(inputKey, selectedPlanType);
+    setTimeout(async () => {
+      const result = await activateLicense(inputKey, selectedPlanType);
       if (result.success) {
         setActivationMessage({ type: 'success', text: result.message });
         setInputKey('');
@@ -79,10 +79,10 @@ export const LicencaView: React.FC = () => {
     }, 400);
   };
 
-  const handleSimulateQuickActivation = (plan: 'MENSAL' | 'ANUAL') => {
+  const handleSimulateQuickActivation = async (plan: 'MENSAL' | 'ANUAL') => {
     const randomKey = `SISCOOPE-KW-${Math.floor(1000 + Math.random() * 9000)}-2026`;
-    const res = activateLicense(randomKey, plan);
-    setActivationMessage({ type: 'success', text: `Licença simulada com sucesso! (${res.message})` });
+    const res = await activateLicense(randomKey, plan);
+    setActivationMessage({ type: res.success ? 'success' : 'error', text: res.success ? `Licença simulada com sucesso! (${res.message})` : res.message });
   };
 
   const handleOpenKiwifyCheckout = (planUrl: string) => {
@@ -147,9 +147,9 @@ Equipe SisCoope / Kiwify Suporte
     setTimeout(() => setCopiedEmailText(false), 2500);
   };
 
-  const handleApplyGeneratedKeyDirectly = (key: string, plan: 'MENSAL' | 'ANUAL') => {
-    const res = activateLicense(key, plan);
-    setActivationMessage({ type: 'success', text: `Licença do e-mail ativada com sucesso! (${res.message})` });
+  const handleApplyGeneratedKeyDirectly = async (key: string, plan: 'MENSAL' | 'ANUAL') => {
+    const res = await activateLicense(key, plan);
+    setActivationMessage({ type: res.success ? 'success' : 'error', text: res.success ? `Licença do e-mail ativada com sucesso! (${res.message})` : res.message });
   };
 
   const [isSimulatingWebhook, setIsSimulatingWebhook] = useState(false);

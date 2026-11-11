@@ -14,15 +14,31 @@ import {
   EmailAuthProvider,
   User as FirebaseUser
 } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  doc,
+  getDocFromServer,
+  type Firestore
+} from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
+// Cache persistente (IndexedDB): ao reabrir o app — o Android encerra páginas
+// em segundo plano com frequência — o Firestore mostra os dados locais na hora
+// e baixa só o que mudou, em vez de todos os registros da cooperativa. Também
+// mantém na fila as gravações feitas sem rede. Se o IndexedDB não estiver
+// disponível (ex.: aba anônima), o SDK volta sozinho para o cache em memória.
+const firestoreSettings = {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+};
+
 // Initialize Firestore with specific database ID if present
-export const db = firebaseConfig.firestoreDatabaseId
-  ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
-  : getFirestore(app);
+export const db: Firestore = firebaseConfig.firestoreDatabaseId
+  ? initializeFirestore(app, firestoreSettings, firebaseConfig.firestoreDatabaseId)
+  : initializeFirestore(app, firestoreSettings);
 
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();

@@ -242,8 +242,8 @@ if (c) {
   const dreLucroBruto = dreReceitaLiquida - dreCpv;
   const dreDespesasAdm = contasFiltradas.filter(c => c.tipo === 'PAGAR' && c.classificacaoDespesa === 'FIXA').reduce((sum, c) => sum + c.valor, 0);
   const dreEbitda = dreLucroBruto - dreDespesasAdm;
-  const dreReceitasFin = (extratoDoPeriodo || []).filter(l => l.tipo === 'CREDITO' && (l.descricao?.toLowerCase().includes('rendimento') || l.descricao?.toLowerCase().includes('juros'))).reduce((s, l) => s + (l.valor || 0), 0);
-  const dreDespesasFin = (extratoDoPeriodo || []).filter(l => l.tipo === 'DEBITO' && (l.descricao?.toLowerCase().includes('tarifa') || l.descricao?.toLowerCase().includes('juros') || l.descricao?.toLowerCase().includes('iof'))).reduce((s, l) => s + (l.valor || 0), 0) || (contasFiltradas.filter(c => c.tipo === 'PAGAR' && c.categoria === 'FINANCEIRA').reduce((s, c) => s + c.valor, 0));
+  const dreReceitasFin = (extratoDoPeriodo || []).filter(l => l.tipo === 'CREDITO' && (l.historico?.toLowerCase().includes('rendimento') || l.historico?.toLowerCase().includes('juros'))).reduce((s, l) => s + (l.valor || 0), 0);
+  const dreDespesasFin = (extratoDoPeriodo || []).filter(l => l.tipo === 'DEBITO' && (l.historico?.toLowerCase().includes('tarifa') || l.historico?.toLowerCase().includes('juros') || l.historico?.toLowerCase().includes('iof'))).reduce((s, l) => s + (l.valor || 0), 0) || (contasFiltradas.filter(c => c.tipo === 'PAGAR' && c.categoria === 'FINANCEIRA').reduce((s, c) => s + c.valor, 0));
   const dreResultadoFin = dreReceitasFin - dreDespesasFin;
   const dreLair = dreEbitda + dreResultadoFin;
   const dreProvisaoTributos = dreLair > 0 ? Math.round(dreLair * 0.15 * 100) / 100 : 0;

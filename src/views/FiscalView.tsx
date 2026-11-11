@@ -144,7 +144,7 @@ export const FiscalView: React.FC = () => {
       setFormDestEndereco(`${esc.endereco || 'Sede'}, ${esc.bairro || 'Centro'}`);
       setFormDestMunicipio(esc.municipio || 'Trairi');
       setFormDestUf('CE');
-      setFormDestEmail(esc.emailContato || '');
+      setFormDestEmail(esc.email || '');
     }
   };
 
@@ -805,7 +805,7 @@ export const FiscalView: React.FC = () => {
                   <option value="">-- Selecionar Produtor Rural Cadastrado --</option>
                   {cooperados.map(c => (
                     <option key={c.id} value={c.id}>
-                      {c.nome} - CPF/CNPJ: {c.cpfCnpj} ({c.comunidade || c.municipio})
+                      {c.nome} - CPF/CNPJ: {c.cpf} ({c.bairro || c.cidade})
                     </option>
                   ))}
                 </select>
@@ -850,7 +850,7 @@ export const FiscalView: React.FC = () => {
                       <option value="">-- Selecione o Produtor Cadastrado --</option>
                       {cooperados.map(c => (
                         <option key={c.id} value={c.id}>
-                          {c.nome} - CPF: {c.cpfCnpj} (IE: {c.inscriCaEstadual || 'Isento'})
+                          {c.nome} - CPF: {c.cpf} (IE: Isento)
                         </option>
                       ))}
                     </select>

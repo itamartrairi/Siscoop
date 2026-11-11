@@ -62,7 +62,7 @@ import {
 } from '../types';
 import { calcularImpostosItem, ALERTA_CRONOGRAMA_TEXTO } from '../utils/tributacaoReforma';
 import { gerarParcelas } from '../utils/parcelamento';
-import { iniciarSincronizacaoFirestore, agendarSincronizacaoFirestore, aplicarMudancaRemota } from '../services/firestoreSync';
+import { iniciarSincronizacaoFirestore, agendarSincronizacaoFirestore, aplicarMudancaRemota, descarregarSincronizacaoFirestore } from '../services/firestoreSync';
 import type { Atividade } from '../types/agenda';
 import { IndicadorSincronizacao } from '../components/IndicadorSincronizacao';
 import { transmitirParaNuvemFiscal } from '../services/nuvemFiscalService';
@@ -939,15 +939,45 @@ function gravarSnapshot(payload: Record<string, any>) {
  * cada tecla digitada em qualquer formulário — serializando o banco inteiro
  * (mais de 1 MB) de forma síncrona na thread principal, a cada vez.
  */
+let payloadPendente: Record<string, any> | null = null;
+
 function agendarGravacao(payload: Record<string, any>) {
+  payloadPendente = payload;
   if (timerGravacao) clearTimeout(timerGravacao);
-  timerGravacao = setTimeout(() => {
-    timerGravacao = null;
-    gravarSnapshot(payload);
-  }, 800);
+  timerGravacao = setTimeout(descarregarGravacaoLocal, 800);
+}
+
+/**
+ * Grava imediatamente o snapshot que ainda está esperando o debounce.
+ *
+ * No Android o sistema congela ou encerra a página assim que o usuário troca
+ * de app; se isso acontecer dentro dos 800 ms do debounce, a última alteração
+ * nunca chegava ao localStorage. Chamado em visibilitychange/pagehide.
+ */
+function descarregarGravacaoLocal() {
+  if (timerGravacao) { clearTimeout(timerGravacao); timerGravacao = null; }
+  const payload = payloadPendente;
+  payloadPendente = null;
+  if (payload) gravarSnapshot(payload);
 }
 
 export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+
+  // Android (e iOS) congelam/encerram a página em segundo plano sem aviso:
+  // grava o que estiver pendente assim que o app sai da tela.
+  useEffect(() => {
+    const aoSair = (e: Event) => {
+      if (e.type === 'visibilitychange' && document.visibilityState === 'visible') return;
+      descarregarGravacaoLocal();
+      descarregarSincronizacaoFirestore();
+    };
+    document.addEventListener('visibilitychange', aoSair);
+    window.addEventListener('pagehide', aoSair);
+    return () => {
+      document.removeEventListener('visibilitychange', aoSair);
+      window.removeEventListener('pagehide', aoSair);
+    };
+  }, []);
 
   // Loader genérico usado pelos módulos abaixo (produtores, GEPA/PAA, compras,
   // estoque, RH, contábil...) que antes NÃO liam nem gravavam no localStorage

@@ -449,7 +449,7 @@ export const SisGepaView: React.FC = () => {
               id,
               nomeEscola: esc?.nomeEscola || 'Escola',
               polo: esc?.polo || 'Sede',
-              codigoInep: esc?.codigoInep || '',
+              codigoInep: esc?.inepCodigo || '',
               endereco: esc?.endereco || '',
               alunosAtendidos: esc?.alunosAtendidos || 250
             };
@@ -499,7 +499,7 @@ export const SisGepaView: React.FC = () => {
         id: e.id,
         nomeEscola: e.nomeEscola,
         polo: e.polo || 'Polo Sede',
-        codigoInep: e.codigoInep || '',
+        codigoInep: e.inepCodigo || '',
         endereco: e.endereco || '',
         alunosAtendidos: e.alunosAtendidos || 250
       }));
@@ -623,7 +623,7 @@ export const SisGepaView: React.FC = () => {
             id: escObj.id,
             nomeEscola: escObj.nomeEscola,
             polo: escObj.polo || 'Polo Sede',
-            codigoInep: escObj.codigoInep || '',
+            codigoInep: escObj.inepCodigo || '',
             endereco: escObj.endereco || '',
             alunosAtendidos: escObj.alunosAtendidos || 250
           }
@@ -648,7 +648,7 @@ export const SisGepaView: React.FC = () => {
       id: e.id,
       nomeEscola: e.nomeEscola,
       polo: e.polo || 'Polo Sede',
-      codigoInep: e.codigoInep || '',
+      codigoInep: e.inepCodigo || '',
       endereco: e.endereco || '',
       alunosAtendidos: e.alunosAtendidos || 250
     }));
@@ -1532,7 +1532,7 @@ export const SisGepaView: React.FC = () => {
     const prodObj = produtores.find(p => p.id === produtorId);
     const itensProd = (pedido.itens || []).filter(i => i.produtorId === produtorId);
     const prodNome = prodObj?.nome || itensProd[0]?.produtorNome || 'Produtor Rural';
-    const phone = prodObj?.whatsapp || prodObj?.celular || prodObj?.telefone || '';
+    const phone = prodObj?.telefone || '';
     
     const cleanPhone = phone.replace(/\D/g, '');
     const somaTotal = itensProd.reduce((sum, it) => sum + (it.valorTotalItem || (it.quantidadePedida || 0) * (it.precoUnitario || 0)), 0);
@@ -3275,7 +3275,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
 
   const relOptionsEscolas = useMemo(() => {
     const setEscolas = new Set<string>();
-    escolasPnae.forEach(e => e.nome && setEscolas.add(e.nome));
+    escolasPnae.forEach(e => e.nomeEscola && setEscolas.add(e.nomeEscola));
     pedidosProdutorPAA.forEach(ped => {
       if (ped.escolaNome) {
         ped.escolaNome.split(',').forEach(s => s.trim() && setEscolas.add(s.trim()));
@@ -5582,7 +5582,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                 >
                   <option value="">Selecione o Produtor Rural...</option>
                   {produtores.map(p => (
-                    <option key={p.id} value={p.id}>{p.nome} (Polo: {p.polo || 'Geral'} | CAF: {p.cafDapNum || p.cafDap || 'Ativo'})</option>
+                    <option key={p.id} value={p.id}>{p.nome} (Polo: {p.polo || 'Geral'} | CAF: {p.cafDapNum || 'Ativo'})</option>
                   ))}
                 </select>
               </div>
@@ -6708,7 +6708,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                 <div className="bg-white p-4 rounded-xl border border-emerald-200 max-w-xl mx-auto text-left text-xs space-y-2">
                   <div className="flex justify-between border-b border-slate-100 pb-1">
                     <span className="text-slate-500">Número da Nota:</span>
-                    <span className="font-mono font-bold text-slate-900">{nfeSuccessResult.nf.numero} (Série {nfeSuccessResult.nf.serie})</span>
+                    <span className="font-mono font-bold text-slate-900">{nfeSuccessResult.nf.numeroNota} (Série {nfeSuccessResult.nf.serie})</span>
                   </div>
                   <div className="flex justify-between border-b border-slate-100 pb-1">
                     <span className="text-slate-500">Tipo de Operação:</span>
@@ -6716,7 +6716,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                   </div>
                   <div className="flex justify-between border-b border-slate-100 pb-1">
                     <span className="text-slate-500">Destinatário:</span>
-                    <span className="font-bold text-slate-800">{nfeSuccessResult.nf.destinatarioRazaoSocial}</span>
+                    <span className="font-bold text-slate-800">{nfeSuccessResult.nf.destinatarioNome}</span>
                   </div>
                   <div className="flex justify-between border-b border-slate-100 pb-1">
                     <span className="text-slate-500">Valor Total:</span>
@@ -6726,7 +6726,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Chave de Acesso:</span>
-                    <span className="font-mono font-bold text-slate-700 text-[10px] truncate max-w-xs">{nfeSuccessResult.nf.chaveAcesso}</span>
+                    <span className="font-mono font-bold text-slate-700 text-[10px] truncate max-w-xs">{nfeSuccessResult.nf.chaveAcesso44}</span>
                   </div>
                 </div>
 
@@ -8463,12 +8463,12 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                 type="button"
                 onClick={() => {
                   setViewingCronogramaPedido(null);
-                  setActiveTab('logistica');
+                  setActiveTab('entregas');
                 }}
                 className="px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 font-bold rounded-xl text-xs flex items-center gap-1.5 border border-indigo-200 transition-all cursor-pointer"
               >
                 <Truck className="w-4 h-4 text-indigo-600" />
-                Ver no Módulo de Logística & Frotas
+                Ver nas Entregas
               </button>
 
               <div className="flex items-center gap-2">
@@ -8560,7 +8560,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                   const prodObj = produtores.find(p => p.id === prodId);
                   const itensProd = (viewingEnvioProdutoresPedido.itens || []).filter(i => i.produtorId === prodId);
                   const prodNome = prodObj?.nome || itensProd[0]?.produtorNome || 'Produtor Rural';
-                  const prodTel = prodObj?.whatsapp || prodObj?.celular || prodObj?.telefone || 'Sem telefone cad.';
+                  const prodTel = prodObj?.telefone || 'Sem telefone cad.';
                   const totalProd = itensProd.reduce((sum, it) => sum + (it.valorTotalItem || (it.quantidadePedida || 0) * (it.precoUnitario || 0)), 0);
 
                   return (
