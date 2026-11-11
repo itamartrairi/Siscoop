@@ -99,6 +99,8 @@ const pertence = (r: Registro, tenantId: string) => !r || !r.tenantId || r.tenan
 interface Sessao {
   tenantId: string;
   carregado: boolean;
+  /** Registros mostrados a partir do cache local, antes da confirmação do servidor. */
+  vistosNoCache: Map<string, { colecao: string; registroId: string }>;
   /** docId → hash do json gravado/lido do Firestore */
   conhecidos: Map<string, string>;
   cancelar: Unsubscribe | null;
@@ -171,7 +173,7 @@ export const iniciarSincronizacaoFirestore = (
   aplicar: (colecao: string, mudanca: MudancaRemota) => void
 ): (() => void) => {
   pararSincronizacaoFirestore();
-  const atual: Sessao = { tenantId, carregado: false, conhecidos: new Map(), cancelar: null, tentativas: 0, timerReabrir: null };
+  const atual: Sessao = { tenantId, carregado: false, conhecidos: new Map(), vistosNoCache: new Map(), cancelar: null, tentativas: 0, timerReabrir: null };
   sessao = atual;
   const aplicarRemoto = (colecao: string, mudanca: MudancaRemota) => {
     remotaSeq = ++sequencia;
@@ -182,16 +184,28 @@ export const iniciarSincronizacaoFirestore = (
     if (sessao !== atual) return;
     definirStatus({ fase: 'carregando', mensagem: 'Carregando dados do Firestore...' });
     const q = query(collection(db, COLECAO_FIRESTORE), where('tenantId', '==', tenantId));
-    atual.cancelar = onSnapshot(q, snap => {
+    // includeMetadataChanges: com o cache persistente, o primeiro snapshot
+    // costuma vir do IndexedDB (fromCache). Ele já é mostrado na tela, mas a
+    // sessão só é considerada "carregada" (e liberada para gravar) quando o
+    // servidor confirmar — senão um cache antigo poderia sobrescrever dados
+    // alterados em outro computador.
+    atual.cancelar = onSnapshot(q, { includeMetadataChanges: true }, snap => {
       if (sessao !== atual) return;
       atual.tentativas = 0;
 
       if (!atual.carregado) {
+        const doServidor = !snap.metadata.fromCache;
+        // Hashes já aplicados a partir do cache: o snapshot do servidor só
+        // precisa reprocessar (JSON.parse) o que mudou — economiza CPU no celular.
+        const jaAplicados = new Map(atual.conhecidos);
+        atual.conhecidos.clear();
         const listas = new Map<string, Registro[]>();
         snap.docs.forEach(d => {
           const dados = d.data() as { colecao?: string; registroId?: string; json?: string };
           if (!dados.colecao || !TODAS.has(dados.colecao) || typeof dados.json !== 'string') return;
-          atual.conhecidos.set(d.id, hash(dados.json));
+          const h = hash(dados.json);
+          atual.conhecidos.set(d.id, h);
+          if (jaAplicados.get(d.id) === h) return;
           try {
             const valor = JSON.parse(dados.json);
             if (OBJETOS.has(dados.colecao)) aplicarRemoto(dados.colecao, { tipo: 'objeto', valor });
@@ -201,6 +215,26 @@ export const iniciarSincronizacaoFirestore = (
           }
         });
         listas.forEach((registros, colecao) => aplicarRemoto(colecao, { tipo: 'inicial', registros }));
+        if (!doServidor) {
+          snap.docs.forEach(d => {
+            const dados = d.data() as { colecao?: string; registroId?: string };
+            if (dados.colecao && !OBJETOS.has(dados.colecao)) {
+              atual.vistosNoCache.set(d.id, { colecao: dados.colecao, registroId: String(dados.registroId || '') });
+            }
+          });
+          definirStatus({ fase: 'carregando', mensagem: `Dados locais exibidos (${snap.size} registro(s)); aguardando o Firestore...` });
+          return;
+        }
+        // Registros que estavam no cache mas já foram excluídos no servidor
+        // (ex.: apagados em outro computador): remove da tela, senão a próxima
+        // gravação os recriaria no Firestore.
+        const excluidos = new Map<string, string[]>();
+        atual.vistosNoCache.forEach((v, id) => {
+          if (atual.conhecidos.has(id)) return;
+          excluidos.set(v.colecao, [...(excluidos.get(v.colecao) || []), v.registroId]);
+        });
+        atual.vistosNoCache.clear();
+        excluidos.forEach((removidos, colecao) => aplicarRemoto(colecao, { tipo: 'incremental', upserts: [], removidos }));
         atual.carregado = true;
         definirStatus({ fase: 'sincronizado', mensagem: `Dados carregados do Firestore (${snap.size} registro(s)).` });
         // Envia o que existe só neste navegador. Se dados remotos foram
@@ -277,6 +311,19 @@ export const agendarSincronizacaoFirestore = (payload: Record<string, unknown>) 
   pendenteSeq = ++sequencia;
   if (!sessao?.carregado) return; // grava depois que a primeira leitura terminar
   agendarGravacao(ESPERA_GRAVACAO_MS);
+};
+
+/**
+ * Envia agora o que está esperando o debounce de gravação. Chamado quando o app
+ * vai para segundo plano: com o cache persistente do Firestore, a gravação fica
+ * na fila do IndexedDB e é concluída na próxima abertura, mesmo se o Android
+ * encerrar a página antes da resposta do servidor.
+ */
+export const descarregarSincronizacaoFirestore = () => {
+  if (!timerGravacao) return;
+  clearTimeout(timerGravacao);
+  timerGravacao = null;
+  void gravarPendente();
 };
 
 const agendarGravacao = (ms: number) => {
