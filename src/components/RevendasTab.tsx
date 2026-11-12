@@ -2,7 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { Plus, X, Store, MessageCircle, BadgeDollarSign, Ban, Trash2, Eye, Landmark, Settings2 } from 'lucide-react';
 import { useCoop } from '../context/CoopContext';
 import { ProdutoAgroSelect } from './ProdutoAgroSelect';
-import { unidadeEstoqueDoProduto, categoriaEstoqueDoProduto } from '../utils/produtoAgroEstoque';
+import { unidadeEstoqueDoProduto } from '../utils/produtoAgroEstoque';
+import { opcaoIbsCbs, sugerirClassificacaoIbsCbs, sugerirIcmsProduto } from '../utils/classificacaoFiscalProduto';
 import { VendaRevenda, ItemVendaRevenda, FormaPagamentoComercial, TributacaoIcmsItem, ImpostosVenda, ProdutoAgro } from '../types';
 import { DataGrid, GridStatus } from './ui/DataGrid';
 import { abrirLinkExterno, montarLinkWhatsApp, getTelefoneContato } from '../utils/whatsappHelpers';
@@ -106,7 +107,8 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
       unidade: p?.unidadeMedida || unidadeEstoqueDoProduto(produto),
       custoUnitario: p?.valorUnitarioMedio || 0,
       precoUnitario: p?.precoVenda || produto.precoReferencia || itens[idx]?.precoUnitario || p?.valorUnitarioMedio || 0,
-      tributacaoIcms: p?.tributacaoIcms || sugerirTributacaoIcms(produto.nome, p?.categoria || categoriaEstoqueDoProduto(produto)),
+      tributacaoIcms: produto.tributacaoIcms || p?.tributacaoIcms || sugerirIcmsProduto(produto.tipoProcessamento, produto.categoria, produto.nome),
+      classificacaoIbsCbs: produto.classificacaoIbsCbs || sugerirClassificacaoIbsCbs(produto.tipoProcessamento, produto.categoria, produto.nome),
       fornecedorId: p?.fornecedorPadraoId || itens[idx]?.fornecedorId,
     });
   };
@@ -131,6 +133,7 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
           subtotal: Number(((Number(i.quantidade) || 0) * (Number(i.precoUnitario) || 0)).toFixed(2)),
           tributacaoIcms: i.tributacaoIcms || 'TRIBUTADO',
         };
+        if (i.classificacaoIbsCbs) item.classificacaoIbsCbs = i.classificacaoIbsCbs;
         if (forn) { item.fornecedorId = forn.id; item.fornecedorNome = forn.nomeFantasia || forn.razaoSocial; }
         return item;
       });
@@ -339,6 +342,7 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
                               <select value={item.tributacaoIcms || 'TRIBUTADO'} onChange={e => atualizarItem(idx, { tributacaoIcms: e.target.value as TributacaoIcmsItem })} className="w-full p-1.5 border border-slate-200 rounded-lg bg-white">
                                 {OPCOES_TRIBUTACAO_ICMS.map(o => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
                               </select>
+                              {item.classificacaoIbsCbs && item.classificacaoIbsCbs !== 'PADRAO' && <div className="mt-0.5 text-[10px] text-emerald-700" title={opcaoIbsCbs(item.classificacaoIbsCbs).fundamento}>IBS/CBS: {opcaoIbsCbs(item.classificacaoIbsCbs).rotulo}</div>}
                             </td>
                             <td className="px-2 py-1.5">
                               <input type="number" min="0.01" step="any" required value={item.quantidade} onChange={e => atualizarItem(idx, { quantidade: Number(e.target.value) || 0 })} className={`w-full p-1.5 border rounded-lg text-right ${semSaldo ? 'border-rose-400 bg-rose-50' : 'border-slate-200'}`} />
