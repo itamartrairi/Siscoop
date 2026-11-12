@@ -466,10 +466,31 @@ export interface ProdutoAgro {
   // Classifica se o produto é vendido/entregue in natura (fresco, sem
   // processamento) ou beneficiado (industrializado/processado pela
   // cooperativa ou pelo produtor: polpa, farinha, doce, queijo etc.).
-  tipoProcessamento?: 'IN_NATURA' | 'BENEFICIADO';
+  tipoProcessamento?: TipoProdutoAgro;
+  /** Tratamento do ICMS na venda (regras do Ceará). */
+  tributacaoIcms?: TributacaoIcmsItem;
+  /** Enquadramento no IBS/CBS (Reforma Tributária — LC 214/2025). */
+  classificacaoIbsCbs?: ClassificacaoIbsCbs;
   descricao?: string;
   estoqueMinimo?: number;
 }
+
+export type TipoProdutoAgro =
+  | 'IN_NATURA'
+  | 'MINIMAMENTE_PROCESSADO'
+  | 'BENEFICIADO'
+  | 'INDUSTRIALIZADO'
+  | 'INSUMO'
+  | 'REVENDA';
+
+/** Classificação do produto no IBS/CBS (LC 214/2025). */
+export type ClassificacaoIbsCbs =
+  | 'PADRAO'                 // alíquota de referência cheia
+  | 'HORTIFRUTI_OVOS_ZERO'   // art. 148 / Anexo XV — alíquota zero
+  | 'CESTA_BASICA_ZERO'      // art. 125 / Anexo I — alíquota zero
+  | 'IN_NATURA_REDUCAO_60'   // art. 137 — redução de 60%
+  | 'ALIMENTOS_REDUCAO_60'   // art. 135 / Anexo VII — redução de 60%
+  | 'INSUMO_AGRO_REDUCAO_60';// art. 138 / Anexo IX — redução de 60%
 
 export interface RegistroProducaoItem {
   produtoId: string;
@@ -1182,6 +1203,8 @@ export interface ItemEstoque {
   fornecedorPadraoId?: string;
   /** Produto disponível na aba Revendas de Produtos. */
   paraRevenda?: boolean;
+  /** Produto do cadastro Cadastros Agropecuários → Produtos Agropecuários ao qual este saldo pertence. */
+  produtoAgroId?: string;
   ativo?: boolean;
   descricao?: string;  lotes?: {
     numeroLote: string;
@@ -1548,6 +1571,8 @@ export interface ItemVendaRevenda {
   fornecedorId?: string;
   fornecedorNome?: string;
   tributacaoIcms?: TributacaoIcmsItem;
+  /** Enquadramento IBS/CBS vindo do cadastro do produto. */
+  classificacaoIbsCbs?: ClassificacaoIbsCbs;
 }
 
 export interface VendaRevenda {
