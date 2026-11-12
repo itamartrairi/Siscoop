@@ -36,6 +36,8 @@ export const EstoqueView: React.FC = () => {
     addItemEstoque,
     updateItemEstoque,
     deleteItemEstoque,
+    itensEstoqueAntigosSemUso,
+    excluirItensEstoqueAntigos,
     movimentacoesEstoque,
     addMovimentacaoEstoque,
     deleteMovimentacaoEstoque,
@@ -230,6 +232,22 @@ if (item) {
         </div>
 
         <div className="flex items-center gap-2">
+          {activeTab === 'saldos' && itensEstoqueAntigosSemUso().length > 0 && (
+            <button
+              onClick={() => {
+                if (!canWrite) { blockWriteAction(); return; }
+                const antigos = itensEstoqueAntigosSemUso();
+                const lista = antigos.slice(0, 15).map(i => `• ${i.nomeItem}`).join('\n') + (antigos.length > 15 ? `\n… e mais ${antigos.length - 15}` : '');
+                if (!confirm(`Excluir ${antigos.length} item(ns) antigo(s) do estoque?\n\nSão itens que não estão ligados a um Produto Agropecuário e não aparecem em nenhuma compra, venda ou movimentação:\n\n${lista}\n\nEssa exclusão não pode ser desfeita.`)) return;
+                const n = excluirItensEstoqueAntigos();
+                alert(`${n} item(ns) antigo(s) excluído(s).`);
+              }}
+              title="Remove itens antigos sem produto agropecuário e sem uso"
+              className="px-4 py-2.5 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-all flex items-center gap-2"
+            >
+              <Trash2 className="w-4 h-4" /> Excluir itens antigos ({itensEstoqueAntigosSemUso().length})
+            </button>
+          )}
           {activeTab === 'saldos' && (
             <button
               onClick={() => handleOpenItem()}
