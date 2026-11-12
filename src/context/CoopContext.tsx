@@ -1,5 +1,6 @@
 import { encontrarVinculos, mensagemExclusaoBloqueada, type EntidadeVinculavel, type ReferenciaPorValor } from '../services/integridadeReferencial';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { unidadeEstoqueDoProduto, categoriaEstoqueDoProduto } from '../utils/produtoAgroEstoque';
 import {
   User,
   CooperativeTenant,
@@ -664,6 +665,12 @@ interface CoopContextType {
   estoque: ItemEstoque[];
   addItemEstoque: (i: Omit<ItemEstoque, 'id' | 'tenantId'>) => void;
   updateItemEstoque: (id: string, i: Partial<ItemEstoque>) => void;
+  /**
+   * Devolve o id do item de estoque ligado a um produto de Cadastros
+   * Agropecuários → Produtos Agropecuários, criando o item (saldo 0) se ainda
+   * não existir. Usado pelos formulários de Compras e Vendas.
+   */
+  garantirItemEstoqueDoProduto: (produtoId: string) => string | undefined;
   deleteItemEstoque: (id: string) => void;
 
   movimentacoesEstoque: MovimentacaoEstoque[];
@@ -4869,6 +4876,52 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addAuditLog('ESTOQUE', 'INCLUSAO', `Cadastrou item de estoque: ${newItem.nomeItem || newItem.id}`);
   };
 
+  // Itens de estoque criados nesta sessão a partir de um produto agropecuário,
+  // para não criar dois itens se o mesmo produto for escolhido duas vezes
+  // antes de a tela atualizar.
+  const itensCriadosPorProdutoRef = useRef<Record<string, string>>({});
+  const garantirItemEstoqueDoProduto = (produtoId: string): string | undefined => {
+    const produto = produtos.find(p => p.id === produtoId && pertenceAoTenant(p, currentTenant.id));
+    if (!produto) return undefined;
+    const doTenant = estoque.filter(i => pertenceAoTenant(i, currentTenant.id));
+    const ligado = doTenant.find(i => i.produtoAgroId === produto.id);
+    if (ligado) return ligado.id;
+    const jaCriado = itensCriadosPorProdutoRef.current[produto.id];
+    if (jaCriado) return jaCriado;
+    // Item antigo com o mesmo código ou nome: liga ao produto em vez de duplicar.
+    const codigo = chaveUnica(produto.codigo);
+    const nome = chaveUnica(produto.nome);
+    const parecido = doTenant.find(i => !i.produtoAgroId && (
+      (codigo && (chaveUnica(i.codigoSku) === codigo || chaveUnica(i.codigoItem) === codigo)) ||
+      (nome && chaveUnica(i.nomeItem) === nome)
+    ));
+    if (parecido) {
+      setEstoque(prev => prev.map(i => (i.id === parecido.id ? { ...i, produtoAgroId: produto.id } : i)));
+      itensCriadosPorProdutoRef.current[produto.id] = parecido.id;
+      return parecido.id;
+    }
+    const novo: ItemEstoque = {
+      id: `est-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      tenantId: currentTenant.id,
+      produtoAgroId: produto.id,
+      codigoSku: produto.codigo || '',
+      nomeItem: produto.nome,
+      descricao: produto.descricao || '',
+      categoria: categoriaEstoqueDoProduto(produto),
+      unidadeMedida: unidadeEstoqueDoProduto(produto),
+      quantidadeAtual: 0,
+      quantidadeMinima: Number(produto.estoqueMinimo) || 0,
+      valorUnitarioMedio: 0,
+      precoVenda: Number(produto.precoReferencia) || 0,
+      ncm: produto.codigoNcm || '',
+      paraRevenda: true,
+      ativo: true,
+    };
+    itensCriadosPorProdutoRef.current[produto.id] = novo.id;
+    setEstoque(prev => [novo, ...prev]);
+    return novo.id;
+  };
+
   const updateItemEstoque = (id: string, iData: Partial<ItemEstoque>) => {
     const alvo = estoque.find(x => x.id === id);
     if (bloqueadoPorStatusFinal(alvo, 'item de estoque')) return;
@@ -5967,6 +6020,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         estoque: tenantEstoque,
         addItemEstoque,
         updateItemEstoque,
+        garantirItemEstoqueDoProduto,
         deleteItemEstoque,
         movimentacoesEstoque: tenantMovimentacoesEstoque,
         addMovimentacaoEstoque,
