@@ -63,11 +63,25 @@ export const DepartamentoSelect: React.FC<BaseProps & { departamentos: Departame
   );
 };
 
+/** Encontra o id do departamento a partir do nome gravado no formulário. */
+const idDoDepartamento = (departamentos: Departamento[], nome?: string) =>
+  nome ? departamentos.find(d => normalizarNome(d.nome) === normalizarNome(nome))?.id : undefined;
+
+/** Remove nomes repetidos (mesmo cargo cadastrado mais de uma vez). */
+const unicosPorNome = (lista: Cargo[]) =>
+  Array.from(new Map(lista.map(c => [normalizarNome(c.nome), c])).values()).sort((a, b) =>
+    a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' })
+  );
+
 export const CargoSelect: React.FC<
   BaseProps & {
     cargos: Cargo[];
     departamentos: Departamento[];
-    /** Nome do departamento escolhido: mostra só os cargos dele (e os gerais). */
+    /**
+     * Nome do departamento escolhido. A lista mostra os cargos vinculados a ele
+     * e, num grupo separado, os cargos marcados como "Todos os setores".
+     * Sem departamento escolhido, o campo fica bloqueado.
+     */
     departamentoSelecionado?: string;
   }
 > = ({
@@ -82,19 +96,34 @@ export const CargoSelect: React.FC<
   id,
   placeholder = 'Selecione o cargo…'
 }) => {
-  const depId = departamentoSelecionado
-    ? departamentos.find(d => normalizarNome(d.nome) === normalizarNome(departamentoSelecionado))?.id
-    : undefined;
+  const filtrarPorDepartamento = departamentoSelecionado !== undefined;
+  const depId = idDoDepartamento(departamentos, departamentoSelecionado);
+  const ativos = cargos.filter(c => c.ativo !== false);
 
-  const visiveis = cargos.filter(c => {
-    if (c.ativo === false && c.nome !== value) return false;
-    if (!depId) return true;
-    return !c.departamentoId || c.departamentoId === depId || c.nome === value;
-  });
+  const doDepartamento = filtrarPorDepartamento
+    ? unicosPorNome(ativos.filter(c => !!depId && c.departamentoId === depId))
+    : unicosPorNome(ativos);
+  const doDepNomes = new Set(doDepartamento.map(c => normalizarNome(c.nome)));
+  const gerais = filtrarPorDepartamento
+    ? unicosPorNome(ativos.filter(c => !c.departamentoId && !doDepNomes.has(normalizarNome(c.nome))))
+    : [];
 
-  // Mesmo nome em departamentos diferentes aparece uma vez só.
-  const nomesUnicos = Array.from(new Map(visiveis.map(c => [normalizarNome(c.nome), c])).values());
-  const valorForaDoCadastro = !!value && !nomesUnicos.some(c => c.nome === value);
+  const semDepartamento = filtrarPorDepartamento && !departamentoSelecionado;
+  const valorNaLista = !!value && [...doDepartamento, ...gerais].some(c => normalizarNome(c.nome) === normalizarNome(value));
+  const valorForaDaLista = !!value && !valorNaLista;
+
+  // Ao trocar o departamento, limpa o cargo se ele não pertence ao novo setor.
+  // (Não roda na abertura do formulário, para não apagar cadastros antigos.)
+  const depAnterior = React.useRef(departamentoSelecionado);
+  React.useEffect(() => {
+    if (!filtrarPorDepartamento) return;
+    if (depAnterior.current === departamentoSelecionado) return;
+    depAnterior.current = departamentoSelecionado;
+    if (value && !valorNaLista) onChange('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [departamentoSelecionado]);
+
+  const nadaParaEscolher = filtrarPorDepartamento && !semDepartamento && doDepartamento.length === 0 && gerais.length === 0;
 
   return (
     <>
@@ -103,20 +132,41 @@ export const CargoSelect: React.FC<
         value={value || ''}
         onChange={e => onChange(e.target.value)}
         className={className}
-        disabled={disabled}
+        disabled={disabled || (semDepartamento && !value)}
         required={required}
       >
-        <option value="">{placeholder}</option>
-        {valorForaDoCadastro && <option value={value}>{value} (não cadastrado)</option>}
-        {nomesUnicos.map(c => (
-          <option key={c.id} value={c.nome}>
-            {c.nome}
+        <option value="">{semDepartamento ? 'Selecione primeiro o departamento…' : placeholder}</option>
+        {valorForaDaLista && (
+          <option value={value}>
+            {value} ({cargos.some(c => normalizarNome(c.nome) === normalizarNome(value)) ? 'outro departamento' : 'não cadastrado'})
           </option>
-        ))}
+        )}
+        {gerais.length > 0 ? (
+          <>
+            {doDepartamento.length > 0 && (
+              <optgroup label={`Cargos de ${departamentoSelecionado}`}>
+                {doDepartamento.map(c => (
+                  <option key={c.id} value={c.nome}>{c.nome}</option>
+                ))}
+              </optgroup>
+            )}
+            <optgroup label="Comuns a todos os setores">
+              {gerais.map(c => (
+                <option key={c.id} value={c.nome}>{c.nome}</option>
+              ))}
+            </optgroup>
+          </>
+        ) : (
+          doDepartamento.map(c => (
+            <option key={c.id} value={c.nome}>{c.nome}</option>
+          ))
+        )}
       </select>
-      {cargos.length === 0 && (
+      {cargos.length === 0 ? (
         <AvisoListaVazia texto="Nenhum cargo cadastrado. Cadastre em Finanças → Cargos & Departamentos." />
-      )}
+      ) : nadaParaEscolher ? (
+        <AvisoListaVazia texto="Nenhum cargo vinculado a este departamento. Vincule em Finanças → Cargos & Departamentos." />
+      ) : null}
     </>
   );
 };
