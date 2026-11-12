@@ -15,15 +15,15 @@ import {
   MessageCircle,
   Users,
   Store,
-  FileText,
-  Package
+  FileText
 } from 'lucide-react';
 import { SolicitacaoCompra, Fornecedor, ItemEstoque } from '../types';
 import { DataGrid, GridStatus } from '../components/ui/DataGrid';
 import { ClientesTab } from '../components/ClientesTab';
 import { RevendasTab } from '../components/RevendasTab';
 import { RelatoriosPdfTab } from '../components/RelatoriosPdfTab';
-import { ProdutosTab } from '../components/ProdutosTab';
+import { ProdutoAgroSelect } from '../components/ProdutoAgroSelect';
+import { unidadeEstoqueDoProduto } from '../utils/produtoAgroEstoque';
 import { abrirLinkExterno, montarLinkWhatsApp, montarLinkWhatsAppGenerico, getTelefoneContato } from '../utils/whatsappHelpers';
 import { mensagemOrdemCompra } from '../utils/mensagensWhatsApp';
 import { FORMAS_PAGAMENTO_COMERCIAL, type FormaPagamentoComercial, gerarParcelas, somarDias, hojeISO, dataBR, formatarMoeda, rotuloFormaPagamento } from '../utils/parcelamento';
@@ -98,6 +98,8 @@ export const ComprasView: React.FC = () => {
     updateFornecedor,
     deleteFornecedor,
     estoque,
+    produtos,
+    garantirItemEstoqueDoProduto,
     currentTenant,
     canWriteModule
   } = useCoop();
@@ -107,7 +109,7 @@ export const ComprasView: React.FC = () => {
     alert('Seu perfil de acesso tem permissão apenas de leitura neste módulo. Fale com um administrador para solicitar permissão de edição.');
   };
 
-  const [activeTab, setActiveTab] = useState<'solicitacoes' | 'ordens' | 'fornecedores' | 'revendas' | 'clientes' | 'relatorios' | 'produtos'>('ordens');
+  const [activeTab, setActiveTab] = useState<'solicitacoes' | 'ordens' | 'fornecedores' | 'revendas' | 'clientes' | 'relatorios'>('ordens');
 
   // Editing state
   const [editingSolicitacao, setEditingSolicitacao] = useState<SolicitacaoCompra | null>(null);
@@ -566,16 +568,6 @@ if (f) {
         >
           <ShoppingCart className="w-4 h-4 text-emerald-600" /> Ordens de Compra OC ({ordensCompra.length})
         </button>
-          <button
-            onClick={() => setActiveTab('produtos')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-              activeTab === 'produtos'
-                ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-                : 'border-transparent text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <Package className="w-4 h-4" /> Produtos & Insumos ({estoque.length})
-          </button>
         <button
           onClick={() => setActiveTab('fornecedores')}
           className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
@@ -682,9 +674,6 @@ if (f) {
         </div>
       )}
 
-      {/* Tab Produtos & Insumos */}
-
-      {activeTab === 'produtos' && <ProdutosTab canWrite={canWrite} onBlocked={blockWriteAction} />}
 
 
 
@@ -776,13 +765,13 @@ if (f) {
               </div>
 
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-3">
-                <div className="flex items-center justify-between"><div><div className="text-xs font-extrabold text-slate-800">Itens da ordem de compra</div><div className="text-[10px] text-slate-500">Os produtos são sempre selecionados do SisEstoque.</div></div><button type="button" onClick={() => setOrdemItens([...ordemItens, { descricao: '', quantidade: 1, unidade: 'UN', precoUnitario: 0, subtotal: 0 }])} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold">+ Adicionar item</button></div>
+                <div className="flex items-center justify-between"><div><div className="text-xs font-extrabold text-slate-800">Itens da ordem de compra</div><div className="text-[10px] text-slate-500">Os produtos vêm de Cadastros Agropecuários → Produtos Agropecuários; a entrada vai para o SisEstoque.</div></div><button type="button" onClick={() => setOrdemItens([...ordemItens, { descricao: '', quantidade: 1, unidade: 'UN', precoUnitario: 0, subtotal: 0 }])} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold">+ Adicionar item</button></div>
                 <div className="max-h-64 overflow-auto rounded-xl border border-slate-200 bg-white">
                   <table className="w-full min-w-[720px] text-xs">
                     <thead className="sticky top-0 z-10 bg-slate-100 text-[10px] uppercase tracking-wide text-slate-500">
                       <tr>
                         <th className="px-2 py-2 text-left font-bold w-8">#</th>
-                        <th className="px-2 py-2 text-left font-bold">Produto do estoque</th>
+                        <th className="px-2 py-2 text-left font-bold">Produto</th>
                         <th className="px-2 py-2 text-right font-bold w-28">Qtd.</th>
                         <th className="px-2 py-2 text-left font-bold w-16">Unid.</th>
                         <th className="px-2 py-2 text-right font-bold w-36">Preço unitário</th>
@@ -795,10 +784,18 @@ if (f) {
                         <tr key={index}>
                           <td className="px-2 py-1.5 font-bold text-slate-400">{index + 1}</td>
                           <td className="px-2 py-1.5">
-                            <select required value={item.estoqueItemId || ''} onChange={e => { const p = estoque.find(x => x.id === e.target.value); setOrdemItens(ordemItens.map((x, i) => i === index ? { ...x, estoqueItemId: p?.id, descricao: p?.nomeItem || '', unidade: p?.unidadeMedida || x.unidade } : x)); }} className="w-full p-1.5 border border-slate-200 rounded-lg bg-white">
-                              <option value="">Selecione um produto</option>
-                              {estoque.map(p => <option key={p.id} value={p.id}>{p.codigoSku || p.codigoItem || '—'} — {p.nomeItem}</option>)}
-                            </select>
+                            <ProdutoAgroSelect
+                              required
+                              value={item.estoqueItemId}
+                              produtos={produtos}
+                              estoque={estoque}
+                              onSelect={p => {
+                                const estoqueItemId = p ? garantirItemEstoqueDoProduto(p.id) : undefined;
+                                const est = estoque.find(x => x.id === estoqueItemId);
+                                setOrdemItens(ordemItens.map((x, i) => i === index ? { ...x, estoqueItemId, descricao: p?.nome || '', unidade: est?.unidadeMedida || (p ? unidadeEstoqueDoProduto(p) : x.unidade) } : x));
+                              }}
+                              className="w-full p-1.5 border border-slate-200 rounded-lg bg-white"
+                            />
                           </td>
                           <td className="px-2 py-1.5">
                             <input type="number" min="1" step="any" required value={item.quantidade} onChange={e => setOrdemItens(ordemItens.map((x, i) => i === index ? { ...x, quantidade: Number(e.target.value) || 0 } : x))} className="w-full p-1.5 border border-slate-200 rounded-lg text-right" />
