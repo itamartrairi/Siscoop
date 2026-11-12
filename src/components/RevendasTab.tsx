@@ -1,7 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { Plus, X, Store, MessageCircle, BadgeDollarSign, Ban, Trash2, Eye, Landmark, Settings2 } from 'lucide-react';
 import { useCoop } from '../context/CoopContext';
-import { VendaRevenda, ItemVendaRevenda, FormaPagamentoComercial, TributacaoIcmsItem, ImpostosVenda } from '../types';
+import { ProdutoAgroSelect } from './ProdutoAgroSelect';
+import { unidadeEstoqueDoProduto, categoriaEstoqueDoProduto } from '../utils/produtoAgroEstoque';
+import { VendaRevenda, ItemVendaRevenda, FormaPagamentoComercial, TributacaoIcmsItem, ImpostosVenda, ProdutoAgro } from '../types';
 import { DataGrid, GridStatus } from './ui/DataGrid';
 import { abrirLinkExterno, montarLinkWhatsApp, getTelefoneContato } from '../utils/whatsappHelpers';
 import { mensagemCobranca, mensagemComprovanteVenda } from '../utils/mensagensWhatsApp';
@@ -45,7 +47,7 @@ const itemVazio = (): ItemVendaRevenda => ({ estoqueItemId: '', descricao: '', u
 export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }> = ({ canWrite, onBlocked }) => {
   const {
     vendasRevenda, addVendaRevenda, cancelarVendaRevenda, deleteVendaRevenda,
-    clientes, estoque, fornecedores, contasPagarReceber, currentTenant, config,
+    clientes, estoque, produtos, garantirItemEstoqueDoProduto, fornecedores, contasPagarReceber, currentTenant, config,
   } = useCoop();
   const cfgTrib = configTributaria(config?.tributacaoRevenda);
   const [showConfigTrib, setShowConfigTrib] = useState(false);
@@ -60,11 +62,6 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
 
   const cooperativa = currentTenant?.name || currentTenant?.razaoSocial || 'Cooperativa';
   const clientesAtivos = clientes.filter(c => c.ativo !== false);
-  // Produtos ativos; os marcados "para revenda" (Compras → Produtos & Insumos) aparecem primeiro.
-  const produtosVenda = estoque
-    .filter(p => p.ativo !== false)
-    .sort((a, b) => Number(!!b.paraRevenda) - Number(!!a.paraRevenda) || a.nomeItem.localeCompare(b.nomeItem, 'pt-BR'));
-
   const linhas = useMemo(
     () => vendasRevenda.filter(v => filtroStatus === 'TODAS' || v.status === filtroStatus),
     [vendasRevenda, filtroStatus]
@@ -97,15 +94,19 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
   const atualizarItem = (idx: number, dados: Partial<ItemVendaRevenda>) =>
     setItens(prev => prev.map((it, i) => (i === idx ? { ...it, ...dados } : it)));
 
-  const escolherProduto = (idx: number, estoqueItemId: string) => {
+  // Produtos vêm de Cadastros Agropecuários → Produtos Agropecuários; o item de
+  // estoque (saldo, custo médio) é criado/ligado automaticamente.
+  const escolherProduto = (idx: number, produto: ProdutoAgro | undefined) => {
+    if (!produto) { atualizarItem(idx, { estoqueItemId: '', descricao: '' }); return; }
+    const estoqueItemId = garantirItemEstoqueDoProduto(produto.id) || '';
     const p = estoque.find(e => e.id === estoqueItemId);
     atualizarItem(idx, {
       estoqueItemId,
-      descricao: p?.nomeItem || '',
-      unidade: p?.unidadeMedida || 'UN',
+      descricao: produto.nome,
+      unidade: p?.unidadeMedida || unidadeEstoqueDoProduto(produto),
       custoUnitario: p?.valorUnitarioMedio || 0,
-      precoUnitario: p?.precoVenda || itens[idx]?.precoUnitario || p?.valorUnitarioMedio || 0,
-      tributacaoIcms: p?.tributacaoIcms || sugerirTributacaoIcms(p?.nomeItem, p?.categoria),
+      precoUnitario: p?.precoVenda || produto.precoReferencia || itens[idx]?.precoUnitario || p?.valorUnitarioMedio || 0,
+      tributacaoIcms: p?.tributacaoIcms || sugerirTributacaoIcms(produto.nome, p?.categoria || categoriaEstoqueDoProduto(produto)),
       fornecedorId: p?.fornecedorPadraoId || itens[idx]?.fornecedorId,
     });
   };
@@ -298,7 +299,7 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-xs font-extrabold text-slate-800">Produtos vendidos</div>
-                    <div className="text-[10px] text-slate-500">Cadastre os produtos em Compras → Produtos & Insumos. A quantidade vendida sai do estoque.</div>
+                    <div className="text-[10px] text-slate-500">Os produtos vêm de Cadastros Agropecuários → Produtos Agropecuários. A quantidade vendida sai do estoque.</div>
                   </div>
                   <button type="button" onClick={() => setItens([...itens, itemVazio()])} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold">+ Adicionar produto</button>
                 </div>
@@ -323,10 +324,15 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
                           <tr key={idx} className={semSaldo ? 'bg-rose-50/60 align-top' : 'align-top'}>
                             <td className="px-2 py-1.5 font-bold text-slate-400">{idx + 1}</td>
                             <td className="px-2 py-1.5">
-                              <select required value={item.estoqueItemId} onChange={e => escolherProduto(idx, e.target.value)} className="w-full p-1.5 border border-slate-200 rounded-lg bg-white">
-                                <option value="">Selecione</option>
-                                {produtosVenda.map(p => <option key={p.id} value={p.id}>{p.nomeItem} — saldo {p.quantidadeAtual} {p.unidadeMedida}{p.precoVenda ? ` — ${formatarMoeda(p.precoVenda)}` : ''}</option>)}
-                              </select>
+                              <ProdutoAgroSelect
+                                required
+                                value={item.estoqueItemId}
+                                produtos={produtos}
+                                estoque={estoque}
+                                onSelect={p => escolherProduto(idx, p)}
+                                detalhe={(p, est) => `saldo ${est?.quantidadeAtual ?? 0} ${est?.unidadeMedida || unidadeEstoqueDoProduto(p)}${(est?.precoVenda || p.precoReferencia) ? ` — ${formatarMoeda(est?.precoVenda || p.precoReferencia)}` : ''}`}
+                                className="w-full p-1.5 border border-slate-200 rounded-lg bg-white"
+                              />
                               {semSaldo && <div className="mt-0.5 text-[10px] font-bold text-rose-600">Saldo insuficiente: disponível {est?.quantidadeAtual} {est?.unidadeMedida}.</div>}
                             </td>
                             <td className="px-2 py-1.5">
