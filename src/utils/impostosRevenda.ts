@@ -23,6 +23,7 @@
 //  - CBS 0,9% e IBS 0,1% em 2026: destaque na nota (fase de teste), sem
 //    recolhimento para quem cumpre as obrigações acessórias (LC 214/2025).
 
+import { reducaoIbsCbs, opcaoIbsCbs } from './classificacaoFiscalProduto';
 import type { ConfigTributariaRevenda, ImpostosVenda, ItemVendaRevenda, RegimeApuracaoRevenda, TributacaoIcmsItem } from '../types';
 
 export const OPCOES_TRIBUTACAO_ICMS: { valor: TributacaoIcmsItem; rotulo: string }[] = [
@@ -140,9 +141,22 @@ export const calcularImpostosVenda = (
     }
   }
 
-  const cbs = receita * cfg.cbsTeste / 100;
-  const ibs = receita * cfg.ibsTeste / 100;
-  if (cbs || ibs) obs.push(`CBS ${pct(cfg.cbsTeste)}% e IBS ${pct(cfg.ibsTeste)}%: destaque informativo na nota em 2026, sem recolhimento (LC 214/2025).`);
+  // IBS/CBS por item, aplicando a redução do enquadramento do produto
+  // (alíquota zero ou redução de 60% — LC 214/2025).
+  let cbs = 0, ibs = 0;
+  const enquadramentos = new Set<string>();
+  itens.forEach(i => {
+    const base = (Number(i.quantidade) || 0) * (Number(i.precoUnitario) || 0) * fatorDesconto;
+    const fator = 1 - reducaoIbsCbs(i.classificacaoIbsCbs) / 100;
+    cbs += base * cfg.cbsTeste / 100 * fator;
+    ibs += base * cfg.ibsTeste / 100 * fator;
+    if (i.classificacaoIbsCbs && i.classificacaoIbsCbs !== 'PADRAO') {
+      const o = opcaoIbsCbs(i.classificacaoIbsCbs);
+      enquadramentos.add(`${o.rotulo} (${o.fundamento})`);
+    }
+  });
+  if (cfg.cbsTeste || cfg.ibsTeste) obs.push(`CBS ${pct(cfg.cbsTeste)}% e IBS ${pct(cfg.ibsTeste)}%: destaque informativo na nota em 2026, sem recolhimento (LC 214/2025).`);
+  enquadramentos.forEach(e => obs.push(`IBS/CBS: ${e}.`));
   obs.push('Venda de mercadorias de terceiros é ato não cooperativo (tributação normal).');
 
   const res = {
