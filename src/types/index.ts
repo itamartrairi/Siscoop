@@ -1182,6 +1182,8 @@ export interface ItemEstoque {
   fornecedorPadraoId?: string;
   /** Produto disponível na aba Revendas de Produtos. */
   paraRevenda?: boolean;
+  /** Produto do cadastro Cadastros Agropecuários → Produtos Agropecuários ao qual este saldo pertence. */
+  produtoAgroId?: string;
   ativo?: boolean;
   descricao?: string;  lotes?: {
     numeroLote: string;
