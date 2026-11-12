@@ -671,6 +671,10 @@ interface CoopContextType {
    * não existir. Usado pelos formulários de Compras e Vendas.
    */
   garantirItemEstoqueDoProduto: (produtoId: string) => string | undefined;
+  /** Itens de estoque antigos: sem produto agropecuário ligado e sem uso em outros registros. */
+  itensEstoqueAntigosSemUso: () => ItemEstoque[];
+  /** Exclui os itens de `itensEstoqueAntigosSemUso`. Devolve quantos saíram. */
+  excluirItensEstoqueAntigos: () => number;
   deleteItemEstoque: (id: string) => void;
 
   movimentacoesEstoque: MovimentacaoEstoque[];
@@ -4922,6 +4926,24 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return novo.id;
   };
 
+  const itensEstoqueAntigosSemUso = (): ItemEstoque[] => {
+    const listas = listasParaVinculos();
+    return estoque.filter(i =>
+      pertenceAoTenant(i, currentTenant.id) &&
+      !i.produtoAgroId &&
+      encontrarVinculos('itemEstoque', i.id, listas).length === 0 &&
+      !vendasRevenda.some(v => (v.itens || []).some(it => it.estoqueItemId === i.id))
+    );
+  };
+  const excluirItensEstoqueAntigos = (): number => {
+    const alvos = itensEstoqueAntigosSemUso();
+    if (!alvos.length) return 0;
+    const ids = new Set(alvos.map(i => i.id));
+    setEstoque(prev => prev.filter(i => !ids.has(i.id)));
+    addAuditLog('ESTOQUE', 'EXCLUSAO', `Excluiu ${alvos.length} item(ns) de estoque antigo(s) sem produto agropecuário: ${alvos.map(i => i.nomeItem).join(', ')}`);
+    return alvos.length;
+  };
+
   const updateItemEstoque = (id: string, iData: Partial<ItemEstoque>) => {
     const alvo = estoque.find(x => x.id === id);
     if (bloqueadoPorStatusFinal(alvo, 'item de estoque')) return;
@@ -6021,6 +6043,8 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addItemEstoque,
         updateItemEstoque,
         garantirItemEstoqueDoProduto,
+        itensEstoqueAntigosSemUso,
+        excluirItensEstoqueAntigos,
         deleteItemEstoque,
         movimentacoesEstoque: tenantMovimentacoesEstoque,
         addMovimentacaoEstoque,
