@@ -48,6 +48,9 @@ import {
 } from '../types';
 import { GeoLocationPicker } from '../components/GeoLocationPicker';
 import { buscarCodigosFiscais } from '../utils/produtoCodigosFiscais';
+import { TIPOS_PRODUTO, OPCOES_IBS_CBS, rotuloTipoProduto, opcaoIbsCbs, sugerirClassificacaoIbsCbs, sugerirIcmsProduto } from '../utils/classificacaoFiscalProduto';
+import { OPCOES_TRIBUTACAO_ICMS } from '../utils/impostosRevenda';
+import type { ClassificacaoIbsCbs, TipoProdutoAgro, TributacaoIcmsItem } from '../types';
 import { POLOS_PADRAO } from '../utils/poloHelpers';
 import { PortalShareBanner } from '../components/PortalShareBanner';
 import { DataGrid, GridStatus } from '../components/ui/DataGrid';
@@ -224,6 +227,8 @@ export const CadastrosView: React.FC = () => {
         codigoConab: item.codigoConab,
         pesoUnitario: item.pesoUnitario,
         tipoProcessamento: item.tipoProcessamento,
+        tributacaoIcms: sugerirIcmsProduto(item.tipoProcessamento, item.categoria, item.nome),
+        classificacaoIbsCbs: sugerirClassificacaoIbsCbs(item.tipoProcessamento, item.categoria, item.nome),
         descricao: item.descricao || 'Ano todo'
       } as any);
     });
@@ -378,8 +383,22 @@ export const CadastrosView: React.FC = () => {
     codigoNcm: '',
     codigoConab: '',
     pesoUnitario: 0 as number,
-    tipoProcessamento: 'IN_NATURA' as 'IN_NATURA' | 'BENEFICIADO'
+    tipoProcessamento: 'IN_NATURA' as TipoProdutoAgro,
+    tributacaoIcms: 'ISENTO' as TributacaoIcmsItem,
+    classificacaoIbsCbs: 'HORTIFRUTI_OVOS_ZERO' as ClassificacaoIbsCbs
   });
+  // Enquanto o usuário não mexer nos campos fiscais, ICMS e IBS/CBS são
+  // sugeridos pelo tipo, categoria e nome do produto.
+  const [fiscalManual, setFiscalManual] = useState(false);
+  const sugestaoFiscal = (tipo: TipoProdutoAgro, categoria: string, nome: string) => ({
+    tributacaoIcms: sugerirIcmsProduto(tipo, categoria, nome),
+    classificacaoIbsCbs: sugerirClassificacaoIbsCbs(tipo, categoria, nome),
+  });
+  const atualizarProdutoForm = (dados: Partial<typeof produtoForm>) =>
+    setProdutoForm(prev => {
+      const next = { ...prev, ...dados };
+      return fiscalManual ? next : { ...next, ...sugestaoFiscal(next.tipoProcessamento, next.categoria, next.nome) };
+    });
   // Indica se o NCM/CONAB atuais vieram do preenchimento automático (para
   // mostrar o aviso visual) ou foram digitados manualmente pelo usuário.
   const [codigosAutoPreenchidos, setCodigosAutoPreenchidos] = useState(false);
@@ -650,8 +669,12 @@ export const CadastrosView: React.FC = () => {
         codigoNcm: p.codigoNcm || '',
         codigoConab: p.codigoConab || '',
         pesoUnitario: p.pesoUnitario || 0,
-        tipoProcessamento: p.tipoProcessamento || 'IN_NATURA'
+        tipoProcessamento: p.tipoProcessamento || 'IN_NATURA',
+        ...sugestaoFiscal(p.tipoProcessamento || 'IN_NATURA', p.categoria, p.nome),
+        ...(p.tributacaoIcms ? { tributacaoIcms: p.tributacaoIcms } : {}),
+        ...(p.classificacaoIbsCbs ? { classificacaoIbsCbs: p.classificacaoIbsCbs } : {})
       });
+      setFiscalManual(!!(p.tributacaoIcms || p.classificacaoIbsCbs));
       setCodigosAutoPreenchidos(false);
     } else {
       setEditingProduto(null);
@@ -665,8 +688,10 @@ export const CadastrosView: React.FC = () => {
         sazonalidade: 'Ano todo',
         pesoUnitario: 0,
         tipoProcessamento: 'IN_NATURA',
+        ...sugestaoFiscal('IN_NATURA', 'HORTIFRUTI', ''),
         ...codigoInicial
       });
+      setFiscalManual(false);
       setCodigosAutoPreenchidos(false);
     }
     setShowProdutoModal(true);
@@ -1206,9 +1231,15 @@ export const CadastrosView: React.FC = () => {
             { key: 'codigoConab', header: 'Código CONAB', width: 120, align: 'center' },
             {
               key: 'tipoProcessamento',
-              header: 'Processamento',
+              header: 'Tipo',
               width: 130,
-              value: p => ((p as any).tipoProcessamento === 'BENEFICIADO' ? 'Beneficiado' : 'In natura'),
+              value: p => rotuloTipoProduto(p.tipoProcessamento),
+            },
+            {
+              key: 'classificacaoIbsCbs',
+              header: 'IBS/CBS',
+              width: 170,
+              value: p => (p.classificacaoIbsCbs ? opcaoIbsCbs(p.classificacaoIbsCbs).rotulo : '—'),
             },
             {
               key: 'pesoUnitario',
@@ -1672,7 +1703,7 @@ export const CadastrosView: React.FC = () => {
                   value={produtoForm.nome}
                   onChange={e => {
                     const novoNome = e.target.value;
-                    setProdutoForm(prev => ({ ...prev, nome: novoNome }));
+                    atualizarProdutoForm({ nome: novoNome });
                     atualizarCodigosFiscaisAuto(novoNome, produtoForm.categoria);
                   }}
                   className="w-full p-2.5 border border-slate-200 rounded-xl"
@@ -1687,7 +1718,7 @@ export const CadastrosView: React.FC = () => {
                     value={produtoForm.categoria}
                     onChange={e => {
                       const novaCategoria = e.target.value;
-                      setProdutoForm(prev => ({ ...prev, categoria: novaCategoria as any }));
+                      atualizarProdutoForm({ categoria: novaCategoria as any });
                       atualizarCodigosFiscaisAuto(produtoForm.nome, novaCategoria);
                     }}
                     className="w-full p-2.5 border border-slate-200 rounded-xl"
@@ -1780,31 +1811,72 @@ export const CadastrosView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-slate-700 font-bold mb-1">Tipo</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setProdutoForm({ ...produtoForm, tipoProcessamento: 'IN_NATURA' })}
-                    className={`p-2.5 rounded-xl border text-xs font-bold transition-all ${
-                      produtoForm.tipoProcessamento === 'IN_NATURA'
-                        ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs'
-                        : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
-                    }`}
-                  >
-                    In Natura
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setProdutoForm({ ...produtoForm, tipoProcessamento: 'BENEFICIADO' })}
-                    className={`p-2.5 rounded-xl border text-xs font-bold transition-all ${
-                      produtoForm.tipoProcessamento === 'BENEFICIADO'
-                        ? 'bg-amber-600 text-white border-amber-700 shadow-xs'
-                        : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
-                    }`}
-                  >
-                    Beneficiado
-                  </button>
+                <label className="block text-slate-700 font-bold mb-1">Tipo de produto</label>
+                <select
+                  value={produtoForm.tipoProcessamento}
+                  onChange={e => atualizarProdutoForm({ tipoProcessamento: e.target.value as TipoProdutoAgro })}
+                  className="w-full p-2.5 border border-slate-200 rounded-xl bg-white"
+                >
+                  {TIPOS_PRODUTO.map(t => (
+                    <option key={t.valor} value={t.valor}>{t.rotulo}</option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  {TIPOS_PRODUTO.find(t => t.valor === produtoForm.tipoProcessamento)?.dica}
+                </p>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-extrabold text-slate-800">Incidência de impostos na venda</div>
+                  {fiscalManual ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFiscalManual(false);
+                        setProdutoForm(prev => ({ ...prev, ...sugestaoFiscal(prev.tipoProcessamento, prev.categoria, prev.nome) }));
+                      }}
+                      className="text-[10px] font-bold text-emerald-700 hover:underline"
+                    >
+                      Usar sugestão automática
+                    </button>
+                  ) : (
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5 flex items-center gap-1">
+                      <Sparkles className="w-3 h-3" /> Sugerido pelo tipo e categoria
+                    </span>
+                  )}
                 </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">ICMS (regras atuais — CE)</label>
+                    <select
+                      value={produtoForm.tributacaoIcms}
+                      onChange={e => { setFiscalManual(true); setProdutoForm(prev => ({ ...prev, tributacaoIcms: e.target.value as TributacaoIcmsItem })); }}
+                      className="w-full p-2.5 border border-slate-200 rounded-xl bg-white"
+                    >
+                      {OPCOES_TRIBUTACAO_ICMS.map(o => (
+                        <option key={o.valor} value={o.valor}>{o.rotulo}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">IBS / CBS (Reforma Tributária)</label>
+                    <select
+                      value={produtoForm.classificacaoIbsCbs}
+                      onChange={e => { setFiscalManual(true); setProdutoForm(prev => ({ ...prev, classificacaoIbsCbs: e.target.value as ClassificacaoIbsCbs })); }}
+                      className="w-full p-2.5 border border-slate-200 rounded-xl bg-white"
+                    >
+                      {OPCOES_IBS_CBS.map(o => (
+                        <option key={o.valor} value={o.valor}>{o.rotulo}</option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-slate-500 mt-1">{opcaoIbsCbs(produtoForm.classificacaoIbsCbs).fundamento}</p>
+                  </div>
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  IBS e CBS substituem gradualmente ICMS, ISS, PIS e COFINS (2026: fase de teste; ICMS diminui de 2029 a 2032 e acaba em 2033).
+                  Confirme o enquadramento pelo NCM com o contador.
+                </p>
               </div>
 
               <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
@@ -1985,7 +2057,7 @@ export const CadastrosView: React.FC = () => {
                         <tr key={idx} className="border-t border-slate-100">
                           <td className="p-2 font-semibold text-slate-800">{item.nome}</td>
                           <td className="p-2 text-slate-600">{item.categoria}</td>
-                          <td className="p-2 text-slate-600">{item.tipoProcessamento === 'BENEFICIADO' ? 'Beneficiado' : 'In Natura'}</td>
+                          <td className="p-2 text-slate-600">{rotuloTipoProduto(item.tipoProcessamento)}</td>
                           <td className="p-2 text-right text-slate-600">{item.pesoUnitario ? `${item.pesoUnitario} KG` : '—'}</td>
                           <td className="p-2 font-mono text-sky-700">
                             {item.codigoNcm}
