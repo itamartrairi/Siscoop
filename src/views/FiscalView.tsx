@@ -1,3 +1,4 @@
+import { enviarCertificadoFiscal, consultarStatusFiscal } from '../services/nuvemFiscalService';
 import { NavegacaoSecoes } from '../components/ui/NavegacaoSecoes';
 import React, { useState } from 'react';
 import {
@@ -133,6 +134,33 @@ export const FiscalView: React.FC = () => {
 
   // Config Form State
   const [configForm, setConfigForm] = useState<SefazCeConfig>(sefazCeConfig);
+  const [arquivoFiscal, setArquivoFiscal] = useState<File | null>(null);
+  const [senhaFiscal, setSenhaFiscal] = useState('');
+  const [operacaoFiscal, setOperacaoFiscal] = useState<'upload' | 'status' | null>(null);
+  const [resultadoFiscal, setResultadoFiscal] = useState('');
+
+  const executarIntegracaoFiscal = async (operacao: 'upload' | 'status') => {
+    if (!canWrite || operacaoFiscal || (operacao === 'upload' && !arquivoFiscal)) return;
+    setOperacaoFiscal(operacao);
+    setResultadoFiscal('');
+    const config = { ...configForm, cnpjEmitente: currentTenant?.cnpj || configForm.cnpjEmitente };
+    try {
+      if (operacao === 'upload' && arquivoFiscal) {
+        const certificado = await enviarCertificadoFiscal(config, arquivoFiscal, senhaFiscal);
+        updateSefazCeConfig({ ...sefazCeConfig, senhaCertificado: '', certificadoNomeArquivo: arquivoFiscal.name, certificadoDataValidade: certificado.not_valid_after?.slice(0, 10) || '' });
+        setConfigForm(prev => ({ ...prev, senhaCertificado: '', certificadoNomeArquivo: arquivoFiscal.name, certificadoDataValidade: certificado.not_valid_after?.slice(0, 10) || '' }));
+        setResultadoFiscal('Certificado cadastrado na ACBr em ' + config.ambiente.toLowerCase() + '.');
+      } else {
+        const status = await consultarStatusFiscal(config);
+        setResultadoFiscal('SEFAZ (' + status.ambiente + ') · ' + status.codigo_status + ' — ' + status.motivo_status);
+      }
+    } catch (erro) {
+      setResultadoFiscal(erro instanceof Error ? erro.message : 'Falha ao acessar a ACBr.');
+    } finally {
+      if (operacao === 'upload') setSenhaFiscal('');
+      setOperacaoFiscal(null);
+    }
+  };
   const [configSavedSuccess, setConfigSavedSuccess] = useState(false);
 
   // Auto-fill destinatário ao selecionar escola ou cooperado
@@ -354,7 +382,7 @@ export const FiscalView: React.FC = () => {
   const handleSaveConfig = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canWrite) { blockWriteAction(); return; }
-    updateSefazCeConfig(configForm);
+    updateSefazCeConfig({ ...configForm, senhaCertificado: '' });
     setConfigSavedSuccess(true);
     setTimeout(() => setConfigSavedSuccess(false), 3000);
   };
@@ -490,9 +518,9 @@ export const FiscalView: React.FC = () => {
           <div>
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Certificado Digital A1</p>
             <p className="text-sm font-bold text-emerald-700 mt-1 truncate max-w-[140px]">
-              {sefazCeConfig.certificadoNomeArquivo || 'Cadastrado'}
+              {sefazCeConfig.certificadoNomeArquivo || 'Sem certificado informado'}
             </p>
-            <p className="text-[11px] text-slate-500 mt-0.5">Validade: {sefazCeConfig.certificadoDataValidade || '2027-12-31'}</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">Validade: {sefazCeConfig.certificadoDataValidade || 'não informada'}</p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
             <ShieldCheck className="w-5 h-5" />
@@ -1229,45 +1257,21 @@ export const FiscalView: React.FC = () => {
               </h3>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Arquivo do Certificado (.PFX / .P12)</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={configForm.certificadoNomeArquivo || ''}
-                    onChange={e => setConfigForm(prev => ({ ...prev, certificadoNomeArquivo: e.target.value }))}
-                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono"
-                    placeholder="cert_cooperativa_a1.pfx"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => alert('Simulação: Certificado A1 validado e vinculado com sucesso na nuvem!')}
-                    className="px-3 py-2 bg-emerald-100 text-emerald-900 font-bold text-xs rounded-lg hover:bg-emerald-200 transition-colors"
-                  >
-                    Upload PFX
-                  </button>
-                </div>
+                <label className="block text-xs font-semibold">Arquivo do certificado A1
+                  <input type="file" accept=".pfx,.p12" disabled={!canWrite || !!operacaoFiscal} onChange={e => setArquivoFiscal(e.target.files?.[0] || null)} className="block w-full mt-1 text-xs" />
+                </label>
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">Senha do Certificado</label>
-                  <input
-                    type="password"
-                    value={configForm.senhaCertificado || ''}
-                    onChange={e => setConfigForm(prev => ({ ...prev, senhaCertificado: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">Data de Validade</label>
-                  <input
-                    type="date"
-                    value={configForm.certificadoDataValidade || ''}
-                    onChange={e => setConfigForm(prev => ({ ...prev, certificadoDataValidade: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono"
-                  />
-                </div>
+              <label className="block text-xs font-semibold">Senha do certificado
+                <input type="password" autoComplete="off" value={senhaFiscal} onChange={e => setSenhaFiscal(e.target.value)} disabled={!canWrite || !!operacaoFiscal} className="block w-full px-3 py-2 border rounded-lg mt-1" />
+              </label>
+              <p className="text-xs text-slate-600">O arquivo e a senha são enviados à ACBr no ambiente selecionado. A senha é limpa após o envio.</p>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" disabled={!canWrite || !!operacaoFiscal || !arquivoFiscal || !senhaFiscal} onClick={() => void executarIntegracaoFiscal('upload')} className="px-3 py-2 rounded-lg bg-emerald-700 text-white text-xs font-bold disabled:opacity-50">Enviar certificado à ACBr</button>
+                <button type="button" disabled={!canWrite || !!operacaoFiscal} onClick={() => void executarIntegracaoFiscal('status')} className="px-3 py-2 rounded-lg border text-xs font-bold disabled:opacity-50">Testar conexão</button>
               </div>
+              {operacaoFiscal && <p role="status" className="text-xs">Consultando a ACBr…</p>}
+              {resultadoFiscal && <p role="status" className="text-xs">{resultadoFiscal}</p>}
+              {configForm.certificadoDataValidade && <p className="text-xs">Validade registrada: {configForm.certificadoDataValidade}</p>}
             </div>
 
             {/* Parâmetros Fiscais CE */}
