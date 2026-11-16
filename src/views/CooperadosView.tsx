@@ -47,7 +47,7 @@ import { ReceiptModal } from '../components/ReceiptModal';
 import { GeoLocationPicker } from '../components/GeoLocationPicker';
 
 type CampoImovel = { chave: string; rotulo: string; tipo?: 'inteiro' | 'decimal'; opcoes?: readonly string[] };
-type ImovelCooperado = { id: string; campos: Record<string, string> };
+type ImovelCooperado = { id: string; campos: Record<string, string>; documento?: { nome: string; dados: string } };
 type CooperadoComImoveis = Cooperado & { imoveisCadastrados?: ImovelCooperado[] };
 
 const simNao = ['Sim', 'Não'];
@@ -94,6 +94,7 @@ const PropriedadesCooperados: React.FC = () => {
   const [rascunho, setRascunho] = useState<ImovelCooperado | null>(null);
   const [abaImovel, setAbaImovel] = useState(0);
   const [erroImovel, setErroImovel] = useState('');
+  const [lendoDocumento, setLendoDocumento] = useState(false);
   const abrirFormulario = (imovel: ImovelCooperado) => {
     setAbaImovel(0);
     setErroImovel('');
@@ -111,9 +112,38 @@ const PropriedadesCooperados: React.FC = () => {
   const campo = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:bg-slate-900 dark:border-slate-700';
   const botao = 'rounded-lg px-3 py-2 text-sm font-semibold border border-slate-300 dark:border-slate-700';
 
+  const anexarDocumento = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const arquivo = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    if (!arquivo || !rascunho || !podeEditar || lendoDocumento) return;
+    setErroImovel('');
+    if (!['application/pdf', 'image/jpeg', 'image/png'].includes(arquivo.type)) {
+      setErroImovel('Selecione um documento em PDF, JPG ou PNG.');
+      return;
+    }
+    if (arquivo.size > 200 * 1024) {
+      setErroImovel('O documento deve ter até 200 KB.');
+      return;
+    }
+    const imovelId = rascunho.id;
+    const leitor = new FileReader();
+    setLendoDocumento(true);
+    leitor.onload = () => {
+      const dados = leitor.result;
+      if (typeof dados !== 'string') return;
+      setRascunho(atual => atual?.id === imovelId ? {
+        ...atual, campos: { ...atual.campos, temDocumento: 'Sim' },
+        documento: { nome: arquivo.name, dados }
+      } : atual);
+    };
+    leitor.onerror = () => setErroImovel('Não foi possível ler o documento. Tente selecioná-lo novamente.');
+    leitor.onloadend = () => setLendoDocumento(false);
+    leitor.readAsDataURL(arquivo);
+  };
+
   const salvar = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!produtor || !rascunho || !podeEditar) return;
+    if (!produtor || !rascunho || !podeEditar || lendoDocumento) return;
     for (const [indice, grupo] of gruposImovel.entries()) {
       const invalido = grupo.campos.find(({ chave, tipo }) => {
         const valor = rascunho.campos[chave]?.trim() || '';
@@ -133,6 +163,11 @@ const PropriedadesCooperados: React.FC = () => {
       ? imoveis.map(i => i.id === registro.id ? registro : i)
       : [...imoveis, registro];
     const alteracao: Partial<CooperadoComImoveis> = { imoveisCadastrados };
+    if (rascunho.documento && new TextEncoder().encode(JSON.stringify({ ...produtor, ...alteracao })).length > 800 * 1024) {
+      setAbaImovel(0);
+      setErroImovel('Os documentos deste cooperado excedem o espaço disponível. Use um arquivo menor.');
+      return;
+    }
     updateCooperado(produtor.id, alteracao);
     setRascunho(null);
   };
@@ -208,9 +243,30 @@ const PropriedadesCooperados: React.FC = () => {
               </fieldset>
             ))}
           </div>
+          {abaImovel === 0 && (
+            <section className="space-y-2 rounded-xl border border-slate-200 p-4 dark:border-slate-700" aria-label="Documento do imóvel">
+              {podeEditar && <label className="block text-sm font-semibold">
+                Anexar documento do imóvel
+                <input type="file" className={campo} accept="application/pdf,image/jpeg,image/png" disabled={lendoDocumento} onChange={anexarDocumento} />
+                <span className="text-xs font-normal text-slate-500">PDF, JPG ou PNG de até 200 KB. Um documento por imóvel.</span>
+              </label>}
+              {lendoDocumento && <p role="status" className="text-sm">Carregando documento…</p>}
+              {rascunho.documento && (
+                <div className="flex flex-wrap items-center gap-3 text-sm">
+                  <a className="font-semibold text-emerald-700 underline" href={rascunho.documento.dados} download={rascunho.documento.nome}>
+                    Baixar {rascunho.documento.nome}
+                  </a>
+                  {podeEditar && <button type="button" className={botao} disabled={lendoDocumento} onClick={() => {
+                    setRascunho(atual => atual && ({ id: atual.id, campos: atual.campos }));
+                    setErroImovel('');
+                  }}>Remover anexo</button>}
+                </div>
+              )}
+            </section>
+          )}
           <div className="flex justify-end gap-2">
             <button type="button" className={botao} onClick={() => setRascunho(null)}>{podeEditar ? 'Cancelar' : 'Fechar'}</button>
-            {podeEditar && <button type="submit" className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">Salvar imóvel</button>}
+            {podeEditar && <button type="submit" disabled={lendoDocumento} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">Salvar imóvel</button>}
           </div>
         </form>
       )}
