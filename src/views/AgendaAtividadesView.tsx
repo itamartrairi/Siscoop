@@ -1,3 +1,4 @@
+import { VoltarSecoes } from '../components/ui/NavegacaoSecoes';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CalendarDays,
@@ -480,9 +481,7 @@ export const AgendaAtividadesView: React.FC = () => {
       </div>
 
       {activeTab ? (
-        <button type="button" onClick={() => setActiveTab(null)} className="rounded-lg px-3 py-2 text-sm font-semibold text-orange-800 hover:bg-orange-50">
-          ← Voltar à Agenda & Atividades
-        </button>
+        <VoltarSecoes voltar={() => setActiveTab(null)} rotulo="Voltar à Agenda & Atividades" />
       ) : (
         <ol aria-label="Seções de Agenda & Atividades" className="rounded-2xl border border-slate-200 border-t-2 border-t-orange-500 bg-white p-6">
           {([

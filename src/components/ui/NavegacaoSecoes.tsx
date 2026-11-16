@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 
 type Secao = { titulo: React.ReactNode; descricao: string; icone: React.ElementType; abrir: () => void };
@@ -8,11 +9,7 @@ export function NavegacaoSecoes({ selecionada, voltar, secoes }: {
   voltar: () => void;
   secoes: readonly Secao[];
 }) {
-  if (selecionada) return (
-    <button type="button" onClick={voltar} className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-orange-800 hover:bg-orange-50 dark:text-orange-300 dark:hover:bg-slate-800">
-      <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Voltar às opções
-    </button>
-  );
+  if (selecionada) return <VoltarSecoes voltar={voltar} />;
 
   return (
     <ol aria-label="Seções disponíveis" className="rounded-2xl border border-slate-200 border-t-2 border-t-orange-500 bg-white p-6 dark:border-slate-700 dark:border-t-orange-500 dark:bg-slate-900">
@@ -28,4 +25,30 @@ export function NavegacaoSecoes({ selecionada, voltar, secoes }: {
       ))}
     </ol>
   );
+}
+export function VoltarSecoes({ voltar, rotulo = 'Voltar às opções' }: { voltar: () => void; rotulo?: string }) {
+  const origem = useRef<HTMLSpanElement>(null);
+  const [destino, setDestino] = useState<HTMLDivElement | null>(null);
+
+  useLayoutEffect(() => {
+    // Procura a faixa fixa da tela atual. Janelas sem essa faixa mantêm o retorno no próprio formulário.
+    const pai = origem.current?.parentElement;
+    const faixa = Array.from(pai?.children ?? []).find(el => el.matches('.sticky.top-0.z-20'));
+    const titulo = faixa?.querySelector('h1, h2, h3');
+    if (!titulo?.parentElement) return;
+
+    const suporte = document.createElement('div');
+    suporte.className = 'mb-2';
+    titulo.parentElement.insertBefore(suporte, titulo);
+    setDestino(suporte);
+    return () => suporte.remove();
+  }, []);
+
+  const botao = (
+    <button type="button" onClick={voltar} className="inline-flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-semibold text-orange-900 hover:bg-orange-100 focus-visible:outline-2 focus-visible:outline-orange-700">
+      <ArrowLeft className="h-4 w-4" aria-hidden="true" /> {rotulo}
+    </button>
+  );
+
+  return <><span ref={origem} hidden />{destino ? createPortal(botao, destino) : botao}</>;
 }
