@@ -1,3 +1,4 @@
+import { NavegacaoSecoes } from '../components/ui/NavegacaoSecoes';
 import { formatarData } from '../utils/dateHelpers';
 import React, { useState } from 'react';
 import { useCoop } from '../context/CoopContext';
@@ -91,7 +92,7 @@ export const SisFinView: React.FC = () => {
     alert('Seu perfil de acesso tem permissão apenas de leitura neste módulo. Fale com um administrador para solicitar permissão de edição.');
   };
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'dre' | 'fluxo' | 'contas' | 'estoque' | 'custos' | 'extrato' | 'balanco' | 'bancos' | 'relatorios'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'dre' | 'fluxo' | 'contas' | 'estoque' | 'custos' | 'extrato' | 'balanco' | 'bancos' | 'relatorios' | null>(null);
   const [filtroMes, setFiltroMes] = useState(String(new Date().getMonth() + 1).padStart(2, '0'));
   const [filtroAno, setFiltroAno] = useState(String(new Date().getFullYear()));
   const [filtroCategoria, setFiltroCategoria] = useState('TODAS');
@@ -380,56 +381,18 @@ if (c) {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-slate-200 gap-2 overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('contas')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-            activeTab === 'contas'
-              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <CircleDollarSign className="w-4 h-4" /> Contas a Pagar e Receber ({contasPagarReceber.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('relatorios')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-            activeTab === 'relatorios'
-              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <FileText className="w-4 h-4" /> Relatórios PDF
-        </button>
-        <button
-          onClick={() => setActiveTab('extrato')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-            activeTab === 'extrato'
-              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <Landmark className="w-4 h-4" /> Extrato Conciliado ({extratoBancario?.bancoNome || 'Sicoob Credi'})
-        </button>
-        <button
-          onClick={() => setActiveTab('bancos')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-            activeTab === 'bancos'
-              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <Landmark className="w-4 h-4" /> Contas Bancárias
-        </button>
-        <button
-          onClick={() => setActiveTab('balanco')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${activeTab === 'balanco' ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl' : 'border-transparent text-slate-500 hover:text-slate-900'}`}
-        >
-          <BarChart3 className="w-4 h-4" /> Balanço Financeiro
-        </button>
-        {([['dashboard', 'Dashboard'], ['dre', 'DRE'], ['fluxo', 'Fluxo de Caixa'], ['estoque', 'Estoque'], ['custos', 'Custos']] as const).map(([tab, label]) => <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2.5 text-xs font-bold border-b-2 whitespace-nowrap ${activeTab === tab ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl' : 'border-transparent text-slate-500 hover:text-slate-900'}`}>{label}</button>)}
-      </div>
+      <NavegacaoSecoes selecionada={activeTab !== null} voltar={() => setActiveTab(null)} secoes={[
+        { titulo: <>Contas a Pagar e Receber ({contasPagarReceber.length})</>, descricao: "Acompanhe pagamentos e recebimentos.", icone: CircleDollarSign, abrir: () => setActiveTab('contas') },
+        { titulo: <>Relatórios PDF</>, descricao: "Consulte e exporte relatórios em PDF.", icone: FileText, abrir: () => setActiveTab('relatorios') },
+        { titulo: <>Extrato Conciliado ({extratoBancario?.bancoNome || 'Sicoob Credi'})</>, descricao: "Confira as movimentações bancárias conciliadas.", icone: Landmark, abrir: () => setActiveTab('extrato') },
+        { titulo: <>Contas Bancárias</>, descricao: "Gerencie as contas bancárias.", icone: Landmark, abrir: () => setActiveTab('bancos') },
+        { titulo: <>Balanço Financeiro</>, descricao: "Consulte a posição patrimonial e financeira.", icone: BarChart3, abrir: () => setActiveTab('balanco') },
+        { titulo: 'Dashboard', descricao: 'Acompanhe os indicadores financeiros.', icone: BarChart3, abrir: () => setActiveTab('dashboard') },
+        { titulo: 'DRE', descricao: 'Consulte o resultado do exercício.', icone: BarChart3, abrir: () => setActiveTab('dre') },
+        { titulo: 'Fluxo de Caixa', descricao: 'Acompanhe as entradas e saídas de caixa.', icone: BarChart3, abrir: () => setActiveTab('fluxo') },
+        { titulo: 'Estoque', descricao: 'Consulte os saldos de estoque.', icone: BarChart3, abrir: () => setActiveTab('estoque') },
+        { titulo: 'Custos', descricao: 'Analise os custos da operação.', icone: BarChart3, abrir: () => setActiveTab('custos') }
+      ]} />
 
       {(activeTab === 'dashboard' || activeTab === 'dre' || activeTab === 'fluxo' || activeTab === 'estoque' || activeTab === 'custos') && (
         <div className="space-y-5">
