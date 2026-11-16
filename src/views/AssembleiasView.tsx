@@ -335,7 +335,7 @@ ${secretarioNome} - Secretário ad-hoc`;
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
       {/* Top Bar */}
-      <div className="flex items-center justify-between flex-wrap gap-4 bg-white dark:bg-slate-800 p-5 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm">
+      <div className="sticky top-0 z-20 flex items-center justify-between flex-wrap gap-4 bg-slate-100 dark:bg-slate-800 p-5 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm">
         <div>
           <h2 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
             <Users className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />

@@ -3644,114 +3644,116 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
         </div>
       )}
 
-      {/* Header Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-emerald-900 to-teal-900 p-6 rounded-2xl text-white shadow-md">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-bold text-emerald-200 bg-emerald-800/60 px-3 py-1 rounded-full w-fit border border-emerald-700/50 mb-2">
-            <Landmark className="w-3.5 h-3.5" /> Comercialização Agrícola & Mercados Institucionais
-          </div>
-          <h1 className="text-2xl font-black tracking-tight">Comercialização da Produção (PAA / PNAE)</h1>
-          <p className="text-xs text-emerald-100/80 mt-1 max-w-2xl">
-            Gestão integrada da produção dos cooperados, editais de chamadas públicas, rateio de cotas de fornecimento, pedidos e logística de entregas na merenda escolar e programas institucionais.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {activeTab === 'chamadas' && (
-            <button
-              onClick={() => handleOpenChamada()}
-              className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold rounded-xl text-xs transition-all shadow-sm flex items-center gap-2 shrink-0"
-            >
-              <Plus className="w-4 h-4" /> Nova Chamada Pública
-            </button>
-          )}
-          {activeTab === 'ofertas' && (
-            <button
-              onClick={() => handleOpenOferta()}
-              className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold rounded-xl text-xs transition-all shadow-sm flex items-center gap-2 shrink-0"
-            >
-              <Plus className="w-4 h-4" /> Registrar Proposta PAA
-            </button>
-          )}
-          {activeTab === 'pedidos' && (
-            <button
-              onClick={() => handleOpenPedido()}
-              className="px-4 py-2.5 bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-black rounded-xl text-xs transition-all shadow-md flex items-center gap-2 shrink-0 animate-pulse"
-            >
-              <ShoppingBag className="w-4 h-4" /> Fazer Pedido aos Produtores
-            </button>
-          )}
-          {activeTab === 'entregas' && (
-            <button
-              onClick={() => handleOpenEntrega()}
-              className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold rounded-xl text-xs transition-all shadow-sm flex items-center gap-2 shrink-0"
-            >
-              <Plus className="w-4 h-4" /> Nova Rota de Entrega
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Cross-entity Relationship Search & Filters Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-black uppercase text-slate-600 flex items-center gap-1.5">
-            <Filter className="w-3.5 h-3.5 text-emerald-600" />
-            Filtros Integrados de Cruzamento (Programa, Produtor, Escola, Produto)
-          </span>
-          {(searchTerm || filterProgramaId || filterProdutorId || filterEscolaId || filterProdutoId || filterDataPedido) && (
-            <button
-              onClick={() => {
-                setSearchTerm('');
-                setFilterProgramaId('');
-                setFilterProdutorId('');
-                setFilterEscolaId('');
-                setFilterProdutoId('');
-                setFilterDataPedido('');
-              }}
-              className="text-[11px] text-emerald-700 hover:underline font-bold"
-            >
-              Limpar Filtros
-            </button>
-          )}
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-2.5 text-xs">
-          {/* Search Term */}
-          <div className="relative">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              placeholder="Buscar por código, edital ou nome..."
-              className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:bg-white focus:ring-2 focus:ring-emerald-500"
-            />
-          </div>
-
-          {/* Filter Programa */}
+      <div className="sticky top-0 z-20 max-h-[42dvh] overflow-y-auto space-y-3 rounded-2xl bg-slate-100 p-2 dark:bg-slate-950">
+        {/* Header Banner */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-emerald-900 to-teal-900 p-6 rounded-2xl text-white shadow-md">
           <div>
-            <select
-              value={filterProgramaId}
-              onChange={e => setFilterProgramaId(e.target.value)}
-              className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:bg-white"
-            >
-              <option value="">Todos os Programas</option>
-              {programas.map(p => (
-                <option key={p.id} value={p.id}>{p.nome} ({p.tipo})</option>
-              ))}
-            </select>
+            <div className="flex items-center gap-2 text-xs font-bold text-emerald-200 bg-emerald-800/60 px-3 py-1 rounded-full w-fit border border-emerald-700/50 mb-2">
+              <Landmark className="w-3.5 h-3.5" /> Comercialização Agrícola & Mercados Institucionais
+            </div>
+            <h1 className="text-2xl font-black tracking-tight text-white">Comercialização da Produção (PAA / PNAE)</h1>
+            <p className="text-xs text-emerald-100/80 mt-1 max-w-2xl">
+              Gestão integrada da produção dos cooperados, editais de chamadas públicas, rateio de cotas de fornecimento, pedidos e logística de entregas na merenda escolar e programas institucionais.
+            </p>
           </div>
 
-          {/* Filter Data Prevista / Entrega */}
-          <div>
-            <input
-              type="date"
-              value={filterDataPedido}
-              onChange={e => setFilterDataPedido(e.target.value)}
-              className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:bg-white text-slate-700"
-              title="Filtrar por Data Prevista de Entrega"
-            />
+          <div className="flex items-center gap-2">
+            {activeTab === 'chamadas' && (
+              <button
+                onClick={() => handleOpenChamada()}
+                className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold rounded-xl text-xs transition-all shadow-sm flex items-center gap-2 shrink-0"
+              >
+                <Plus className="w-4 h-4" /> Nova Chamada Pública
+              </button>
+            )}
+            {activeTab === 'ofertas' && (
+              <button
+                onClick={() => handleOpenOferta()}
+                className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold rounded-xl text-xs transition-all shadow-sm flex items-center gap-2 shrink-0"
+              >
+                <Plus className="w-4 h-4" /> Registrar Proposta PAA
+              </button>
+            )}
+            {activeTab === 'pedidos' && (
+              <button
+                onClick={() => handleOpenPedido()}
+                className="px-4 py-2.5 bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-black rounded-xl text-xs transition-all shadow-md flex items-center gap-2 shrink-0 animate-pulse"
+              >
+                <ShoppingBag className="w-4 h-4" /> Fazer Pedido aos Produtores
+              </button>
+            )}
+            {activeTab === 'entregas' && (
+              <button
+                onClick={() => handleOpenEntrega()}
+                className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold rounded-xl text-xs transition-all shadow-sm flex items-center gap-2 shrink-0"
+              >
+                <Plus className="w-4 h-4" /> Nova Rota de Entrega
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Cross-entity Relationship Search & Filters Bar */}
+        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-black uppercase text-slate-600 flex items-center gap-1.5">
+              <Filter className="w-3.5 h-3.5 text-emerald-600" />
+              Filtros Integrados de Cruzamento (Programa, Produtor, Escola, Produto)
+            </span>
+            {(searchTerm || filterProgramaId || filterProdutorId || filterEscolaId || filterProdutoId || filterDataPedido) && (
+              <button
+                onClick={() => {
+                  setSearchTerm('');
+                  setFilterProgramaId('');
+                  setFilterProdutorId('');
+                  setFilterEscolaId('');
+                  setFilterProdutoId('');
+                  setFilterDataPedido('');
+                }}
+                className="text-[11px] text-emerald-700 hover:underline font-bold"
+              >
+                Limpar Filtros
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-2.5 text-xs">
+            {/* Search Term */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                placeholder="Buscar por código, edital ou nome..."
+                className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:bg-white focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+
+            {/* Filter Programa */}
+            <div>
+              <select
+                value={filterProgramaId}
+                onChange={e => setFilterProgramaId(e.target.value)}
+                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:bg-white"
+              >
+                <option value="">Todos os Programas</option>
+                {programas.map(p => (
+                  <option key={p.id} value={p.id}>{p.nome} ({p.tipo})</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Filter Data Prevista / Entrega */}
+            <div>
+              <input
+                type="date"
+                value={filterDataPedido}
+                onChange={e => setFilterDataPedido(e.target.value)}
+                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:bg-white text-slate-700"
+                title="Filtrar por Data Prevista de Entrega"
+              />
+            </div>
           </div>
         </div>
       </div>

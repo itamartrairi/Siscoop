@@ -619,7 +619,7 @@ export const CooperadosView: React.FC = () => {
         recipientLabel="cooperados"
       /> */}
       {/* View Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="sticky top-0 z-20 rounded-2xl bg-slate-100 p-4 dark:bg-slate-900 flex items-center justify-between flex-wrap gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
             Gestão de Quadro Social

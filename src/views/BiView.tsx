@@ -234,7 +234,7 @@ export const BiView: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header with Navigation Tabs */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 p-6 rounded-3xl text-white shadow-xl border border-emerald-500/30">
+      <div className="sticky top-0 z-20 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 p-6 rounded-3xl text-white shadow-xl border border-emerald-500/30">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 rounded-full text-xs font-mono font-bold border border-emerald-400/30 flex items-center gap-1.5">
