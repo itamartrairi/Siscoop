@@ -1,3 +1,4 @@
+import { NavegacaoSecoes } from '../components/ui/NavegacaoSecoes';
 import React, { useState } from 'react';
 import { useCoop } from '../context/CoopContext';
 import { Assembleia, TipoAssembleia, StatusAssembleia, PautaItem } from '../types';
@@ -50,7 +51,7 @@ export const AssembleiasView: React.FC = () => {
   };
 
   const [selectedAssId, setSelectedAssId] = useState<string>(assembleias[0]?.id || '');
-  const [activeTab, setActiveTab] = useState<'presenca' | 'pautas' | 'convocatoria' | 'ata'>('presenca');
+  const [activeTab, setActiveTab] = useState<'presenca' | 'pautas' | 'convocatoria' | 'ata' | null>(null);
 
   // Search and filter for presence
   const [searchTerm, setSearchTerm] = useState('');
@@ -449,44 +450,12 @@ ${secretarioNome} - Secretário ad-hoc`;
             </div>
           </div>
 
-          {/* Subtabs Bar */}
-          <div className="flex items-center gap-1 px-4 sm:px-6 pt-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 text-xs overflow-x-auto">
-            <button
-              onClick={() => setActiveTab('presenca')}
-              className={`px-4 py-3 font-bold border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap ${
-                activeTab === 'presenca' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-slate-500'
-              }`}
-            >
-              <Users className="w-4 h-4" /> Controle de Presença ({presentesCount}/{totalAtivos})
-            </button>
-
-            <button
-              onClick={() => setActiveTab('pautas')}
-              className={`px-4 py-3 font-bold border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap ${
-                activeTab === 'pautas' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-slate-500'
-              }`}
-            >
-              <Vote className="w-4 h-4" /> Votação das Pautas ({selectedAss.pautas.length})
-            </button>
-
-            <button
-              onClick={() => setActiveTab('convocatoria')}
-              className={`px-4 py-3 font-bold border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap ${
-                activeTab === 'convocatoria' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-slate-500'
-              }`}
-            >
-              <Send className="w-4 h-4" /> Disparar Convocações
-            </button>
-
-            <button
-              onClick={() => setActiveTab('ata')}
-              className={`px-4 py-3 font-bold border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap ${
-                activeTab === 'ata' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-slate-500'
-              }`}
-            >
-              <FileCheck className="w-4 h-4" /> Ata Oficial
-            </button>
-          </div>
+          <NavegacaoSecoes selecionada={activeTab !== null} voltar={() => setActiveTab(null)} secoes={[
+            { titulo: <>Controle de Presença ({presentesCount}/{totalAtivos})</>, descricao: "Registre e acompanhe a participação.", icone: Users, abrir: () => setActiveTab('presenca') },
+            { titulo: <>Votação das Pautas ({selectedAss.pautas.length})</>, descricao: "Organize e acompanhe as votações.", icone: Vote, abrir: () => setActiveTab('pautas') },
+            { titulo: <>Disparar Convocações</>, descricao: "Prepare as convocações da assembleia.", icone: Send, abrir: () => setActiveTab('convocatoria') },
+            { titulo: <>Ata Oficial</>, descricao: "Consulte e gere a ata oficial.", icone: FileCheck, abrir: () => setActiveTab('ata') }
+          ]} />
 
           {/* Tab Content Body */}
           <div className="p-4 sm:p-6">
