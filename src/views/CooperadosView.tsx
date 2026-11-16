@@ -47,7 +47,7 @@ import { ReceiptModal } from '../components/ReceiptModal';
 import { GeoLocationPicker } from '../components/GeoLocationPicker';
 
 type CampoImovel = { chave: string; rotulo: string; tipo?: 'inteiro' | 'decimal'; opcoes?: readonly string[] };
-type ImovelCooperado = { id: string; campos: Record<string, string> };
+type ImovelCooperado = { id: string; campos: Record<string, string>; documento?: { nome: string; dados: string } };
 type CooperadoComImoveis = Cooperado & { imoveisCadastrados?: ImovelCooperado[] };
 
 const simNao = ['Sim', 'Não'];
@@ -92,6 +92,14 @@ const PropriedadesCooperados: React.FC = () => {
   const { cooperados, updateCooperado, canWriteModule } = useCoop();
   const [cooperadoId, setCooperadoId] = useState('');
   const [rascunho, setRascunho] = useState<ImovelCooperado | null>(null);
+  const [abaImovel, setAbaImovel] = useState(0);
+  const [erroImovel, setErroImovel] = useState('');
+  const [lendoDocumento, setLendoDocumento] = useState(false);
+  const abrirFormulario = (imovel: ImovelCooperado) => {
+    setAbaImovel(0);
+    setErroImovel('');
+    setRascunho(imovel);
+  };
   const podeEditar = canWriteModule('cooperados');
   const produtor: CooperadoComImoveis | undefined = cooperados.find(c => c.id === cooperadoId);
   const imoveis = produtor?.imoveisCadastrados ?? [];
@@ -99,19 +107,67 @@ const PropriedadesCooperados: React.FC = () => {
   const selecionarCooperado = (id: string) => {
     setCooperadoId(id);
     const selecionado: CooperadoComImoveis | undefined = cooperados.find(c => c.id === id);
-    if (podeEditar && selecionado && !selecionado.imoveisCadastrados?.length) setRascunho(novoImovel());
+    if (podeEditar && selecionado && !selecionado.imoveisCadastrados?.length) abrirFormulario(novoImovel());
   };
   const campo = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:bg-slate-900 dark:border-slate-700';
   const botao = 'rounded-lg px-3 py-2 text-sm font-semibold border border-slate-300 dark:border-slate-700';
 
+  const anexarDocumento = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const arquivo = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    if (!arquivo || !rascunho || !podeEditar || lendoDocumento) return;
+    setErroImovel('');
+    if (!['application/pdf', 'image/jpeg', 'image/png'].includes(arquivo.type)) {
+      setErroImovel('Selecione um documento em PDF, JPG ou PNG.');
+      return;
+    }
+    if (arquivo.size > 200 * 1024) {
+      setErroImovel('O documento deve ter até 200 KB.');
+      return;
+    }
+    const imovelId = rascunho.id;
+    const leitor = new FileReader();
+    setLendoDocumento(true);
+    leitor.onload = () => {
+      const dados = leitor.result;
+      if (typeof dados !== 'string') return;
+      setRascunho(atual => atual?.id === imovelId ? {
+        ...atual, campos: { ...atual.campos, temDocumento: 'Sim' },
+        documento: { nome: arquivo.name, dados }
+      } : atual);
+    };
+    leitor.onerror = () => setErroImovel('Não foi possível ler o documento. Tente selecioná-lo novamente.');
+    leitor.onloadend = () => setLendoDocumento(false);
+    leitor.readAsDataURL(arquivo);
+  };
+
   const salvar = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!produtor || !rascunho || !podeEditar) return;
+    if (!produtor || !rascunho || !podeEditar || lendoDocumento) return;
+    for (const [indice, grupo] of gruposImovel.entries()) {
+      const invalido = grupo.campos.find(({ chave, tipo }) => {
+        const valor = rascunho.campos[chave]?.trim() || '';
+        if (!valor) return chave === 'tipoImovel';
+        if (tipo === 'inteiro') return !/^[0-9]+$/.test(valor);
+        if (tipo === 'decimal') return !/^[0-9]+([,.][0-9]+)?$/.test(valor);
+        return false;
+      });
+      if (invalido) {
+        setAbaImovel(indice);
+        setErroImovel('Confira o campo ' + invalido.rotulo + ' antes de salvar.');
+        return;
+      }
+    }
     const registro = { ...rascunho, campos: Object.fromEntries(Object.entries(rascunho.campos).map(([chave, valor]) => [chave, valor.trim()])) };
     const imoveisCadastrados = imoveis.some(i => i.id === registro.id)
       ? imoveis.map(i => i.id === registro.id ? registro : i)
       : [...imoveis, registro];
     const alteracao: Partial<CooperadoComImoveis> = { imoveisCadastrados };
+    if (rascunho.documento && new TextEncoder().encode(JSON.stringify({ ...produtor, ...alteracao })).length > 800 * 1024) {
+      setAbaImovel(0);
+      setErroImovel('Os documentos deste cooperado excedem o espaço disponível. Use um arquivo menor.');
+      return;
+    }
     updateCooperado(produtor.id, alteracao);
     setRascunho(null);
   };
@@ -130,7 +186,7 @@ const PropriedadesCooperados: React.FC = () => {
         </label>
         <p className="pb-2 text-sm">Nº de imóveis <strong>{imoveis.length}</strong></p>
         {produtor && podeEditar && !rascunho && (
-          <button type="button" className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white" onClick={() => setRascunho(novoImovel())}>Novo cadastro de imóvel</button>
+          <button type="button" className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white" onClick={() => abrirFormulario(novoImovel())}>Novo cadastro de imóvel</button>
         )}
       </div>
       {produtor && !rascunho && (
@@ -139,7 +195,7 @@ const PropriedadesCooperados: React.FC = () => {
             <li key={imovel.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
               <span className="text-sm">{imovel.campos.endereco || imovel.campos.localidade || 'Imóvel ' + (indice + 1)}{imovel.campos.municipio && ' · ' + imovel.campos.municipio}</span>
               <div className="flex gap-2">
-                <button type="button" className={botao} onClick={() => setRascunho(imovel)}>{podeEditar ? 'Editar' : 'Consultar'}</button>
+                <button type="button" className={botao} onClick={() => abrirFormulario(imovel)}>{podeEditar ? 'Editar' : 'Consultar'}</button>
                 {podeEditar && <button type="button" className={botao + ' text-rose-700'} onClick={() => {
                   if (!confirm('Excluir este imóvel do cadastro do cooperado?')) return;
                   const alteracao: Partial<CooperadoComImoveis> = { imoveisCadastrados: imoveis.filter(item => item.id !== imovel.id) };
@@ -151,9 +207,19 @@ const PropriedadesCooperados: React.FC = () => {
         </ul> : <p className="text-sm text-slate-500">Este cooperado ainda não tem imóveis cadastrados.</p>
       )}
       {produtor && rascunho && (
-        <form className="space-y-4" onSubmit={salvar}>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            {gruposImovel.map(grupo => (
+        <form className="space-y-4" onSubmit={salvar} noValidate>
+          <nav aria-label="Seções do formulário de imóvel" className="flex flex-wrap gap-2 border-b border-slate-200 pb-2 dark:border-slate-700">
+            {gruposImovel.map((grupo, indice) => (
+              <button type="button" key={grupo.titulo} aria-pressed={abaImovel === indice}
+                onClick={() => { setAbaImovel(indice); setErroImovel(''); }}
+                className={abaImovel === indice ? botao + ' bg-emerald-700 text-white' : botao}>
+                {indice + 1}. {grupo.titulo}
+              </button>
+            ))}
+          </nav>
+          {erroImovel && <p role="alert" className="text-sm font-semibold text-rose-700">{erroImovel}</p>}
+          <div>
+            {[gruposImovel[abaImovel]].map(grupo => (
               <fieldset key={grupo.titulo} disabled={!podeEditar} className="min-w-0 space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
                 <legend className="px-1 text-sm font-bold">{grupo.titulo}</legend>
                 {grupo.campos.map(({ chave, rotulo, tipo, opcoes }) => {
@@ -177,9 +243,30 @@ const PropriedadesCooperados: React.FC = () => {
               </fieldset>
             ))}
           </div>
+          {abaImovel === 0 && (
+            <section className="space-y-2 rounded-xl border border-slate-200 p-4 dark:border-slate-700" aria-label="Documento do imóvel">
+              {podeEditar && <label className="block text-sm font-semibold">
+                Anexar documento do imóvel
+                <input type="file" className={campo} accept="application/pdf,image/jpeg,image/png" disabled={lendoDocumento} onChange={anexarDocumento} />
+                <span className="text-xs font-normal text-slate-500">PDF, JPG ou PNG de até 200 KB. Um documento por imóvel.</span>
+              </label>}
+              {lendoDocumento && <p role="status" className="text-sm">Carregando documento…</p>}
+              {rascunho.documento && (
+                <div className="flex flex-wrap items-center gap-3 text-sm">
+                  <a className="font-semibold text-emerald-700 underline" href={rascunho.documento.dados} download={rascunho.documento.nome}>
+                    Baixar {rascunho.documento.nome}
+                  </a>
+                  {podeEditar && <button type="button" className={botao} disabled={lendoDocumento} onClick={() => {
+                    setRascunho(atual => atual && ({ id: atual.id, campos: atual.campos }));
+                    setErroImovel('');
+                  }}>Remover anexo</button>}
+                </div>
+              )}
+            </section>
+          )}
           <div className="flex justify-end gap-2">
             <button type="button" className={botao} onClick={() => setRascunho(null)}>{podeEditar ? 'Cancelar' : 'Fechar'}</button>
-            {podeEditar && <button type="submit" className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">Salvar imóvel</button>}
+            {podeEditar && <button type="submit" disabled={lendoDocumento} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">Salvar imóvel</button>}
           </div>
         </form>
       )}
