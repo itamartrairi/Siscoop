@@ -97,6 +97,10 @@ export function limparTokenApiFiscal(config: SefazCeConfig): void {
  * Mantém o nome antigo para não quebrar quem já importa esta função.
  */
 export async function obterTokenNuvemFiscal(config: SefazCeConfig): Promise<string> {
+  return solicitarTokenFiscal(config, 'nfe cnpj', true);
+}
+
+async function solicitarTokenFiscal(config: SefazCeConfig, escopo: string, persistir: boolean): Promise<string> {
   const clientId = config.nuvemFiscalClientId?.trim();
   const clientSecret = config.nuvemFiscalClientSecret?.trim();
 
@@ -105,11 +109,11 @@ export async function obterTokenNuvemFiscal(config: SefazCeConfig): Promise<stri
   }
 
   const key = chaveToken(config);
-  if (cachedToken && cachedToken.key === key && Date.now() < cachedToken.expiresAt - MARGEM_EXPIRACAO_MS) {
+  if (persistir && cachedToken && cachedToken.key === key && Date.now() < cachedToken.expiresAt - MARGEM_EXPIRACAO_MS) {
     return cachedToken.token;
   }
 
-  const salvo = lerTokenSalvo(key);
+  const salvo = persistir ? lerTokenSalvo(key) : null;
   if (salvo && Date.now() < salvo.expiresAt - MARGEM_EXPIRACAO_MS) {
     cachedToken = { key, token: salvo.token, expiresAt: salvo.expiresAt };
     return salvo.token;
@@ -119,7 +123,7 @@ export async function obterTokenNuvemFiscal(config: SefazCeConfig): Promise<stri
   params.append('grant_type', 'client_credentials');
   params.append('client_id', clientId);
   params.append('client_secret', clientSecret);
-  params.append('scope', 'nfe cnpj');
+  params.append('scope', escopo);
 
   const response = await fetch(ACBR_AUTH_URL, {
     method: 'POST',
@@ -136,8 +140,10 @@ export async function obterTokenNuvemFiscal(config: SefazCeConfig): Promise<stri
 
   const data: NuvemFiscalTokenResponse = await response.json();
   const expiresAt = Date.now() + (data.expires_in * 1000);
-  cachedToken = { key, token: data.access_token, expiresAt };
-  salvarToken(key, data.access_token, expiresAt);
+  if (persistir) {
+    cachedToken = { key, token: data.access_token, expiresAt };
+    salvarToken(key, data.access_token, expiresAt);
+  }
 
   return data.access_token;
 }
@@ -356,4 +362,36 @@ export async function transmitirParaNuvemFiscal(
       motivo: error.message || 'Falha de conexão com a ACBr API',
     };
   }
+}
+
+function cnpjDaIntegracao(config: SefazCeConfig): string {
+  const cnpj = (config.cnpjEmitente || '').replace(/\D/g, '');
+  if (cnpj.length !== 14) throw new Error('Configure o CNPJ do emitente antes de continuar.');
+  return cnpj;
+}
+
+export async function enviarCertificadoFiscal(config: SefazCeConfig, arquivo: File, senha: string): Promise<{ not_valid_after?: string }> {
+  if (!/\.(pfx|p12)$/i.test(arquivo.name) || !arquivo.size || !senha) {
+    throw new Error('Selecione um certificado A1 (.pfx ou .p12) e informe a senha.');
+  }
+  const cnpj = cnpjDaIntegracao(config);
+  const token = await solicitarTokenFiscal(config, 'empresa', false);
+  const dados = new FormData();
+  dados.append('file', arquivo);
+  dados.append('password', senha);
+  const resposta = await fetch(`${obterUrlBaseApiFiscal(config)}/empresas/${cnpj}/certificado/upload`, {
+    method: 'PUT', headers: { Authorization: `Bearer ${token}` }, body: dados
+  });
+  if (!resposta.ok) throw new Error(`A ACBr não aceitou o certificado (HTTP ${resposta.status}). Confira a empresa, a senha e o ambiente.`);
+  return resposta.json();
+}
+
+export async function consultarStatusFiscal(config: SefazCeConfig): Promise<{ codigo_status: number; motivo_status: string; ambiente: string }> {
+  const cnpj = cnpjDaIntegracao(config);
+  const token = await solicitarTokenFiscal(config, 'nfe', false);
+  const resposta = await fetch(`${obterUrlBaseApiFiscal(config)}/nfe/sefaz/status?cpf_cnpj=${cnpj}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!resposta.ok) throw new Error(`Não foi possível consultar a SEFAZ pela ACBr (HTTP ${resposta.status}).`);
+  return resposta.json();
 }
