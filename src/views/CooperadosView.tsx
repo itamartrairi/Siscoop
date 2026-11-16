@@ -100,6 +100,12 @@ const PropriedadesCooperados: React.FC = () => {
   const podeEditar = canWriteModule('cooperados');
   const produtor: CooperadoComImoveis | undefined = cooperados.find(c => c.id === cooperadoId);
   const imoveis = produtor?.imoveisCadastrados ?? [];
+  const novoImovel = (): ImovelCooperado => ({ id: crypto.randomUUID(), campos: { tipoBem: 'Imóvel' } });
+  const selecionarCooperado = (id: string) => {
+    setCooperadoId(id);
+    const selecionado: CooperadoComImoveis | undefined = cooperados.find(c => c.id === id);
+    if (podeEditar && selecionado && !selecionado.imoveisCadastrados?.length) setRascunho(novoImovel());
+  };
   const campo = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:bg-slate-900 dark:border-slate-700';
   const botao = 'rounded-lg px-3 py-2 text-sm font-semibold border border-slate-300 dark:border-slate-700';
 
@@ -120,7 +126,7 @@ const PropriedadesCooperados: React.FC = () => {
       <div className="flex flex-wrap items-end gap-4">
         <label className="min-w-56 flex-1 text-sm font-semibold">
           Produtor (cooperado)
-          <select className={campo} value={cooperadoId} disabled={!!rascunho} onChange={e => setCooperadoId(e.target.value)}>
+          <select className={campo} value={cooperadoId} disabled={!!rascunho} onChange={e => selecionarCooperado(e.target.value)}>
             <option value="">Selecione um cooperado</option>
             {[...cooperados].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map(c => (
               <option key={c.id} value={c.id}>{c.nome} · {c.matricula}</option>
@@ -129,7 +135,7 @@ const PropriedadesCooperados: React.FC = () => {
         </label>
         <p className="pb-2 text-sm">Nº de imóveis <strong>{imoveis.length}</strong></p>
         {produtor && podeEditar && !rascunho && (
-          <button type="button" className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white" onClick={() => setRascunho({ id: crypto.randomUUID(), campos: { tipoBem: 'Imóvel' } })}>Novo imóvel</button>
+          <button type="button" className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white" onClick={() => setRascunho(novoImovel())}>Novo imóvel</button>
         )}
       </div>
       {produtor && !rascunho && (
@@ -201,6 +207,15 @@ const CadastroProducao: React.FC = () => {
   const podeEditar = canWriteModule('cooperados');
   const itens = rascunho ?? produtor?.cadastroProducao?.itens ?? [];
   const catalogo = [...produtos].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  const novaLinha = (): LinhaProducaoCooperado => ({
+    id: crypto.randomUUID(), produtoId: '', produtoNome: '', nip: '', unidade: '', periodo: '', irrigado: '', area: ''
+  });
+  const selecionarCooperado = (id: string) => {
+    setCooperadoId(id);
+    setMensagem('');
+    const selecionado: CooperadoComProducao | undefined = cooperados.find(c => c.id === id);
+    if (podeEditar && selecionado && !selecionado.cadastroProducao?.itens.length) setRascunho([novaLinha()]);
+  };
   const campo = 'w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm dark:border-slate-700 dark:bg-slate-900';
   const acao = 'rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold dark:border-slate-700';
   const salvar = (e: React.FormEvent) => {
@@ -224,10 +239,9 @@ const CadastroProducao: React.FC = () => {
   return (
     <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
       <h2 className="text-lg font-bold">Cadastro de produção</h2>
-      <div className="grid gap-3 sm:grid-cols-[1fr_3fr_1fr]">
-        <label className="text-sm font-semibold">Código<input className={campo} readOnly value={produtor?.matricula || ''} /></label>
+      <div className="grid gap-3 sm:grid-cols-[3fr_1fr]">
         <label className="text-sm font-semibold">Produtor (cooperado)
-          <select className={campo} value={cooperadoId} disabled={rascunho !== null} onChange={e => { setCooperadoId(e.target.value); setMensagem(''); }}>
+          <select className={campo} value={cooperadoId} disabled={rascunho !== null} onChange={e => selecionarCooperado(e.target.value)}>
             <option value="">Selecione um cooperado</option>
             {[...cooperados].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
           </select>
@@ -278,11 +292,11 @@ const CadastroProducao: React.FC = () => {
         </div> : <p className="text-sm text-slate-500">Nenhum produto informado para este cooperado.</p>}
         {mensagem && <p role="status" className="text-sm">{mensagem}</p>}
         {podeEditar && (rascunho ? <div className="flex flex-wrap gap-2">
-          <button type="button" className={acao} disabled={catalogo.length === 0} onClick={() => setRascunho([...rascunho, { id: crypto.randomUUID(), produtoId: '', produtoNome: '', nip: '', unidade: '', periodo: '', irrigado: '', area: '' }])}>Adicionar produto</button>
+          <button type="button" className={acao} disabled={catalogo.length === 0} onClick={() => setRascunho([...rascunho, novaLinha()])}>Adicionar produto</button>
           <button type="button" className={acao} onClick={() => { setRascunho(null); setMensagem(''); }}>Cancelar</button>
           <button type="submit" className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">Salvar produção</button>
           {!catalogo.length && <p className="self-center text-sm text-slate-500">Cadastre produtos no catálogo agropecuário.</p>}
-        </div> : <button type="button" className={acao} onClick={() => { setRascunho(itens); setMensagem(''); }}>Editar produção</button>)}
+        </div> : <button type="button" className={acao} onClick={() => { setRascunho(itens.length ? itens : [novaLinha()]); setMensagem(''); }}>Editar produção</button>)}
       </form>}
     </section>
   );
