@@ -1,3 +1,4 @@
+import { NavegacaoSecoes } from '../components/ui/NavegacaoSecoes';
 import React, { useState, useMemo } from 'react';
 import { useCoop } from '../context/CoopContext';
 import {
@@ -45,7 +46,7 @@ export const BiView: React.FC = () => {
   const { produtores, ofertasPAA, cooperados, transacoesCapital, estoque } = useCoop();
 
   // Active View Tab inside BI
-  const [activeTab, setActiveTab] = useState<'vendas_vs_estoque' | 'overview' | 'metas' | 'sazonalidade'>('vendas_vs_estoque');
+  const [activeTab, setActiveTab] = useState<'vendas_vs_estoque' | 'overview' | 'metas' | 'sazonalidade' | null>(null);
   const [selectedTipoCooperado, setSelectedTipoCooperado] = useState<string>('TODOS');
 
   // Modal for Custom Goals
@@ -261,52 +262,12 @@ export const BiView: React.FC = () => {
         </div>
       </div>
 
-      {/* Main View Navigation Tabs */}
-      <div className="flex items-center gap-2 p-1.5 bg-slate-200/80 dark:bg-slate-800 rounded-2xl border border-slate-300/80 dark:border-slate-700 w-fit">
-        <button
-          onClick={() => setActiveTab('vendas_vs_estoque')}
-          className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === 'vendas_vs_estoque'
-              ? 'bg-emerald-600 text-white shadow-md'
-              : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
-          }`}
-        >
-          <BarChart3 className="w-4 h-4" /> Vendas vs. Estoque Mensal
-        </button>
-
-        <button
-          onClick={() => setActiveTab('overview')}
-          className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === 'overview'
-              ? 'bg-emerald-600 text-white shadow-md'
-              : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
-          }`}
-        >
-          <PieChartIcon className="w-4 h-4" /> Visão Geral de Programas PAA/PNAE
-        </button>
-
-        <button
-          onClick={() => setActiveTab('metas')}
-          className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === 'metas'
-              ? 'bg-emerald-600 text-white shadow-md'
-              : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
-          }`}
-        >
-          <Target className="w-4 h-4" /> Metas Estratégicas ({metasCustomizadas.length})
-        </button>
-
-        <button
-          onClick={() => setActiveTab('sazonalidade')}
-          className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === 'sazonalidade'
-              ? 'bg-emerald-600 text-white shadow-md'
-              : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
-          }`}
-        >
-          <TrendingUp className="w-4 h-4" /> Sazonalidade & Logística
-        </button>
-      </div>
+      <NavegacaoSecoes selecionada={activeTab !== null} voltar={() => setActiveTab(null)} secoes={[
+        { titulo: <>Vendas vs. Estoque Mensal</>, descricao: "Compare as vendas e os saldos mensais.", icone: BarChart3, abrir: () => setActiveTab('vendas_vs_estoque') },
+        { titulo: <>Visão Geral de Programas PAA/PNAE</>, descricao: "Consulte os indicadores dos programas atendidos.", icone: PieChartIcon, abrir: () => setActiveTab('overview') },
+        { titulo: <>Metas Estratégicas ({metasCustomizadas.length})</>, descricao: "Acompanhe os objetivos da cooperativa.", icone: Target, abrir: () => setActiveTab('metas') },
+        { titulo: <>Sazonalidade & Logística</>, descricao: "Analise períodos de produção e logística.", icone: TrendingUp, abrir: () => setActiveTab('sazonalidade') }
+      ]} />
 
       {/* TAB 1: VENDAS VS. ESTOQUE MENSAL */}
       {activeTab === 'vendas_vs_estoque' && (
