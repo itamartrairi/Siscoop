@@ -135,7 +135,7 @@ const PropriedadesCooperados: React.FC = () => {
         </label>
         <p className="pb-2 text-sm">Nº de imóveis <strong>{imoveis.length}</strong></p>
         {produtor && podeEditar && !rascunho && (
-          <button type="button" className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white" onClick={() => setRascunho(novoImovel())}>Novo imóvel</button>
+          <button type="button" className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white" onClick={() => setRascunho(novoImovel())}>Novo cadastro de imóvel</button>
         )}
       </div>
       {produtor && !rascunho && (
@@ -143,7 +143,14 @@ const PropriedadesCooperados: React.FC = () => {
           {imoveis.map((imovel, indice) => (
             <li key={imovel.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
               <span className="text-sm">{imovel.campos.endereco || imovel.campos.localidade || 'Imóvel ' + (indice + 1)}{imovel.campos.municipio && ' · ' + imovel.campos.municipio}</span>
-              <button type="button" className={botao} onClick={() => setRascunho(imovel)}>{podeEditar ? 'Editar' : 'Consultar'}</button>
+              <div className="flex gap-2">
+                <button type="button" className={botao} onClick={() => setRascunho(imovel)}>{podeEditar ? 'Editar' : 'Consultar'}</button>
+                {podeEditar && <button type="button" className={botao + ' text-rose-700'} onClick={() => {
+                  if (!confirm('Excluir este imóvel do cadastro do cooperado?')) return;
+                  const alteracao: Partial<CooperadoComImoveis> = { imoveisCadastrados: imoveis.filter(item => item.id !== imovel.id) };
+                  updateCooperado(produtor.id, alteracao);
+                }}>Excluir</button>}
+              </div>
             </li>
           ))}
         </ul> : <p className="text-sm text-slate-500">Este cooperado ainda não tem imóveis cadastrados.</p>
@@ -285,7 +292,7 @@ const CadastroProducao: React.FC = () => {
                     )}
                   </td>
                 ))}
-                {rascunho && <td className="p-2"><button type="button" className={acao} aria-label={'Remover linha ' + (index + 1)} onClick={() => setRascunho(rascunho.filter(linha => linha.id !== item.id))}>Remover</button></td>}
+                {rascunho && <td className="p-2"><button type="button" className={acao} aria-label={'Excluir linha ' + (index + 1)} onClick={() => setRascunho(rascunho.filter(linha => linha.id !== item.id))}>Excluir</button></td>}
               </tr>)}
             </tbody>
           </table>
@@ -296,7 +303,18 @@ const CadastroProducao: React.FC = () => {
           <button type="button" className={acao} onClick={() => { setRascunho(null); setMensagem(''); }}>Cancelar</button>
           <button type="submit" className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">Salvar produção</button>
           {!catalogo.length && <p className="self-center text-sm text-slate-500">Cadastre produtos no catálogo agropecuário.</p>}
-        </div> : <button type="button" className={acao} onClick={() => { setRascunho(itens.length ? itens : [novaLinha()]); setMensagem(''); }}>Editar produção</button>)}
+        </div> : <div className="flex flex-wrap gap-2">
+          <button type="button" className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white" onClick={() => { setRascunho([...itens, novaLinha()]); setMensagem(''); }}>Novo cadastro de produção</button>
+          {itens.length > 0 && <>
+            <button type="button" className={acao} onClick={() => { setRascunho(itens); setMensagem(''); }}>Editar produção</button>
+            <button type="button" className={acao + ' text-rose-700'} onClick={() => {
+              if (!confirm('Excluir todos os produtos cadastrados na capacidade de produção deste cooperado?')) return;
+              const alteracao: Partial<CooperadoComProducao> = { cadastroProducao: { dataAtualizacao: new Date().toISOString(), itens: [] } };
+              updateCooperado(produtor.id, alteracao);
+              setMensagem('Cadastro de produção excluído.');
+            }}>Excluir produção</button>
+          </>}
+        </div>)}
       </form>}
     </section>
   );
