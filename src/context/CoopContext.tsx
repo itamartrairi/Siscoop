@@ -5402,15 +5402,20 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const transmitirSefazCe = async (id: string): Promise<{ success: boolean; motivo: string; chaveAcesso?: string; protocolo?: string }> => {
-    setNotasFiscais(prev => prev.map(n => n.id === id ? { ...n, statusSefaz: 'TRANSMITINDO' as const } : n));
-
     const targetNf = notasFiscais.find(n => n.id === id);
     if (!targetNf) {
       return { success: false, motivo: 'Nota Fiscal não encontrada.' };
     }
 
     // Se a Nuvem Fiscal estiver ativa e configurada, transmite diretamente para a API oficial
+    if (targetNf.ambienteSefaz !== sefazCeConfig.ambiente) {
+      return { success: false, motivo: 'O ambiente da nota é diferente do ambiente configurado.' };
+    }
+    if (targetNf.statusSefaz !== 'RASCUNHO') {
+      return { success: false, motivo: 'Somente notas em rascunho podem ser transmitidas.' };
+    }
     if (sefazCeConfig.nuvemFiscalAtiva && sefazCeConfig.nuvemFiscalClientId && sefazCeConfig.nuvemFiscalClientSecret) {
+      setNotasFiscais(prev => prev.map(n => n.id === id ? { ...n, statusSefaz: 'TRANSMITINDO' as const } : n));
       try {
         const resultadoNuvem = await transmitirParaNuvemFiscal(targetNf, sefazCeConfig);
         if (resultadoNuvem.success) {
@@ -5454,81 +5459,13 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // Modo Padrão / Simulação SEFAZ-CE caso as credenciais não estejam ativas
-    await new Promise(resolve => setTimeout(resolve, 1400));
-
-    const yearMonth = new Date().toISOString().substring(2, 7).replace('-', '');
-    const cnpjClean = (targetNf.emitenteCnpjCpf || sefazCeConfig.cnpjEmitente).replace(/\D/g, '').padStart(14, '0');
-    const mod = targetNf.modelo === 'NFE_55' ? '55' : targetNf.modelo === 'NFCE_65' ? '65' : '55';
-    const serie = (targetNf.serie || '001').replace(/\D/g, '').padStart(3, '0');
-    const num = (targetNf.numeroNota || '000000001').replace(/\D/g, '').padStart(9, '0');
-    const tipoEmissao = '1';
-    const codNum = Math.floor(10000000 + Math.random() * 90000000).toString();
-    
-    // Chave de Acesso de 44 dígitos com prefixo 23 (Ceará)
-    const baseChave = `23${yearMonth}${cnpjClean}${mod}${serie}${num}${tipoEmissao}${codNum}`;
-    let sum = 0;
-    let weight = 2;
-    for (let i = baseChave.length - 1; i >= 0; i--) {
-      sum += parseInt(baseChave[i], 10) * weight;
-      weight = weight === 9 ? 2 : weight + 1;
-    }
-    const remainder = sum % 11;
-    const dv = (remainder === 0 || remainder === 1) ? 0 : 11 - remainder;
-    const chave44 = `${baseChave}${dv}`;
-
-    const protocolo = `12326000${Math.floor(1000000 + Math.random() * 9000000)}`;
-    const dataHoraAut = new Date().toISOString();
-    const motivo = '100 - Autorizado o uso da NF-e (SEFAZ CEARÁ)';
-
-    setNotasFiscais(prev => prev.map(n => {
-      if (n.id === id) {
-        return {
-          ...n,
-          statusSefaz: 'AUTORIZADA' as const,
-          chaveAcesso44: chave44,
-          protocoloAutorizacao: protocolo,
-          dataHoraAutorizacao: dataHoraAut,
-          motivoStatusSefaz: motivo,
-          qrCodeSefazUrl: `https://kalypso.sefaz.ce.gov.br/nfe/qrcode?p=${chave44}`,
-          xmlUrl: `data:text/xml;charset=utf-8,${encodeURIComponent(`<?xml version="1.0" encoding="UTF-8"?><nfeProc xmlns="http://www.portalfiscal.inf.br/nfe"><NFe><infNFe Id="NFe${chave44}"><ide><cUF>23</cUF><cNF>${codNum}</cNF><natOp>${n.naturezaOperacao}</natOp><mod>${mod}</mod><serie>${serie}</serie><nNF>${num}</nNF><dhEmi>${n.dataEmissao}</dhEmi><tpNF>1</tpNF><idDest>1</idDest><cMunFG>2313501</cMunFG><tpImp>1</tpImp><tpEmis>1</tpEmis><cDV>${dv}</cDV><tpAmb>2</tpAmb><finNFe>1</finNFe><indFinal>1</indFinal><indPres>1</indPres><procEmi>0</procEmi><verProc>SICOOP-CE-1.0</verProc></ide><emit><CNPJ>${cnpjClean}</CNPJ><xNome>${n.emitenteRazaoSocial}</xNome><IE>${n.emitenteInscricaoEstadual}</IE><CRT>1</CRT></emit><dest><CNPJ>${(n.destinatarioCnpjCpf || '').replace(/\D/g, '')}</CNPJ><xNome>${n.destinatarioNome}</xNome></dest></infNFe></NFe><protNFe><infProt><tpAmb>2</tpAmb><verAplic>SEFAZ_CE_1.0</verAplic><chNFe>${chave44}</chNFe><dhRecbto>${dataHoraAut}</dhRecbto><nProt>${protocolo}</nProt><cStat>100</cStat><xMotivo>Autorizado o uso da NF-e (SEFAZ Ceará)</xMotivo></infProt></protNFe></nfeProc>`)}`
-        };
-      }
-      return n;
-    }));
-
-    setSefazCeConfig(prev => ({
-      ...prev,
-      proximoNumeroNFe: prev.proximoNumeroNFe + 1
-    }));
-
-    addAuditLog('RELATORIOS', 'INCLUSAO', `Transmitiu NF-e nº ${targetNf.numeroNota} à SEFAZ-CE. Protocolo: ${protocolo}`);
-
-    return {
-      success: true,
-      motivo,
-      chaveAcesso: chave44,
-      protocolo
-    };
+    return { success: false, motivo: 'Ative a integração ACBr e configure as credenciais antes de transmitir à SEFAZ.' };
   };
 
-  const cancelarNotaFiscalSefaz = async (id: string, justificativa: string): Promise<{ success: boolean; motivo: string }> => {
-    if (!justificativa || justificativa.trim().length < 15) {
-      return { success: false, motivo: 'A justificativa de cancelamento na SEFAZ-CE deve ter no mínimo 15 caracteres.' };
-    }
-    setNotasFiscais(prev => prev.map(n => {
-      if (n.id === id) {
-        return {
-          ...n,
-          statusSefaz: 'CANCELADA' as const,
-          motivoStatusSefaz: `101 - Cancelamento de NF-e homologado na SEFAZ Ceará. Motivo: ${justificativa}`
-        };
-      }
-      return n;
-    }));
-    addAuditLog('RELATORIOS', 'ALTERACAO', `Cancelou NF-e ID ${id} na SEFAZ-CE. Motivo: ${justificativa}`);
-    return { success: true, motivo: 'Cancelamento homologado com sucesso na SEFAZ Ceará.' };
-  };
+  const cancelarNotaFiscalSefaz = async (_id: string, _justificativa: string): Promise<{ success: boolean; motivo: string }> => ({
+    success: false,
+    motivo: 'O cancelamento real ainda não está integrado ao Siscoop. Consulte a nota no canal fiscal da empresa.'
+  });
 
   const gerarNotaFiscalDePrestacaoContas = (prestacao: PrestacaoContasPAA): NotaFiscal => {
     const num = sefazCeConfig.proximoNumeroNFe.toString().padStart(6, '0');
