@@ -1,3 +1,4 @@
+import { NavegacaoSecoes } from '../components/ui/NavegacaoSecoes';
 import { formatarData } from '../utils/dateHelpers';
 import React, { useState, useMemo, useRef } from 'react';
 import { useCoop } from '../context/CoopContext';
@@ -107,7 +108,7 @@ export const ComprasView: React.FC = () => {
     alert('Seu perfil de acesso tem permissão apenas de leitura neste módulo. Fale com um administrador para solicitar permissão de edição.');
   };
 
-  const [activeTab, setActiveTab] = useState<'solicitacoes' | 'ordens' | 'fornecedores' | 'revendas' | 'clientes' | 'relatorios' | 'produtos'>('ordens');
+  const [activeTab, setActiveTab] = useState<'solicitacoes' | 'ordens' | 'fornecedores' | 'revendas' | 'clientes' | 'relatorios' | 'produtos' | null>(null);
 
   // Editing state
   const [editingSolicitacao, setEditingSolicitacao] = useState<SolicitacaoCompra | null>(null);
@@ -554,39 +555,11 @@ if (f) {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-slate-200 gap-2 overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('ordens')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-            activeTab === 'ordens'
-              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <ShoppingCart className="w-4 h-4 text-emerald-600" /> Ordens de Compra OC ({ordensCompra.length})
-        </button>
-          <button
-            onClick={() => setActiveTab('produtos')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-              activeTab === 'produtos'
-                ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-                : 'border-transparent text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <Package className="w-4 h-4" /> Produtos & Insumos ({estoque.length})
-          </button>
-        <button
-          onClick={() => setActiveTab('fornecedores')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-            activeTab === 'fornecedores'
-              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <Truck className="w-4 h-4" /> Fornecedores Homologados ({fornecedores.length})
-        </button>
-      </div>
+      <NavegacaoSecoes selecionada={activeTab !== null} voltar={() => setActiveTab(null)} secoes={[
+        { titulo: <>Ordens de Compra OC ({ordensCompra.length})</>, descricao: "Gerencie as ordens de compra.", icone: ShoppingCart, abrir: () => setActiveTab('ordens') },
+        { titulo: <>Produtos & Insumos ({estoque.length})</>, descricao: "Consulte os produtos e insumos disponíveis.", icone: Package, abrir: () => setActiveTab('produtos') },
+        { titulo: <>Fornecedores Homologados ({fornecedores.length})</>, descricao: "Gerencie os fornecedores homologados.", icone: Truck, abrir: () => setActiveTab('fornecedores') }
+      ]} />
 
       {/* Tab Ordens de Compra */}
       {activeTab === 'ordens' && (
