@@ -3,6 +3,8 @@ import { useCoop } from '../context/CoopContext';
 import { sanitizeCooperado } from '../utils/cooperadoSanitizer';
 import {
   FolderTree,
+  ArrowLeft,
+  ArrowRight,
   Plus,
   Search,
   Sprout,
@@ -101,7 +103,7 @@ export const CadastrosView: React.FC = () => {
     alert('Seu perfil de acesso tem permissão apenas de leitura neste módulo. Fale com um administrador para solicitar permissão de edição.');
   };
 
-  const [activeTab, setActiveTab] = useState<'produtores' | 'produtos' | 'programas' | 'escolas' | 'motoristas'>('produtores');
+  const [activeTab, setActiveTab] = useState<'produtores' | 'produtos' | 'programas' | 'escolas' | 'motoristas' | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   // Editing state
@@ -835,6 +837,50 @@ export const CadastrosView: React.FC = () => {
     setShowEscolaModal(false);
   };
 
+  const cadastros = [
+    { id: 'produtores', titulo: 'Produtor / Programa', descricao: 'Cadastre produtores rurais e acompanhe seus vínculos com programas e a validade da CAF.', acao: 'Gerenciar Produtores', total: produtores.length, Icone: Users },
+    { id: 'produtos', titulo: 'Produtos Agropecuários', descricao: 'Gerencie os produtos, as unidades de medida e os dados fiscais do catálogo.', acao: 'Abrir Produtos', total: produtos.length, Icone: Package },
+    { id: 'programas', titulo: 'Programas Governamentais', descricao: 'Cadastre e organize os programas institucionais atendidos pela cooperativa.', acao: 'Abrir Programas', total: programas.length, Icone: Layers },
+    { id: 'escolas', titulo: 'Escolas Cadastradas', descricao: 'Gerencie as escolas atendidas e seus dados para entregas do PNAE.', acao: 'Gerenciar Escolas', total: escolasPnae.length, Icone: GraduationCap },
+    { id: 'motoristas', titulo: 'Motoristas', descricao: 'Cadastre os motoristas responsáveis pelas entregas da cooperativa.', acao: 'Gerenciar Motoristas', total: motoristas.length, Icone: Truck }
+  ] as const;
+
+  if (activeTab === null) return (
+    <section className="rounded-2xl border border-t-2 border-slate-200 border-t-orange-500 bg-white p-6 sm:p-8 dark:border-slate-700 dark:border-t-orange-500 dark:bg-slate-900">
+      <div className="mx-auto grid max-w-5xl gap-8 md:grid-cols-[minmax(13rem,1fr)_minmax(0,2.5fr)]">
+        <div className="text-center">
+          <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400">
+            <FolderTree className="h-9 w-9" aria-hidden="true" />
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-orange-700 dark:text-orange-400">Cadastros Rurais & Agropecuários</h1>
+          <p className="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-300">Selecione um cadastro para consultar ou atualizar os registros da cooperativa.</p>
+        </div>
+        <ol aria-label="Cadastros disponíveis">
+          {cadastros.map(({ id, titulo, descricao, acao, total, Icone }, index) => (
+            <li key={id} className="relative grid grid-cols-[3rem_minmax(0,1fr)] gap-4 pb-7 last:pb-0 sm:grid-cols-[3.5rem_minmax(0,1fr)] sm:gap-5">
+              {index < cadastros.length - 1 && <span aria-hidden="true" className="absolute bottom-0 left-6 top-12 w-px bg-slate-200 dark:bg-slate-700 sm:left-7 sm:top-14" />}
+              <div className="relative flex h-12 w-12 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 sm:h-14 sm:w-14">
+                <Icone className="h-5 w-5" aria-hidden="true" />
+              </div>
+              <div className="min-w-0 pt-1">
+                <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">{index + 1}. {titulo} <span className="text-sm font-medium text-slate-500 dark:text-slate-400">({total})</span></h2>
+                <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{descricao}</p>
+                {id === 'produtores' && totalAlertasCaf > 0 && (
+                  <p className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-amber-800 dark:text-amber-300"><AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" /> {totalAlertasCaf} alerta(s) de CAF/DAP</p>
+                )}
+                <button type="button" onClick={() => setActiveTab(id)} className="mt-3 inline-flex items-center gap-2 rounded-full bg-orange-700 px-5 py-2.5 text-sm font-bold text-white hover:bg-orange-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700">
+                  {acao} <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </section>
+  );
+
+  const cadastroAtual = cadastros.find(cadastro => cadastro.id === activeTab);
+
   return (
     <div className="space-y-6">
       {/* Header Banner */}
@@ -843,10 +889,11 @@ export const CadastrosView: React.FC = () => {
           <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full w-fit border border-emerald-200 mb-2">
             <FolderTree className="w-3.5 h-3.5" /> Módulo de Cadastros Agropecuários
           </div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Cadastros Rurais & Agropecuários</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Gerencie cooperados rurais, propriedades e talhões (DAP/CAF), produtos da safra, programas institucionais (PAA/PNAE) e rotas de entrega.
-          </p>
+          <button type="button" onClick={() => setActiveTab(null)} className="mb-2 inline-flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-semibold text-orange-800 hover:bg-orange-50 focus-visible:outline-2 focus-visible:outline-orange-700">
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Voltar aos cadastros
+          </button>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">{cadastroAtual?.titulo}</h1>
+          <p className="text-sm text-slate-500 mt-1">{cadastroAtual?.descricao}</p>
         </div>
 
         <div className="flex items-center gap-3">
@@ -970,65 +1017,6 @@ export const CadastrosView: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* Tabs */}
-      <div className="flex border-b border-slate-200 gap-2 overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('produtores')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-            activeTab === 'produtores'
-              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <Users className="w-4 h-4" /> Produtor / Programa ({produtores.length})
-          {totalAlertasCaf > 0 && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white animate-pulse inline-flex items-center gap-1 shadow-xs ml-1" title={`${totalAlertasCaf} produtores com CAF vencendo em breve ou vencidas`}>
-              <AlertTriangle className="w-3 h-3" /> {totalAlertasCaf}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('produtos')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-            activeTab === 'produtos'
-              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <Package className="w-4 h-4" /> Produtos Agropecuários ({produtos.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('programas')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-            activeTab === 'programas'
-              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <Layers className="w-4 h-4" /> Programas Governamentais ({programas.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('escolas')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-            activeTab === 'escolas'
-              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <GraduationCap className="w-4 h-4" /> Escolas Cadastradas ({escolasPnae.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('motoristas')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-            activeTab === 'motoristas'
-              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <Truck className="w-4 h-4" /> Motoristas ({motoristas.length})
-        </button>
-      </div>
 
       {/* Tab 1: Produtores Rurais */}
       {activeTab === 'produtores' && (
