@@ -1,3 +1,4 @@
+import { NavegacaoSecoes } from '../components/ui/NavegacaoSecoes';
 import React, { useState } from 'react';
 import { Store, Users, FileText, TrendingUp } from 'lucide-react';
 import { useCoop } from '../context/CoopContext';
@@ -17,12 +18,12 @@ export const VendasRelatoriosView: React.FC = () => {
     alert('Seu perfil de acesso tem permissão apenas de leitura neste módulo. Fale com um administrador para solicitar permissão de edição.');
   };
 
-  const [activeTab, setActiveTab] = useState<AbaVendas>('revendas');
+  const [activeTab, setActiveTab] = useState<AbaVendas | null>(null);
 
-  const abas: { id: AbaVendas; label: string; icon: React.ElementType }[] = [
-    { id: 'revendas', label: 'Revendas de Produtos', icon: Store },
-    { id: 'clientes', label: 'Clientes', icon: Users },
-    { id: 'relatorios', label: 'Relatórios PDF', icon: FileText }
+  const abas: { id: AbaVendas; label: string; descricao: string; icon: React.ElementType }[] = [
+    { id: 'revendas', label: 'Revendas de Produtos', descricao: 'Registre e consulte as revendas do estoque.', icon: Store },
+    { id: 'clientes', label: 'Clientes', descricao: 'Gerencie o cadastro de clientes.', icon: Users },
+    { id: 'relatorios', label: 'Relatórios PDF', descricao: 'Consulte e exporte os relatórios de vendas.', icon: FileText }
   ];
 
   return (
@@ -37,24 +38,9 @@ export const VendasRelatoriosView: React.FC = () => {
         </p>
       </div>
 
-      <div className="flex border-b border-slate-200 gap-2 overflow-x-auto">
-        {abas.map(aba => {
-          const Icone = aba.icon;
-          return (
-            <button
-              key={aba.id}
-              onClick={() => setActiveTab(aba.id)}
-              className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-                activeTab === aba.id
-                  ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-                  : 'border-transparent text-slate-500 hover:text-slate-900'
-              }`}
-            >
-              <Icone className="w-4 h-4" /> {aba.label}
-            </button>
-          );
-        })}
-      </div>
+      <NavegacaoSecoes selecionada={activeTab !== null} voltar={() => setActiveTab(null)} secoes={abas.map(aba => ({
+        titulo: aba.label, descricao: aba.descricao, icone: aba.icon, abrir: () => setActiveTab(aba.id)
+      }))} />
 
       {activeTab === 'revendas' && <RevendasTab canWrite={canWrite} onBlocked={blockWriteAction} />}
       {activeTab === 'clientes' && <ClientesTab canWrite={canWrite} onBlocked={blockWriteAction} />}
