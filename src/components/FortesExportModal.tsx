@@ -1,3 +1,4 @@
+import { NavegacaoSecoes } from './ui/NavegacaoSecoes';
 import React, { useState, useMemo } from 'react';
 import { useCoop } from '../context/CoopContext';
 import {
@@ -52,7 +53,7 @@ export const FortesExportModal: React.FC<Props> = ({
     currentTenant
   } = useCoop();
 
-  const [activeTab, setActiveTab] = useState<'contabil' | 'fiscal' | 'financeiro' | 'ajuda'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'contabil' | 'fiscal' | 'financeiro' | 'ajuda' | null>(initialTab);
 
   // Filtros
   const [competencia, setCompetencia] = useState(() => {
@@ -187,56 +188,15 @@ export const FortesExportModal: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* Navegação por Abas */}
-        <div className="flex border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-5 pt-2">
-          <button
-            onClick={() => setActiveTab('contabil')}
-            className={`pb-2.5 px-4 font-bold text-xs flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === 'contabil'
-                ? 'border-orange-500 text-orange-600 dark:text-orange-400'
-                : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'
-            }`}
-          >
-            <FileSpreadsheet className="w-4 h-4" /> Fortes Contábil ({lancamentosFiltrados.length})
-          </button>
-
-          <button
-            onClick={() => setActiveTab('fiscal')}
-            className={`pb-2.5 px-4 font-bold text-xs flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === 'fiscal'
-                ? 'border-orange-500 text-orange-600 dark:text-orange-400'
-                : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'
-            }`}
-          >
-            <Receipt className="w-4 h-4" /> Fortes Fiscal ({notasFiltradas.length})
-          </button>
-
-          <button
-            onClick={() => setActiveTab('financeiro')}
-            className={`pb-2.5 px-4 font-bold text-xs flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === 'financeiro'
-                ? 'border-orange-500 text-orange-600 dark:text-orange-400'
-                : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'
-            }`}
-          >
-            <Database className="w-4 h-4" /> Fortes Financeiro ({contasPagarReceber.length})
-          </button>
-
-          <button
-            onClick={() => setActiveTab('ajuda')}
-            className={`pb-2.5 px-4 font-bold text-xs flex items-center gap-2 border-b-2 transition-all ml-auto ${
-              activeTab === 'ajuda'
-                ? 'border-orange-500 text-orange-600 dark:text-orange-400'
-                : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'
-            }`}
-          >
-            <HelpCircle className="w-4 h-4" /> Manual do Contador
-          </button>
-        </div>
-
         {/* Conteúdo Principal */}
         <div className="p-6 overflow-y-auto space-y-6 flex-1 bg-slate-50/50 dark:bg-slate-900/50">
 
+          <NavegacaoSecoes selecionada={activeTab !== null} voltar={() => setActiveTab(null)} secoes={[
+                  { titulo: "Fortes Contábil", descricao: "Exporte os lançamentos contábeis.", icone: FileSpreadsheet, abrir: () => setActiveTab('contabil') },
+                  { titulo: "Fortes Fiscal", descricao: "Exporte as notas fiscais do período.", icone: Receipt, abrir: () => setActiveTab('fiscal') },
+                  { titulo: "Fortes Financeiro", descricao: "Exporte as contas a pagar e receber.", icone: Database, abrir: () => setActiveTab('financeiro') },
+                  { titulo: "Manual do Contador", descricao: "Consulte as instruções para exportar.", icone: HelpCircle, abrir: () => setActiveTab('ajuda') }
+          ]} />
           {/* ============================================================== */}
           {/* ABA 1: FORTES CONTÁBIL                                         */}
           {/* ============================================================== */}
