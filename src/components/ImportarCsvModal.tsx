@@ -1,3 +1,4 @@
+import { NavegacaoSecoes } from './ui/NavegacaoSecoes';
 import React, { useState } from 'react';
 import { useCoop } from '../context/CoopContext';
 import { sanitizeCooperado, isCpfPattern, isRgPattern, isMatriculaPattern, isNamePattern } from '../utils/cooperadoSanitizer';
@@ -26,7 +27,7 @@ interface ImportarCsvModalProps {
 export const ImportarCsvModal: React.FC<ImportarCsvModalProps> = ({ isOpen, onClose }) => {
   const { importarCooperadosCSV, restaurarCooperadosBaseCompleta } = useCoop();
 
-  const [activeTab, setActiveTab] = useState<'FILE' | 'DRIVE' | 'PASTE'>('FILE');
+  const [activeTab, setActiveTab] = useState<'FILE' | 'DRIVE' | 'PASTE' | null>(null);
   const [pastedText, setPastedText] = useState('');
   const [parsedRows, setParsedRows] = useState<any[]>([]);
   const [fileName, setFileName] = useState('');
@@ -285,39 +286,12 @@ export const ImportarCsvModal: React.FC<ImportarCsvModalProps> = ({ isOpen, onCl
         <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
           {/* Controls bar */}
           <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setActiveTab('FILE')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
-                  activeTab === 'FILE'
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                }`}
-              >
-                <Upload className="w-4 h-4" /> Arquivo Local (.CSV / .TSV)
-              </button>
-
-              <button
-                onClick={() => setActiveTab('DRIVE')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
-                  activeTab === 'DRIVE'
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                }`}
-              >
-                <Cloud className="w-4 h-4 text-emerald-400" /> Google Drive (Picker)
-              </button>
-
-              <button
-                onClick={() => setActiveTab('PASTE')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
-                  activeTab === 'PASTE'
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                }`}
-              >
-                <FileText className="w-4 h-4" /> Copiar & Colar
-              </button>
+            <div className="w-full">
+              <NavegacaoSecoes selecionada={activeTab !== null} voltar={() => setActiveTab(null)} secoes={[
+                  { titulo: "Arquivo Local (.CSV / .TSV)", descricao: "Selecione o arquivo salvo no computador.", icone: Upload, abrir: () => setActiveTab('FILE') },
+                  { titulo: "Google Drive", descricao: "Escolha um arquivo do seu Drive.", icone: Cloud, abrir: () => setActiveTab('DRIVE') },
+                  { titulo: "Copiar & Colar", descricao: "Cole as linhas da planilha no formulário.", icone: FileText, abrir: () => setActiveTab('PASTE') }
+              ]} />
             </div>
 
             <button
