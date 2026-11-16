@@ -853,7 +853,7 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="sticky top-0 z-20 rounded-2xl bg-slate-100 p-4 dark:bg-slate-900 flex items-center justify-between flex-wrap gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-900 dark:text-white">
             {isSystemCreator ? 'Configurações do Sistema' : 'Backup & Gestão do Sistema'}
