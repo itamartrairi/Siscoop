@@ -178,6 +178,115 @@ const PropriedadesCooperados: React.FC = () => {
   );
 };
 
+type LinhaProducaoCooperado = {
+  id: string;
+  produtoId: string;
+  produtoNome: string;
+  nip: string;
+  unidade: string;
+  periodo: string;
+  irrigado: string;
+  area: string;
+};
+type CadastroProducaoCooperado = { dataAtualizacao: string; itens: LinhaProducaoCooperado[] };
+type CooperadoComProducao = Cooperado & { cadastroProducao?: CadastroProducaoCooperado };
+
+const CadastroProducao: React.FC = () => {
+  const { cooperados, produtos, updateCooperado, canWriteModule } = useCoop();
+  const [cooperadoId, setCooperadoId] = useState('');
+  const [rascunho, setRascunho] = useState<LinhaProducaoCooperado[] | null>(null);
+  const [mensagem, setMensagem] = useState('');
+  const produtor: CooperadoComProducao | undefined = cooperados.find(c => c.id === cooperadoId);
+  const podeEditar = canWriteModule('cooperados');
+  const itens = rascunho ?? produtor?.cadastroProducao?.itens ?? [];
+  const catalogo = [...produtos].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  const campo = 'w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm dark:border-slate-700 dark:bg-slate-900';
+  const acao = 'rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold dark:border-slate-700';
+  const salvar = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!produtor || !podeEditar || !rascunho) return;
+    if (new Set(rascunho.map(item => item.produtoId)).size !== rascunho.length) {
+      setMensagem('Selecione cada produto apenas uma vez.');
+      return;
+    }
+    const alteracao: Partial<CooperadoComProducao> = {
+      cadastroProducao: { dataAtualizacao: new Date().toISOString(), itens: rascunho }
+    };
+    updateCooperado(produtor.id, alteracao);
+    setRascunho(null);
+    setMensagem('Cadastro atualizado.');
+  };
+  const editarLinha = (id: string, alteracao: Partial<LinhaProducaoCooperado>) => {
+    setRascunho(atual => atual?.map(item => item.id === id ? { ...item, ...alteracao } : item) ?? null);
+  };
+
+  return (
+    <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
+      <h2 className="text-lg font-bold">Cadastro de produção</h2>
+      <div className="grid gap-3 sm:grid-cols-[1fr_3fr_1fr]">
+        <label className="text-sm font-semibold">Código<input className={campo} readOnly value={produtor?.matricula || ''} /></label>
+        <label className="text-sm font-semibold">Produtor (cooperado)
+          <select className={campo} value={cooperadoId} disabled={rascunho !== null} onChange={e => { setCooperadoId(e.target.value); setMensagem(''); }}>
+            <option value="">Selecione um cooperado</option>
+            {[...cooperados].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+          </select>
+        </label>
+        <label className="text-sm font-semibold">Última atualização<input className={campo} readOnly value={produtor?.cadastroProducao ? new Date(produtor.cadastroProducao.dataAtualizacao).toLocaleDateString('pt-BR') : ''} /></label>
+      </div>
+      {produtor && <form onSubmit={salvar} className="space-y-4">
+        {itens.length > 0 ? <div className="overflow-x-auto">
+          <table className="w-full min-w-[800px] text-left text-sm">
+            <thead className="bg-slate-100 dark:bg-slate-900"><tr>
+              {['Produto', 'NIP', 'Unid. mercadoria', 'Período de produção', 'Irrigado', 'Área plantada (ha)'].map(label => <th key={label} scope="col" className="p-2">{label}</th>)}
+              {rascunho && <th scope="col" className="p-2">Ações</th>}
+            </tr></thead>
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+              {itens.map((item, index) => <tr key={item.id}>
+                <td className="min-w-56 p-2">{rascunho ? (
+                  <select className={campo} aria-label={'Produto ' + (index + 1)} required value={item.produtoId} onChange={e => {
+                    const produto = catalogo.find(p => p.id === e.target.value);
+                    editarLinha(item.id, { produtoId: produto?.id || '', produtoNome: produto?.nome || '', unidade: produto?.unidadeMedida || '' });
+                  }}>
+                    <option value="">Selecione</option>
+                    {item.produtoId && !catalogo.some(p => p.id === item.produtoId) && <option value={item.produtoId}>{item.produtoNome}</option>}
+                    {catalogo.map(p => <option key={p.id} value={p.id}>{p.nome} · {p.unidadeMedida}</option>)}
+                  </select>
+                ) : item.produtoNome}</td>
+                {([
+                  ['nip', 'NIP', simNao], ['unidade', 'Unidade', undefined],
+                  ['periodo', 'Período', ['Diário', 'Semanal', 'Quinzenal', 'Mensal', 'Trimestral', 'Semestral', 'Anual', 'Por safra']],
+                  ['irrigado', 'Irrigado', simNao], ['area', 'Área plantada', undefined]
+                ] as const).map(([chave, label, opcoes]) => (
+                  <td key={chave} className="min-w-24 p-2">
+                    {!rascunho ? (item[chave] || '—') : opcoes ? (
+                      <select className={campo} aria-label={label + ' ' + (index + 1)} value={item[chave]} onChange={e => editarLinha(item.id, { [chave]: e.target.value })}>
+                        <option value="">Selecione</option>
+                        {opcoes.map(opcao => <option key={opcao}>{opcao}</option>)}
+                      </select>
+                    ) : (
+                      <input className={campo} aria-label={label + ' ' + (index + 1)} value={item[chave]}
+                        inputMode={chave === 'area' ? 'decimal' : undefined} pattern={chave === 'area' ? '[0-9]+([,.][0-9]+)?' : undefined}
+                        onChange={e => editarLinha(item.id, { [chave]: e.target.value })} />
+                    )}
+                  </td>
+                ))}
+                {rascunho && <td className="p-2"><button type="button" className={acao} aria-label={'Remover linha ' + (index + 1)} onClick={() => setRascunho(rascunho.filter(linha => linha.id !== item.id))}>Remover</button></td>}
+              </tr>)}
+            </tbody>
+          </table>
+        </div> : <p className="text-sm text-slate-500">Nenhum produto informado para este cooperado.</p>}
+        {mensagem && <p role="status" className="text-sm">{mensagem}</p>}
+        {podeEditar && (rascunho ? <div className="flex flex-wrap gap-2">
+          <button type="button" className={acao} disabled={catalogo.length === 0} onClick={() => setRascunho([...rascunho, { id: crypto.randomUUID(), produtoId: '', produtoNome: '', nip: '', unidade: '', periodo: '', irrigado: '', area: '' }])}>Adicionar produto</button>
+          <button type="button" className={acao} onClick={() => { setRascunho(null); setMensagem(''); }}>Cancelar</button>
+          <button type="submit" className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">Salvar produção</button>
+          {!catalogo.length && <p className="self-center text-sm text-slate-500">Cadastre produtos no catálogo agropecuário.</p>}
+        </div> : <button type="button" className={acao} onClick={() => { setRascunho(itens); setMensagem(''); }}>Editar produção</button>)}
+      </form>}
+    </section>
+  );
+};
+
 export const CooperadosView: React.FC = () => {
   const {
     cooperados,
@@ -200,7 +309,7 @@ export const CooperadosView: React.FC = () => {
     alert('Seu perfil de acesso tem permissão apenas de leitura neste módulo. Fale com um administrador para solicitar permissão de edição.');
   };
 
-  const [mostrarPropriedades, setMostrarPropriedades] = useState(false);
+  const [abaCadastro, setAbaCadastro] = useState<'Cooperados' | 'Propriedades' | 'Produção'>('Cooperados');
 
   // Filters & State
   const [searchTerm, setSearchTerm] = useState('');
@@ -482,19 +591,18 @@ export const CooperadosView: React.FC = () => {
 
   const navegacaoCadastro = (
     <nav aria-label="Cadastro de cooperados" className="flex gap-2 border-b border-slate-200 dark:border-slate-700">
-      {(['Cooperados', 'Propriedades'] as const).map(rotulo => {
-        const propriedades = rotulo === 'Propriedades';
-        const selecionado = mostrarPropriedades === propriedades;
-        return <button key={rotulo} type="button" aria-pressed={selecionado} onClick={() => setMostrarPropriedades(propriedades)}
+      {(['Cooperados', 'Propriedades', 'Produção'] as const).map(rotulo => {
+        const selecionado = abaCadastro === rotulo;
+        return <button key={rotulo} type="button" aria-pressed={selecionado} onClick={() => setAbaCadastro(rotulo)}
           className={`border-b-2 px-4 py-3 text-sm font-semibold ${selecionado ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400' : 'border-transparent text-slate-500'}`}>{rotulo}</button>;
       })}
     </nav>
   );
 
-  if (mostrarPropriedades) return (
+  if (abaCadastro !== 'Cooperados') return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       {navegacaoCadastro}
-      <PropriedadesCooperados />
+      {abaCadastro === 'Propriedades' ? <PropriedadesCooperados /> : <CadastroProducao />}
     </div>
   );
 
