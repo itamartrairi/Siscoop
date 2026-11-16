@@ -45,6 +45,248 @@ import jsPDF from 'jspdf';
 import { ReceiptModal } from '../components/ReceiptModal';
 import { GeoLocationPicker } from '../components/GeoLocationPicker';
 
+type CampoImovel = { chave: string; rotulo: string; tipo?: 'inteiro' | 'decimal'; opcoes?: readonly string[] };
+type ImovelCooperado = { id: string; campos: Record<string, string> };
+type CooperadoComImoveis = Cooperado & { imoveisCadastrados?: ImovelCooperado[] };
+
+const simNao = ['Sim', 'Não'];
+const gruposImovel: { titulo: string; campos: CampoImovel[] }[] = [
+  { titulo: 'Domínio e documentação', campos: [
+    { chave: 'dominio', rotulo: 'Tipo de domínio', opcoes: ['Próprio', 'Arrendado', 'Comodato', 'Posse', 'Parceria', 'Outro'] },
+    { chave: 'temDocumento', rotulo: 'Tem documento', opcoes: simNao },
+    { chave: 'apresentouDocumento', rotulo: 'Apresentou documento', opcoes: simNao },
+    { chave: 'registroMidia', rotulo: 'Tem registro de mídia', opcoes: simNao },
+    { chave: 'tipoBem', rotulo: 'Tipo de bem' },
+    { chave: 'marca', rotulo: 'Marca' },
+    { chave: 'modelo', rotulo: 'Modelo' },
+    { chave: 'ano', rotulo: 'Ano', tipo: 'inteiro' },
+    { chave: 'valor', rotulo: 'Valor atribuído (R$)', tipo: 'decimal' },
+    { chave: 'tipoImovel', rotulo: 'Tipo de imóvel', opcoes: ['Rural', 'Urbano', 'Outro'] }
+  ] },
+  { titulo: 'Localização e registros', campos: [
+    { chave: 'endereco', rotulo: 'Endereço do imóvel' },
+    { chave: 'localidade', rotulo: 'Localidade' },
+    { chave: 'municipio', rotulo: 'Município' },
+    { chave: 'uf', rotulo: 'UF', opcoes: ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'] },
+    { chave: 'utmN', rotulo: 'Latitude UTM (N)', tipo: 'decimal' },
+    { chave: 'utmE', rotulo: 'Longitude UTM (E)', tipo: 'decimal' },
+    { chave: 'fusoUtm', rotulo: 'Fuso e hemisfério UTM' },
+    { chave: 'areaTerreno', rotulo: 'Área do terreno (ha)', tipo: 'decimal' },
+    { chave: 'incra', rotulo: 'Nº INCRA' },
+    { chave: 'car', rotulo: 'Nº CAR' }
+  ] },
+  { titulo: 'Água e construções', campos: [
+    { chave: 'lagos', rotulo: 'Quantidade de lagoas', tipo: 'inteiro' },
+    { chave: 'areaLagoa', rotulo: 'Área de lagoa (ha)', tipo: 'decimal' },
+    { chave: 'acudes', rotulo: 'Quantidade de açudes', tipo: 'inteiro' },
+    { chave: 'areaAcude', rotulo: 'Área de açude (ha)', tipo: 'decimal' },
+    { chave: 'rios', rotulo: 'Quantidade de rios', tipo: 'inteiro' },
+    { chave: 'areaRio', rotulo: 'Área de rio (ha)', tipo: 'decimal' },
+    { chave: 'pocos', rotulo: 'Quantidade de poços', tipo: 'inteiro' },
+    { chave: 'capacidadePoco', rotulo: 'Capacidade do poço (m³)', tipo: 'decimal' },
+    { chave: 'areaSeca', rotulo: 'Área seca (ha)', tipo: 'decimal' },
+    { chave: 'areaBaixa', rotulo: 'Área de baixa (ha)', tipo: 'decimal' },
+    { chave: 'construcoes', rotulo: 'Nº de imóveis construídos', tipo: 'inteiro' },
+    { chave: 'residencias', rotulo: 'Nº de imóveis residenciais', tipo: 'inteiro' },
+    { chave: 'areaResidencial', rotulo: 'Área residencial construída (m²)', tipo: 'decimal' }
+  ] }
+];
+
+const PropriedadesCooperados: React.FC = () => {
+  const { cooperados, updateCooperado, canWriteModule } = useCoop();
+  const [cooperadoId, setCooperadoId] = useState('');
+  const [rascunho, setRascunho] = useState<ImovelCooperado | null>(null);
+  const podeEditar = canWriteModule('cooperados');
+  const produtor: CooperadoComImoveis | undefined = cooperados.find(c => c.id === cooperadoId);
+  const imoveis = produtor?.imoveisCadastrados ?? [];
+  const campo = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:bg-slate-900 dark:border-slate-700';
+  const botao = 'rounded-lg px-3 py-2 text-sm font-semibold border border-slate-300 dark:border-slate-700';
+
+  const salvar = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!produtor || !rascunho || !podeEditar) return;
+    const registro = { ...rascunho, campos: Object.fromEntries(Object.entries(rascunho.campos).map(([chave, valor]) => [chave, valor.trim()])) };
+    const imoveisCadastrados = imoveis.some(i => i.id === registro.id)
+      ? imoveis.map(i => i.id === registro.id ? registro : i)
+      : [...imoveis, registro];
+    const alteracao: Partial<CooperadoComImoveis> = { imoveisCadastrados };
+    updateCooperado(produtor.id, alteracao);
+    setRascunho(null);
+  };
+
+  return (
+    <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
+      <div className="flex flex-wrap items-end gap-4">
+        <label className="min-w-56 flex-1 text-sm font-semibold">
+          Produtor (cooperado)
+          <select className={campo} value={cooperadoId} disabled={!!rascunho} onChange={e => setCooperadoId(e.target.value)}>
+            <option value="">Selecione um cooperado</option>
+            {[...cooperados].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map(c => (
+              <option key={c.id} value={c.id}>{c.nome} · {c.matricula}</option>
+            ))}
+          </select>
+        </label>
+        <p className="pb-2 text-sm">Nº de imóveis <strong>{imoveis.length}</strong></p>
+        {produtor && podeEditar && !rascunho && (
+          <button type="button" className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white" onClick={() => setRascunho({ id: crypto.randomUUID(), campos: { tipoBem: 'Imóvel' } })}>Novo imóvel</button>
+        )}
+      </div>
+      {produtor && !rascunho && (
+        imoveis.length ? <ul className="divide-y divide-slate-200 dark:divide-slate-700">
+          {imoveis.map((imovel, indice) => (
+            <li key={imovel.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+              <span className="text-sm">{imovel.campos.endereco || imovel.campos.localidade || 'Imóvel ' + (indice + 1)}{imovel.campos.municipio && ' · ' + imovel.campos.municipio}</span>
+              <button type="button" className={botao} onClick={() => setRascunho(imovel)}>{podeEditar ? 'Editar' : 'Consultar'}</button>
+            </li>
+          ))}
+        </ul> : <p className="text-sm text-slate-500">Este cooperado ainda não tem imóveis cadastrados.</p>
+      )}
+      {produtor && rascunho && (
+        <form className="space-y-4" onSubmit={salvar}>
+          <div className="grid gap-4 lg:grid-cols-3">
+            {gruposImovel.map(grupo => (
+              <fieldset key={grupo.titulo} disabled={!podeEditar} className="min-w-0 space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                <legend className="px-1 text-sm font-bold">{grupo.titulo}</legend>
+                {grupo.campos.map(({ chave, rotulo, tipo, opcoes }) => {
+                  const atualizar = (valor: string) => setRascunho(anterior => anterior && ({ ...anterior, campos: { ...anterior.campos, [chave]: valor } }));
+                  const valor = rascunho.campos[chave] ?? '';
+                  return <label key={chave} className="block text-sm font-medium">
+                    {rotulo}
+                    {opcoes ? (
+                      <select className={campo} value={valor} onChange={e => atualizar(e.target.value)} required={chave === 'tipoImovel'}>
+                        <option value="">Selecione</option>
+                        {opcoes.map(opcao => <option key={opcao}>{opcao}</option>)}
+                      </select>
+                    ) : (
+                      <input className={campo} value={valor} onChange={e => atualizar(e.target.value)}
+                        inputMode={tipo === 'inteiro' ? 'numeric' : tipo === 'decimal' ? 'decimal' : undefined}
+                        pattern={tipo === 'inteiro' ? '[0-9]+' : tipo === 'decimal' ? '[0-9]+([,.][0-9]+)?' : undefined}
+                        title={tipo === 'inteiro' ? 'Informe um número inteiro' : tipo === 'decimal' ? 'Use vírgula ou ponto como separador decimal' : undefined} />
+                    )}
+                  </label>;
+                })}
+              </fieldset>
+            ))}
+          </div>
+          <div className="flex justify-end gap-2">
+            <button type="button" className={botao} onClick={() => setRascunho(null)}>{podeEditar ? 'Cancelar' : 'Fechar'}</button>
+            {podeEditar && <button type="submit" className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">Salvar imóvel</button>}
+          </div>
+        </form>
+      )}
+    </section>
+  );
+};
+
+type LinhaProducaoCooperado = {
+  id: string;
+  produtoId: string;
+  produtoNome: string;
+  nip: string;
+  unidade: string;
+  periodo: string;
+  irrigado: string;
+  area: string;
+};
+type CadastroProducaoCooperado = { dataAtualizacao: string; itens: LinhaProducaoCooperado[] };
+type CooperadoComProducao = Cooperado & { cadastroProducao?: CadastroProducaoCooperado };
+
+const CadastroProducao: React.FC = () => {
+  const { cooperados, produtos, updateCooperado, canWriteModule } = useCoop();
+  const [cooperadoId, setCooperadoId] = useState('');
+  const [rascunho, setRascunho] = useState<LinhaProducaoCooperado[] | null>(null);
+  const [mensagem, setMensagem] = useState('');
+  const produtor: CooperadoComProducao | undefined = cooperados.find(c => c.id === cooperadoId);
+  const podeEditar = canWriteModule('cooperados');
+  const itens = rascunho ?? produtor?.cadastroProducao?.itens ?? [];
+  const catalogo = [...produtos].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  const campo = 'w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm dark:border-slate-700 dark:bg-slate-900';
+  const acao = 'rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold dark:border-slate-700';
+  const salvar = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!produtor || !podeEditar || !rascunho) return;
+    if (new Set(rascunho.map(item => item.produtoId)).size !== rascunho.length) {
+      setMensagem('Selecione cada produto apenas uma vez.');
+      return;
+    }
+    const alteracao: Partial<CooperadoComProducao> = {
+      cadastroProducao: { dataAtualizacao: new Date().toISOString(), itens: rascunho }
+    };
+    updateCooperado(produtor.id, alteracao);
+    setRascunho(null);
+    setMensagem('Cadastro atualizado.');
+  };
+  const editarLinha = (id: string, alteracao: Partial<LinhaProducaoCooperado>) => {
+    setRascunho(atual => atual?.map(item => item.id === id ? { ...item, ...alteracao } : item) ?? null);
+  };
+
+  return (
+    <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
+      <h2 className="text-lg font-bold">Cadastro de produção</h2>
+      <div className="grid gap-3 sm:grid-cols-[1fr_3fr_1fr]">
+        <label className="text-sm font-semibold">Código<input className={campo} readOnly value={produtor?.matricula || ''} /></label>
+        <label className="text-sm font-semibold">Produtor (cooperado)
+          <select className={campo} value={cooperadoId} disabled={rascunho !== null} onChange={e => { setCooperadoId(e.target.value); setMensagem(''); }}>
+            <option value="">Selecione um cooperado</option>
+            {[...cooperados].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+          </select>
+        </label>
+        <label className="text-sm font-semibold">Última atualização<input className={campo} readOnly value={produtor?.cadastroProducao ? new Date(produtor.cadastroProducao.dataAtualizacao).toLocaleDateString('pt-BR') : ''} /></label>
+      </div>
+      {produtor && <form onSubmit={salvar} className="space-y-4">
+        {itens.length > 0 ? <div className="overflow-x-auto">
+          <table className="w-full min-w-[800px] text-left text-sm">
+            <thead className="bg-slate-100 dark:bg-slate-900"><tr>
+              {['Produto', 'NIP', 'Unid. mercadoria', 'Período de produção', 'Irrigado', 'Área plantada (ha)'].map(label => <th key={label} scope="col" className="p-2">{label}</th>)}
+              {rascunho && <th scope="col" className="p-2">Ações</th>}
+            </tr></thead>
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+              {itens.map((item, index) => <tr key={item.id}>
+                <td className="min-w-56 p-2">{rascunho ? (
+                  <select className={campo} aria-label={'Produto ' + (index + 1)} required value={item.produtoId} onChange={e => {
+                    const produto = catalogo.find(p => p.id === e.target.value);
+                    editarLinha(item.id, { produtoId: produto?.id || '', produtoNome: produto?.nome || '', unidade: produto?.unidadeMedida || '' });
+                  }}>
+                    <option value="">Selecione</option>
+                    {item.produtoId && !catalogo.some(p => p.id === item.produtoId) && <option value={item.produtoId}>{item.produtoNome}</option>}
+                    {catalogo.map(p => <option key={p.id} value={p.id}>{p.nome} · {p.unidadeMedida}</option>)}
+                  </select>
+                ) : item.produtoNome}</td>
+                {([
+                  ['nip', 'NIP', simNao], ['unidade', 'Unidade', undefined],
+                  ['periodo', 'Período', ['Diário', 'Semanal', 'Quinzenal', 'Mensal', 'Trimestral', 'Semestral', 'Anual', 'Por safra']],
+                  ['irrigado', 'Irrigado', simNao], ['area', 'Área plantada', undefined]
+                ] as const).map(([chave, label, opcoes]) => (
+                  <td key={chave} className="min-w-24 p-2">
+                    {!rascunho ? (item[chave] || '—') : opcoes ? (
+                      <select className={campo} aria-label={label + ' ' + (index + 1)} value={item[chave]} onChange={e => editarLinha(item.id, { [chave]: e.target.value })}>
+                        <option value="">Selecione</option>
+                        {opcoes.map(opcao => <option key={opcao}>{opcao}</option>)}
+                      </select>
+                    ) : (
+                      <input className={campo} aria-label={label + ' ' + (index + 1)} value={item[chave]}
+                        inputMode={chave === 'area' ? 'decimal' : undefined} pattern={chave === 'area' ? '[0-9]+([,.][0-9]+)?' : undefined}
+                        onChange={e => editarLinha(item.id, { [chave]: e.target.value })} />
+                    )}
+                  </td>
+                ))}
+                {rascunho && <td className="p-2"><button type="button" className={acao} aria-label={'Remover linha ' + (index + 1)} onClick={() => setRascunho(rascunho.filter(linha => linha.id !== item.id))}>Remover</button></td>}
+              </tr>)}
+            </tbody>
+          </table>
+        </div> : <p className="text-sm text-slate-500">Nenhum produto informado para este cooperado.</p>}
+        {mensagem && <p role="status" className="text-sm">{mensagem}</p>}
+        {podeEditar && (rascunho ? <div className="flex flex-wrap gap-2">
+          <button type="button" className={acao} disabled={catalogo.length === 0} onClick={() => setRascunho([...rascunho, { id: crypto.randomUUID(), produtoId: '', produtoNome: '', nip: '', unidade: '', periodo: '', irrigado: '', area: '' }])}>Adicionar produto</button>
+          <button type="button" className={acao} onClick={() => { setRascunho(null); setMensagem(''); }}>Cancelar</button>
+          <button type="submit" className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">Salvar produção</button>
+          {!catalogo.length && <p className="self-center text-sm text-slate-500">Cadastre produtos no catálogo agropecuário.</p>}
+        </div> : <button type="button" className={acao} onClick={() => { setRascunho(itens); setMensagem(''); }}>Editar produção</button>)}
+      </form>}
+    </section>
+  );
+};
+
 export const CooperadosView: React.FC = () => {
   const {
     cooperados,
@@ -66,6 +308,8 @@ export const CooperadosView: React.FC = () => {
   const blockWriteAction = () => {
     alert('Seu perfil de acesso tem permissão apenas de leitura neste módulo. Fale com um administrador para solicitar permissão de edição.');
   };
+
+  const [abaCadastro, setAbaCadastro] = useState<'Cooperados' | 'Propriedades' | 'Produção'>('Cooperados');
 
   // Filters & State
   const [searchTerm, setSearchTerm] = useState('');
@@ -345,8 +589,26 @@ export const CooperadosView: React.FC = () => {
     alert(`${removed} cooperado(s) excluído(s) com sucesso.`);
   };
 
+  const navegacaoCadastro = (
+    <nav aria-label="Cadastro de cooperados" className="flex gap-2 border-b border-slate-200 dark:border-slate-700">
+      {(['Cooperados', 'Propriedades', 'Produção'] as const).map(rotulo => {
+        const selecionado = abaCadastro === rotulo;
+        return <button key={rotulo} type="button" aria-pressed={selecionado} onClick={() => setAbaCadastro(rotulo)}
+          className={`border-b-2 px-4 py-3 text-sm font-semibold ${selecionado ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400' : 'border-transparent text-slate-500'}`}>{rotulo}</button>;
+      })}
+    </nav>
+  );
+
+  if (abaCadastro !== 'Cooperados') return (
+    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      {navegacaoCadastro}
+      {abaCadastro === 'Propriedades' ? <PropriedadesCooperados /> : <CadastroProducao />}
+    </div>
+  );
+
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      {navegacaoCadastro}
       {/* <PortalShareBanner
         portalId="portal-cooperado"
         customTitle="Portal do Cooperado"
