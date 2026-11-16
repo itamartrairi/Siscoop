@@ -196,6 +196,7 @@ type LinhaProducaoCooperado = {
   id: string;
   produtoId: string;
   produtoNome: string;
+  quantidade?: string;
   unidade: string;
   periodo: string;
   irrigado: string;
@@ -214,7 +215,7 @@ const CadastroProducao: React.FC = () => {
   const itens = rascunho ?? produtor?.cadastroProducao?.itens ?? [];
   const catalogo = [...produtos].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
   const novaLinha = (): LinhaProducaoCooperado => ({
-    id: crypto.randomUUID(), produtoId: '', produtoNome: '', unidade: '', periodo: '', irrigado: '', area: ''
+    id: crypto.randomUUID(), produtoId: '', produtoNome: '', quantidade: '', unidade: '', periodo: '', irrigado: '', area: ''
   });
   const selecionarCooperado = (id: string) => {
     setCooperadoId(id);
@@ -258,7 +259,7 @@ const CadastroProducao: React.FC = () => {
         {itens.length > 0 ? <div className="overflow-x-auto">
           <table className="w-full min-w-[800px] text-left text-sm">
             <thead className="bg-slate-100 dark:bg-slate-900"><tr>
-              {['Produto', 'Unid. mercadoria', 'Período de produção', 'Irrigado', 'Área plantada (ha)'].map(label => <th key={label} scope="col" className="p-2">{label}</th>)}
+              {['Produto', 'Quantidade', 'Unid. mercadoria', 'Período de produção', 'Irrigado', 'Área plantada (ha)'].map(label => <th key={label} scope="col" className="p-2">{label}</th>)}
               {rascunho && <th scope="col" className="p-2">Ações</th>}
             </tr></thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
@@ -274,7 +275,7 @@ const CadastroProducao: React.FC = () => {
                   </select>
                 ) : (catalogo.find(p => p.id === item.produtoId)?.nome ?? item.produtoNome)}</td>
                 {([
-                  ['unidade', 'Unidade', undefined],
+                  ['quantidade', 'Quantidade', undefined], ['unidade', 'Unidade', undefined],
                   ['periodo', 'Período', ['Diário', 'Semanal', 'Quinzenal', 'Mensal', 'Trimestral', 'Semestral', 'Anual', 'Por safra']],
                   ['irrigado', 'Irrigado', simNao], ['area', 'Área plantada', undefined]
                 ] as const).map(([chave, label, opcoes]) => (
@@ -285,8 +286,8 @@ const CadastroProducao: React.FC = () => {
                         {opcoes.map(opcao => <option key={opcao}>{opcao}</option>)}
                       </select>
                     ) : (
-                      <input className={campo} aria-label={label + ' ' + (index + 1)} value={item[chave]}
-                        inputMode={chave === 'area' ? 'decimal' : undefined} pattern={chave === 'area' ? '[0-9]+([,.][0-9]+)?' : undefined}
+                      <input className={campo} aria-label={label + ' ' + (index + 1)} value={item[chave] ?? ''}
+                        inputMode={(chave === 'area' || chave === 'quantidade') ? 'decimal' : undefined} pattern={(chave === 'area' || chave === 'quantidade') ? '[0-9]+([,.][0-9]+)?' : undefined}
                         onChange={e => editarLinha(item.id, { [chave]: e.target.value })} />
                     )}
                   </td>
