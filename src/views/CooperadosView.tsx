@@ -57,11 +57,6 @@ const gruposImovel: { titulo: string; campos: CampoImovel[] }[] = [
     { chave: 'temDocumento', rotulo: 'Tem documento', opcoes: simNao },
     { chave: 'apresentouDocumento', rotulo: 'Apresentou documento', opcoes: simNao },
     { chave: 'registroMidia', rotulo: 'Tem registro de mídia', opcoes: simNao },
-    { chave: 'tipoBem', rotulo: 'Tipo de bem' },
-    { chave: 'marca', rotulo: 'Marca' },
-    { chave: 'modelo', rotulo: 'Modelo' },
-    { chave: 'ano', rotulo: 'Ano', tipo: 'inteiro' },
-    { chave: 'valor', rotulo: 'Valor atribuído (R$)', tipo: 'decimal' },
     { chave: 'tipoImovel', rotulo: 'Tipo de imóvel', opcoes: ['Rural', 'Urbano', 'Outro'] }
   ] },
   { titulo: 'Localização e registros', campos: [
@@ -100,7 +95,7 @@ const PropriedadesCooperados: React.FC = () => {
   const podeEditar = canWriteModule('cooperados');
   const produtor: CooperadoComImoveis | undefined = cooperados.find(c => c.id === cooperadoId);
   const imoveis = produtor?.imoveisCadastrados ?? [];
-  const novoImovel = (): ImovelCooperado => ({ id: crypto.randomUUID(), campos: { tipoBem: 'Imóvel' } });
+  const novoImovel = (): ImovelCooperado => ({ id: crypto.randomUUID(), campos: {} });
   const selecionarCooperado = (id: string) => {
     setCooperadoId(id);
     const selecionado: CooperadoComImoveis | undefined = cooperados.find(c => c.id === id);
@@ -157,7 +152,7 @@ const PropriedadesCooperados: React.FC = () => {
       )}
       {produtor && rascunho && (
         <form className="space-y-4" onSubmit={salvar}>
-          <div className="grid gap-4 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             {gruposImovel.map(grupo => (
               <fieldset key={grupo.titulo} disabled={!podeEditar} className="min-w-0 space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
                 <legend className="px-1 text-sm font-bold">{grupo.titulo}</legend>
