@@ -220,8 +220,9 @@ const PropriedadesCooperados: React.FC = () => {
           {erroImovel && <p role="alert" className="text-sm font-semibold text-rose-700">{erroImovel}</p>}
           <div>
             {[gruposImovel[abaImovel]].map(grupo => (
-              <fieldset key={grupo.titulo} disabled={!podeEditar} className="min-w-0 space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+              <fieldset key={grupo.titulo} disabled={!podeEditar} className="min-w-0 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
                 <legend className="px-1 text-sm font-bold">{grupo.titulo}</legend>
+                <div className={abaImovel === 0 ? "space-y-3" : "grid grid-cols-1 gap-3 sm:grid-cols-2"}>
                 {grupo.campos.map(({ chave, rotulo, tipo, opcoes }) => {
                   const atualizar = (valor: string) => setRascunho(anterior => anterior && ({ ...anterior, campos: { ...anterior.campos, [chave]: valor } }));
                   const valor = rascunho.campos[chave] ?? '';
@@ -240,6 +241,7 @@ const PropriedadesCooperados: React.FC = () => {
                     )}
                   </label>;
                 })}
+                </div>
               </fieldset>
             ))}
           </div>
