@@ -48,7 +48,7 @@ export const EstoqueView: React.FC = () => {
     alert('Seu perfil de acesso tem permissão apenas de leitura neste módulo. Fale com um administrador para solicitar permissão de edição.');
   };
 
-  const [activeTab, setActiveTab] = useState<'saldos' | 'movimentacoes'>('saldos');
+  const [activeTab, setActiveTab] = useState<'saldos' | 'movimentacoes' | null>(null);
 
   // Modals
   const [showItemModal, setShowItemModal] = useState(false);
@@ -249,29 +249,25 @@ if (item) {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-slate-200 gap-2 overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('saldos')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-            activeTab === 'saldos'
-              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <Package className="w-4 h-4" /> Saldo Atual de Produtos ({estoque.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('movimentacoes')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-            activeTab === 'movimentacoes'
-              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <Boxes className="w-4 h-4" /> Histórico de Movimentações ({movimentacoesEstoque.length})
-        </button>
-      </div>
+      {activeTab ? (
+        <button type="button" onClick={() => setActiveTab(null)} className="rounded-lg px-3 py-2 text-sm font-semibold text-orange-800 hover:bg-orange-50">← Voltar às opções de Estoque</button>
+      ) : (
+        <ol aria-label="Seções de Estoque" className="rounded-2xl border border-slate-200 border-t-2 border-t-orange-500 bg-white p-6">
+          {([
+            ['saldos', 'Saldo Atual de Produtos', estoque.length, 'Consulte os saldos disponíveis por produto.', Package],
+            ['movimentacoes', 'Histórico de Movimentações', movimentacoesEstoque.length, 'Acompanhe entradas e saídas de estoque.', Boxes]
+          ] as const).map(([id, titulo, total, descricao, Icone], index) => (
+            <li key={id} className="relative grid grid-cols-[3rem_minmax(0,1fr)] gap-4 pb-7 last:pb-0 before:absolute before:bottom-0 before:left-6 before:top-12 before:w-px before:bg-slate-200 last:before:hidden">
+              <span className="relative flex h-12 w-12 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600"><Icone className="h-5 w-5" aria-hidden="true" /></span>
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">{index + 1}. {titulo} ({total})</h2>
+                <p className="mt-1 text-sm text-slate-600">{descricao}</p>
+                <button type="button" onClick={() => setActiveTab(id)} className="mt-3 rounded-full bg-orange-700 px-5 py-2.5 text-sm font-bold text-white hover:bg-orange-800">{id === 'saldos' ? 'Abrir saldos' : 'Abrir movimentações'} →</button>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
 
       {/* Tab Saldos */}
       {activeTab === 'saldos' && (
