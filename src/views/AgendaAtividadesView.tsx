@@ -34,7 +34,7 @@ import {
   type EventoGoogle
 } from '../services/googleCalendarService';
 
-type Aba = 'agenda' | 'atividades';
+type Aba = 'agenda' | 'atividades' | 'kanban';
 
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 const DIAS_SEMANA = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
@@ -373,11 +373,26 @@ export const AgendaAtividadesView: React.FC = () => {
     }
   };
 
+  const atividadesKanban = useMemo(() => [...(atividades || [])]
+    .sort((a, b) => (a.prazo || '9999').localeCompare(b.prazo || '9999')), [atividades]);
+  const [movendoAtividades, setMovendoAtividades] = useState<Set<string>>(new Set());
+  const mudancasEmCurso = useRef(new Set<string>());
+
   const mudarStatus = async (a: Atividade, status: StatusAtividade) => {
-    updateAtividade(a.id, { status });
-    const patch = await sincronizarAtividade({ ...a, status });
-    updateAtividade(a.id, patch);
-    if (conectada) carregarEventos();
+    if (a.status === status || mudancasEmCurso.current.has(a.id)) return;
+    mudancasEmCurso.current.add(a.id);
+    setMovendoAtividades(new Set(mudancasEmCurso.current));
+    try {
+      await updateAtividade(a.id, { status });
+      const patch = await sincronizarAtividade({ ...a, status });
+      await updateAtividade(a.id, patch);
+      if (conectada) void carregarEventos();
+    } catch {
+      setErroAgenda('Não foi possível atualizar a atividade.');
+    } finally {
+      mudancasEmCurso.current.delete(a.id);
+      setMovendoAtividades(new Set(mudancasEmCurso.current));
+    }
   };
 
   const removerAtividade = async (a: Atividade) => {
@@ -416,7 +431,7 @@ export const AgendaAtividadesView: React.FC = () => {
               <Plus className="w-4 h-4" /> Novo Evento
             </button>
           )}
-          {activeTab === 'atividades' && (
+          {activeTab !== 'agenda' && (
             <button onClick={() => abrirAtividade()} className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-2">
               <Plus className="w-4 h-4" /> Nova Atividade
             </button>
@@ -425,7 +440,7 @@ export const AgendaAtividadesView: React.FC = () => {
       </div>
 
       <div className="flex border-b border-slate-200 gap-2 overflow-x-auto">
-        {([['agenda', 'Agenda', CalendarDays], ['atividades', `Atividades (${(atividades || []).length})`, ListChecks]] as [Aba, string, React.ElementType][]).map(([id, rotulo, Icone]) => (
+        {([['agenda', 'Agenda', CalendarDays], ['atividades', `Atividades (${(atividades || []).length})`, ListChecks], ['kanban', 'Kanban', ListChecks]] as [Aba, string, React.ElementType][]).map(([id, rotulo, Icone]) => (
           <button
             key={id}
             onClick={() => setActiveTab(id)}
@@ -547,6 +562,59 @@ export const AgendaAtividadesView: React.FC = () => {
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {activeTab === 'kanban' && (
+        <div className="overflow-x-auto pb-3">
+          <div className="grid grid-cols-4 gap-3 min-w-[880px] items-start">
+            {STATUS_ATIVIDADE.map(({ valor, rotulo }) => {
+              const cards = atividadesKanban.filter(a => a.status === valor);
+              return (
+                <section
+                  key={valor}
+                  aria-label={rotulo}
+                  className="min-h-40 rounded-2xl border border-slate-200 bg-slate-50 p-3 space-y-3"
+                  onDragOver={e => { if (e.dataTransfer.types.includes('application/x-siscoop-atividade')) e.preventDefault(); }}
+                  onDrop={e => {
+                    e.preventDefault();
+                    const id = e.dataTransfer.getData('application/x-siscoop-atividade');
+                    const atividade = atividadesKanban.find(a => a.id === id);
+                    if (atividade && atividade.status !== valor) void mudarStatus(atividade, valor);
+                  }}
+                >
+                  <h2 className="flex items-center justify-between gap-2 text-sm font-bold text-slate-800">
+                    {rotulo}<span className="text-slate-500">{cards.length}</span>
+                  </h2>
+                  {cards.length === 0 && <p className="text-xs text-slate-500">Sem atividades</p>}
+                  {cards.map(a => (
+                    <article
+                      key={a.id}
+                      draggable={!movendoAtividades.has(a.id)}
+                      onDragStart={e => {
+                        e.dataTransfer.setData('application/x-siscoop-atividade', a.id);
+                        e.dataTransfer.effectAllowed = 'move';
+                      }}
+                      className="space-y-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
+                    >
+                      <button type="button" onClick={() => abrirAtividade(a)} className="block w-full break-words text-left text-sm font-bold text-slate-900 hover:text-emerald-700">{a.titulo}</button>
+                      <p className="break-words text-xs text-slate-600">{a.responsavelNome}</p>
+                      <p className="text-xs text-slate-600">{a.prazo ? formatarData(a.prazo) : 'Sem prazo'} · {a.prioridade === 'ALTA' ? 'Alta' : a.prioridade === 'BAIXA' ? 'Baixa' : 'Média'}</p>
+                      <select
+                        aria-label={`Status de ${a.titulo}`}
+                        value={a.status}
+                        disabled={movendoAtividades.has(a.id)}
+                        onChange={e => { void mudarStatus(a, e.target.value as StatusAtividade); }}
+                        className="w-full rounded-lg border border-slate-200 bg-white p-2 text-xs text-slate-700"
+                      >
+                        {STATUS_ATIVIDADE.map(s => <option key={s.valor} value={s.valor}>{s.rotulo}</option>)}
+                      </select>
+                    </article>
+                  ))}
+                </section>
+              );
+            })}
+          </div>
         </div>
       )}
 
