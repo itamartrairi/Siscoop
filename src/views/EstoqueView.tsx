@@ -1,3 +1,4 @@
+import { VoltarSecoes } from '../components/ui/NavegacaoSecoes';
 import React, { useState, useMemo } from 'react';
 import { useCoop } from '../context/CoopContext';
 import {
@@ -250,7 +251,7 @@ if (item) {
       </div>
 
       {activeTab ? (
-        <button type="button" onClick={() => setActiveTab(null)} className="rounded-lg px-3 py-2 text-sm font-semibold text-orange-800 hover:bg-orange-50">← Voltar às opções de Estoque</button>
+        <VoltarSecoes voltar={() => setActiveTab(null)} rotulo="Voltar às opções de Estoque" />
       ) : (
         <ol aria-label="Seções de Estoque" className="rounded-2xl border border-slate-200 border-t-2 border-t-orange-500 bg-white p-6">
           {([
