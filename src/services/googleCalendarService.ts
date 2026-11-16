@@ -23,6 +23,7 @@ export interface EventoGoogle {
   location?: string;
   htmlLink?: string;
   status?: string;
+  extendedProperties?: { private?: Record<string, string> };
   start: { date?: string; dateTime?: string };
   end: { date?: string; dateTime?: string };
 }
@@ -179,6 +180,12 @@ export const criarEventoGoogle = async (ev: NovoEventoGoogle): Promise<EventoGoo
 
 export const atualizarEventoGoogle = async (id: string, ev: NovoEventoGoogle): Promise<EventoGoogle> =>
   chamar(`${API}/${encodeURIComponent(id)}${sufixoConvite(ev)}`, { method: 'PATCH', body: JSON.stringify(corpoEvento(ev)) });
+
+export const atualizarStatusPessoalGoogle = async (id: string, status: string): Promise<EventoGoogle> =>
+  chamar(`${API}/${encodeURIComponent(id)}?sendUpdates=none`, {
+    method: 'PATCH',
+    body: JSON.stringify({ extendedProperties: { private: { sicoopStatus: status } } })
+  });
 
 export const excluirEventoGoogle = async (id: string): Promise<void> => {
   await chamar(`${API}/${encodeURIComponent(id)}`, { method: 'DELETE' });
