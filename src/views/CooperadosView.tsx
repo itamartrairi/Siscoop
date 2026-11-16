@@ -310,7 +310,7 @@ export const CooperadosView: React.FC = () => {
     alert('Seu perfil de acesso tem permissão apenas de leitura neste módulo. Fale com um administrador para solicitar permissão de edição.');
   };
 
-  const [abaCadastro, setAbaCadastro] = useState<'Cooperados' | 'Propriedades' | 'Produção'>('Cooperados');
+  const [abaCadastro, setAbaCadastro] = useState<'Cooperados' | 'Propriedades' | 'Produção' | null>(null);
 
   // Filters & State
   const [searchTerm, setSearchTerm] = useState('');
@@ -591,20 +591,22 @@ export const CooperadosView: React.FC = () => {
     alert(`${removed} cooperado(s) excluído(s) com sucesso.`);
   };
 
-  const navegacaoCadastro = (
-    <nav aria-label="Cadastro de cooperados" className="flex gap-2 border-b border-slate-200 dark:border-slate-700">
-      {(['Cooperados', 'Propriedades', 'Produção'] as const).map(rotulo => {
-        const selecionado = abaCadastro === rotulo;
-        return <button key={rotulo} type="button" aria-pressed={selecionado} onClick={() => setAbaCadastro(rotulo)}
-          className={`border-b-2 px-4 py-3 text-sm font-semibold ${selecionado ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400' : 'border-transparent text-slate-500'}`}>{rotulo}</button>;
-      })}
-    </nav>
-  );
+  const navegacaoCadastro = <NavegacaoSecoes selecionada={abaCadastro !== null} voltar={() => setAbaCadastro(null)} secoes={[
+    { titulo: 'Cooperados', descricao: 'Consulte e atualize o cadastro dos cooperados.', icone: User, abrir: () => setAbaCadastro('Cooperados') },
+    { titulo: 'Propriedades', descricao: 'Cadastre os imóveis vinculados a cada produtor.', icone: MapPin, abrir: () => setAbaCadastro('Propriedades') },
+    { titulo: 'Capacidade de Produção', descricao: 'Registre os produtos, períodos de produção e áreas plantadas por cooperado.', icone: Sprout, abrir: () => setAbaCadastro('Produção') }
+  ]} />;
 
   if (abaCadastro !== 'Cooperados') return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      <div className="sticky top-0 z-20 rounded-2xl bg-slate-100 p-4 dark:bg-slate-900">
+        <h1 className="text-xl font-bold text-slate-900 dark:text-white">
+          {abaCadastro === 'Produção' ? 'Capacidade de Produção' : abaCadastro ?? 'Cooperados & Produtores'}
+        </h1>
+      </div>
       {navegacaoCadastro}
-      {abaCadastro === 'Propriedades' ? <PropriedadesCooperados /> : <CadastroProducao />}
+      {abaCadastro === 'Propriedades' && <PropriedadesCooperados />}
+      {abaCadastro === 'Produção' && <CadastroProducao />}
     </div>
   );
 
