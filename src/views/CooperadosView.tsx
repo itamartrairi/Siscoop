@@ -45,6 +45,139 @@ import jsPDF from 'jspdf';
 import { ReceiptModal } from '../components/ReceiptModal';
 import { GeoLocationPicker } from '../components/GeoLocationPicker';
 
+type CampoImovel = { chave: string; rotulo: string; tipo?: 'inteiro' | 'decimal'; opcoes?: readonly string[] };
+type ImovelCooperado = { id: string; campos: Record<string, string> };
+type CooperadoComImoveis = Cooperado & { imoveisCadastrados?: ImovelCooperado[] };
+
+const simNao = ['Sim', 'Não'];
+const gruposImovel: { titulo: string; campos: CampoImovel[] }[] = [
+  { titulo: 'Domínio e documentação', campos: [
+    { chave: 'dominio', rotulo: 'Tipo de domínio', opcoes: ['Próprio', 'Arrendado', 'Comodato', 'Posse', 'Parceria', 'Outro'] },
+    { chave: 'temDocumento', rotulo: 'Tem documento', opcoes: simNao },
+    { chave: 'apresentouDocumento', rotulo: 'Apresentou documento', opcoes: simNao },
+    { chave: 'registroMidia', rotulo: 'Tem registro de mídia', opcoes: simNao },
+    { chave: 'tipoBem', rotulo: 'Tipo de bem' },
+    { chave: 'marca', rotulo: 'Marca' },
+    { chave: 'modelo', rotulo: 'Modelo' },
+    { chave: 'ano', rotulo: 'Ano', tipo: 'inteiro' },
+    { chave: 'valor', rotulo: 'Valor atribuído (R$)', tipo: 'decimal' },
+    { chave: 'tipoImovel', rotulo: 'Tipo de imóvel', opcoes: ['Rural', 'Urbano', 'Outro'] }
+  ] },
+  { titulo: 'Localização e registros', campos: [
+    { chave: 'endereco', rotulo: 'Endereço do imóvel' },
+    { chave: 'localidade', rotulo: 'Localidade' },
+    { chave: 'municipio', rotulo: 'Município' },
+    { chave: 'uf', rotulo: 'UF', opcoes: ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'] },
+    { chave: 'utmN', rotulo: 'Latitude UTM (N)', tipo: 'decimal' },
+    { chave: 'utmE', rotulo: 'Longitude UTM (E)', tipo: 'decimal' },
+    { chave: 'fusoUtm', rotulo: 'Fuso e hemisfério UTM' },
+    { chave: 'areaTerreno', rotulo: 'Área do terreno (ha)', tipo: 'decimal' },
+    { chave: 'incra', rotulo: 'Nº INCRA' },
+    { chave: 'car', rotulo: 'Nº CAR' }
+  ] },
+  { titulo: 'Água e construções', campos: [
+    { chave: 'lagos', rotulo: 'Quantidade de lagoas', tipo: 'inteiro' },
+    { chave: 'areaLagoa', rotulo: 'Área de lagoa (ha)', tipo: 'decimal' },
+    { chave: 'acudes', rotulo: 'Quantidade de açudes', tipo: 'inteiro' },
+    { chave: 'areaAcude', rotulo: 'Área de açude (ha)', tipo: 'decimal' },
+    { chave: 'rios', rotulo: 'Quantidade de rios', tipo: 'inteiro' },
+    { chave: 'areaRio', rotulo: 'Área de rio (ha)', tipo: 'decimal' },
+    { chave: 'pocos', rotulo: 'Quantidade de poços', tipo: 'inteiro' },
+    { chave: 'capacidadePoco', rotulo: 'Capacidade do poço (m³)', tipo: 'decimal' },
+    { chave: 'areaSeca', rotulo: 'Área seca (ha)', tipo: 'decimal' },
+    { chave: 'areaBaixa', rotulo: 'Área de baixa (ha)', tipo: 'decimal' },
+    { chave: 'construcoes', rotulo: 'Nº de imóveis construídos', tipo: 'inteiro' },
+    { chave: 'residencias', rotulo: 'Nº de imóveis residenciais', tipo: 'inteiro' },
+    { chave: 'areaResidencial', rotulo: 'Área residencial construída (m²)', tipo: 'decimal' }
+  ] }
+];
+
+const PropriedadesCooperados: React.FC = () => {
+  const { cooperados, updateCooperado, canWriteModule } = useCoop();
+  const [cooperadoId, setCooperadoId] = useState('');
+  const [rascunho, setRascunho] = useState<ImovelCooperado | null>(null);
+  const podeEditar = canWriteModule('cooperados');
+  const produtor: CooperadoComImoveis | undefined = cooperados.find(c => c.id === cooperadoId);
+  const imoveis = produtor?.imoveisCadastrados ?? [];
+  const campo = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:bg-slate-900 dark:border-slate-700';
+  const botao = 'rounded-lg px-3 py-2 text-sm font-semibold border border-slate-300 dark:border-slate-700';
+
+  const salvar = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!produtor || !rascunho || !podeEditar) return;
+    const registro = { ...rascunho, campos: Object.fromEntries(Object.entries(rascunho.campos).map(([chave, valor]) => [chave, valor.trim()])) };
+    const imoveisCadastrados = imoveis.some(i => i.id === registro.id)
+      ? imoveis.map(i => i.id === registro.id ? registro : i)
+      : [...imoveis, registro];
+    const alteracao: Partial<CooperadoComImoveis> = { imoveisCadastrados };
+    updateCooperado(produtor.id, alteracao);
+    setRascunho(null);
+  };
+
+  return (
+    <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
+      <div className="flex flex-wrap items-end gap-4">
+        <label className="min-w-56 flex-1 text-sm font-semibold">
+          Produtor (cooperado)
+          <select className={campo} value={cooperadoId} disabled={!!rascunho} onChange={e => setCooperadoId(e.target.value)}>
+            <option value="">Selecione um cooperado</option>
+            {[...cooperados].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map(c => (
+              <option key={c.id} value={c.id}>{c.nome} · {c.matricula}</option>
+            ))}
+          </select>
+        </label>
+        <p className="pb-2 text-sm">Nº de imóveis <strong>{imoveis.length}</strong></p>
+        {produtor && podeEditar && !rascunho && (
+          <button type="button" className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white" onClick={() => setRascunho({ id: crypto.randomUUID(), campos: { tipoBem: 'Imóvel' } })}>Novo imóvel</button>
+        )}
+      </div>
+      {produtor && !rascunho && (
+        imoveis.length ? <ul className="divide-y divide-slate-200 dark:divide-slate-700">
+          {imoveis.map((imovel, indice) => (
+            <li key={imovel.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+              <span className="text-sm">{imovel.campos.endereco || imovel.campos.localidade || 'Imóvel ' + (indice + 1)}{imovel.campos.municipio && ' · ' + imovel.campos.municipio}</span>
+              <button type="button" className={botao} onClick={() => setRascunho(imovel)}>{podeEditar ? 'Editar' : 'Consultar'}</button>
+            </li>
+          ))}
+        </ul> : <p className="text-sm text-slate-500">Este cooperado ainda não tem imóveis cadastrados.</p>
+      )}
+      {produtor && rascunho && (
+        <form className="space-y-4" onSubmit={salvar}>
+          <div className="grid gap-4 lg:grid-cols-3">
+            {gruposImovel.map(grupo => (
+              <fieldset key={grupo.titulo} disabled={!podeEditar} className="min-w-0 space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                <legend className="px-1 text-sm font-bold">{grupo.titulo}</legend>
+                {grupo.campos.map(({ chave, rotulo, tipo, opcoes }) => {
+                  const atualizar = (valor: string) => setRascunho(anterior => anterior && ({ ...anterior, campos: { ...anterior.campos, [chave]: valor } }));
+                  const valor = rascunho.campos[chave] ?? '';
+                  return <label key={chave} className="block text-sm font-medium">
+                    {rotulo}
+                    {opcoes ? (
+                      <select className={campo} value={valor} onChange={e => atualizar(e.target.value)} required={chave === 'tipoImovel'}>
+                        <option value="">Selecione</option>
+                        {opcoes.map(opcao => <option key={opcao}>{opcao}</option>)}
+                      </select>
+                    ) : (
+                      <input className={campo} value={valor} onChange={e => atualizar(e.target.value)}
+                        inputMode={tipo === 'inteiro' ? 'numeric' : tipo === 'decimal' ? 'decimal' : undefined}
+                        pattern={tipo === 'inteiro' ? '[0-9]+' : tipo === 'decimal' ? '[0-9]+([,.][0-9]+)?' : undefined}
+                        title={tipo === 'inteiro' ? 'Informe um número inteiro' : tipo === 'decimal' ? 'Use vírgula ou ponto como separador decimal' : undefined} />
+                    )}
+                  </label>;
+                })}
+              </fieldset>
+            ))}
+          </div>
+          <div className="flex justify-end gap-2">
+            <button type="button" className={botao} onClick={() => setRascunho(null)}>{podeEditar ? 'Cancelar' : 'Fechar'}</button>
+            {podeEditar && <button type="submit" className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">Salvar imóvel</button>}
+          </div>
+        </form>
+      )}
+    </section>
+  );
+};
+
 export const CooperadosView: React.FC = () => {
   const {
     cooperados,
@@ -66,6 +199,8 @@ export const CooperadosView: React.FC = () => {
   const blockWriteAction = () => {
     alert('Seu perfil de acesso tem permissão apenas de leitura neste módulo. Fale com um administrador para solicitar permissão de edição.');
   };
+
+  const [mostrarPropriedades, setMostrarPropriedades] = useState(false);
 
   // Filters & State
   const [searchTerm, setSearchTerm] = useState('');
@@ -345,8 +480,27 @@ export const CooperadosView: React.FC = () => {
     alert(`${removed} cooperado(s) excluído(s) com sucesso.`);
   };
 
+  const navegacaoCadastro = (
+    <nav aria-label="Cadastro de cooperados" className="flex gap-2 border-b border-slate-200 dark:border-slate-700">
+      {(['Cooperados', 'Propriedades'] as const).map(rotulo => {
+        const propriedades = rotulo === 'Propriedades';
+        const selecionado = mostrarPropriedades === propriedades;
+        return <button key={rotulo} type="button" aria-pressed={selecionado} onClick={() => setMostrarPropriedades(propriedades)}
+          className={`border-b-2 px-4 py-3 text-sm font-semibold ${selecionado ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400' : 'border-transparent text-slate-500'}`}>{rotulo}</button>;
+      })}
+    </nav>
+  );
+
+  if (mostrarPropriedades) return (
+    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      {navegacaoCadastro}
+      <PropriedadesCooperados />
+    </div>
+  );
+
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      {navegacaoCadastro}
       {/* <PortalShareBanner
         portalId="portal-cooperado"
         customTitle="Portal do Cooperado"
