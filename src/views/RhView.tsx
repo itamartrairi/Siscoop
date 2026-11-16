@@ -1,3 +1,4 @@
+import { NavegacaoSecoes } from '../components/ui/NavegacaoSecoes';
 import React, { useState } from 'react';
 import { useCoop } from '../context/CoopContext';
 import {
@@ -40,7 +41,7 @@ export const RhView: React.FC = () => {
     alert('Seu perfil de acesso tem permissão apenas de leitura neste módulo. Fale com um administrador para solicitar permissão de edição.');
   };
 
-  const [activeTab, setActiveTab] = useState<'funcionarios' | 'folha'>('funcionarios');
+  const [activeTab, setActiveTab] = useState<'funcionarios' | 'folha' | null>(null);
 
   // Filtros da aba Folha de Pagamento
   const [filterFuncionarioId, setFilterFuncionarioId] = useState('');
@@ -628,29 +629,10 @@ export const RhView: React.FC = () => {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-slate-200 gap-2 overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('funcionarios')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-            activeTab === 'funcionarios'
-              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <Users className="w-4 h-4" /> Colaboradores Registrados ({funcionariosRH.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('folha')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-            activeTab === 'folha'
-              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <FileSpreadsheet className="w-4 h-4" /> Folha de Pagamento ({folhaPagamento.length})
-        </button>
-      </div>
+      <NavegacaoSecoes selecionada={activeTab !== null} voltar={() => setActiveTab(null)} secoes={[
+        { titulo: <>Colaboradores Registrados ({funcionariosRH.length})</>, descricao: "Consulte o cadastro dos colaboradores.", icone: Users, abrir: () => setActiveTab('funcionarios') },
+        { titulo: <>Folha de Pagamento ({folhaPagamento.length})</>, descricao: "Acompanhe o processamento da folha.", icone: FileSpreadsheet, abrir: () => setActiveTab('folha') }
+      ]} />
 
       {/* Tab Funcionarios */}
       {activeTab === 'funcionarios' && (
