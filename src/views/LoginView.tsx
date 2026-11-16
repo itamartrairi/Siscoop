@@ -1,3 +1,4 @@
+import { NavegacaoSecoes } from '../components/ui/NavegacaoSecoes';
 import React, { useState } from 'react';
 import { useCoop } from '../context/CoopContext';
 import { UserRole } from '../types';
@@ -12,7 +13,7 @@ interface Props {
 export const LoginView: React.FC<Props> = ({ onLoginSuccess, onOpenCooperativeSetup }) => {
   const { loginWithEmail, loginWithGoogle, registerUser, recoverPassword } = useCoop();
 
-  const [activeTab, setActiveTab] = useState<'login' | 'register' | 'forgot'>('login');
+  const [activeTab, setActiveTab] = useState<'login' | 'register' | 'forgot' | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -158,19 +159,11 @@ export const LoginView: React.FC<Props> = ({ onLoginSuccess, onOpenCooperativeSe
             Firebase Auth Ativo • Segurança Aprimorada
           </div>
 
-          <div className="login-tabs">
-            <button
-              onClick={() => { setActiveTab('login'); setErrorMessage(null); setSuccessMessage(null); }}
-              className={`login-tab-btn ${activeTab === 'login' || activeTab === 'forgot' ? 'active' : ''}`}
-            >
-              Entrar
-            </button>
-            <button
-              onClick={() => { setActiveTab('register'); setErrorMessage(null); setSuccessMessage(null); }}
-              className={`login-tab-btn ${activeTab === 'register' ? 'active' : ''}`}
-            >
-              Cadastrar-se
-            </button>
+          <div className="mt-4 text-left">
+            <NavegacaoSecoes selecionada={activeTab !== null} voltar={() => { setActiveTab(null); setErrorMessage(null); setSuccessMessage(null); }} secoes={[
+              { titulo: 'Entrar', descricao: 'Acesse sua conta do Siscoop.', icone: Lock, abrir: () => { setActiveTab('login'); setErrorMessage(null); setSuccessMessage(null); } },
+              { titulo: 'Cadastrar-se', descricao: 'Crie uma conta para acessar o sistema.', icone: User, abrir: () => { setActiveTab('register'); setErrorMessage(null); setSuccessMessage(null); } }
+            ]} />
           </div>
         </div>
 
