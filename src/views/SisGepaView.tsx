@@ -1,3 +1,4 @@
+import { NavegacaoSecoes } from '../components/ui/NavegacaoSecoes';
 import { formatarData } from '../utils/dateHelpers';
 import React, { useState, useMemo } from 'react';
 import jsPDF from 'jspdf';
@@ -211,7 +212,7 @@ export const SisGepaView: React.FC = () => {
     alert('Seu perfil de acesso tem permissão apenas de leitura neste módulo. Fale com um administrador para solicitar permissão de edição.');
   };
 
-  const [activeTab, setActiveTab] = useState<'chamadas' | 'ofertas' | 'rateio' | 'pedidos' | 'entregas' | 'relatorios'>('chamadas');
+  const [activeTab, setActiveTab] = useState<'chamadas' | 'ofertas' | 'rateio' | 'pedidos' | 'entregas' | 'relatorios' | null>(null);
   const [relatorioSubTab, setRelatorioSubTab] = useState<'pedidos' | 'entregas'>('pedidos');
   // Chamada pública cujo valor está sendo lançado no Contas a Receber
   const [chamadaParaReceber, setChamadaParaReceber] = useState<(typeof chamadasPublicas)[number] | null>(null);
@@ -3755,92 +3756,14 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
         </div>
       </div>
 
-      {/* Navigation Tabs */}
-      <div className="flex border-b-2 border-slate-200 gap-3 overflow-x-auto pb-1.5 scrollbar-thin">
-        <button
-          onClick={() => setActiveTab('chamadas')}
-          className={`px-5 py-3 text-sm font-extrabold rounded-2xl flex items-center gap-2.5 transition-all whitespace-nowrap shadow-xs cursor-pointer ${
-            activeTab === 'chamadas'
-              ? 'bg-emerald-700 text-white shadow-md ring-2 ring-emerald-600'
-              : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-          }`}
-        >
-          <Building className={`w-4 h-4 ${activeTab === 'chamadas' ? 'text-emerald-200' : 'text-emerald-700'}`} />
-          <span>Chamadas Públicas</span>
-          <span className={`px-2 py-0.5 rounded-full text-xs font-black ${activeTab === 'chamadas' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'}`}>
-            {filteredChamadas.length}
-          </span>
-        </button>
-        <button
-          onClick={() => setActiveTab('ofertas')}
-          className={`px-5 py-3 text-sm font-extrabold rounded-2xl flex items-center gap-2.5 transition-all whitespace-nowrap shadow-xs cursor-pointer ${
-            activeTab === 'ofertas'
-              ? 'bg-emerald-700 text-white shadow-md ring-2 ring-emerald-600'
-              : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-          }`}
-        >
-          <FileCheck className={`w-4 h-4 ${activeTab === 'ofertas' ? 'text-emerald-200' : 'text-emerald-700'}`} />
-          <span>Propostas de Oferta</span>
-          <span className={`px-2 py-0.5 rounded-full text-xs font-black ${activeTab === 'ofertas' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'}`}>
-            {filteredOfertas.length}
-          </span>
-        </button>
-        <button
-          onClick={() => setActiveTab('rateio')}
-          className={`px-5 py-3 text-sm font-extrabold rounded-2xl flex items-center gap-2.5 transition-all whitespace-nowrap shadow-xs cursor-pointer ${
-            activeTab === 'rateio'
-              ? 'bg-emerald-700 text-white shadow-md ring-2 ring-emerald-600'
-              : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-          }`}
-        >
-          <Scale className={`w-4 h-4 ${activeTab === 'rateio' ? 'text-emerald-200' : 'text-emerald-700'}`} />
-          <span>Rateio de Produtores</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('pedidos')}
-          className={`px-5 py-3 text-sm font-black rounded-2xl flex items-center gap-2.5 transition-all whitespace-nowrap shadow-xs cursor-pointer relative ${
-            activeTab === 'pedidos'
-              ? 'bg-emerald-700 text-white shadow-md ring-2 ring-emerald-600'
-              : 'bg-white text-slate-800 hover:bg-slate-100 border-2 border-emerald-300'
-          }`}
-        >
-          <ShoppingBag className={`w-4 h-4 ${activeTab === 'pedidos' ? 'text-emerald-200' : 'text-emerald-600'}`} />
-          <span>Pedidos aos Produtores</span>
-          <span className={`px-2 py-0.5 rounded-full text-xs font-black ${activeTab === 'pedidos' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-900'}`}>
-            {filteredPedidos.length}
-          </span>
-          {pendingPedidosCount > 0 && (
-            <span className="absolute -top-2 -right-2 px-2 py-0.5 bg-amber-500 text-slate-950 rounded-full text-[10px] font-black shadow-lg animate-bounce" title={`${pendingPedidosCount} pedidos pendentes`}>
-              {pendingPedidosCount}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('entregas')}
-          className={`px-5 py-3 text-sm font-extrabold rounded-2xl flex items-center gap-2.5 transition-all whitespace-nowrap shadow-xs cursor-pointer ${
-            activeTab === 'entregas'
-              ? 'bg-emerald-700 text-white shadow-md ring-2 ring-emerald-600'
-              : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-          }`}
-        >
-          <Truck className={`w-4 h-4 ${activeTab === 'entregas' ? 'text-emerald-200' : 'text-emerald-700'}`} />
-          <span>Programação de Entregas</span>
-          <span className={`px-2 py-0.5 rounded-full text-xs font-black ${activeTab === 'entregas' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'}`}>
-            {filteredEntregas.length}
-          </span>
-        </button>
-        <button
-          onClick={() => setActiveTab('relatorios')}
-          className={`px-5 py-3 text-sm font-extrabold rounded-2xl flex items-center gap-2.5 transition-all whitespace-nowrap shadow-xs cursor-pointer ${
-            activeTab === 'relatorios'
-              ? 'bg-emerald-700 text-white shadow-md ring-2 ring-emerald-600'
-              : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-          }`}
-        >
-          <FileText className={`w-4 h-4 ${activeTab === 'relatorios' ? 'text-emerald-200' : 'text-emerald-700'}`} />
-          <span>Relatórios de Pedidos e Entregas</span>
-        </button>
-      </div>
+      <NavegacaoSecoes selecionada={activeTab !== null} voltar={() => setActiveTab(null)} secoes={[
+        { titulo: <>Chamadas Públicas ({filteredChamadas.length})</>, descricao: 'Consulte e cadastre os editais do PAA e do PNAE.', icone: Building, abrir: () => setActiveTab('chamadas') },
+        { titulo: <>Propostas de Oferta ({filteredOfertas.length})</>, descricao: 'Registre e acompanhe as ofertas dos produtores.', icone: FileCheck, abrir: () => setActiveTab('ofertas') },
+        { titulo: 'Rateio de Produtores', descricao: 'Distribua os volumes da chamada entre os produtores participantes.', icone: Scale, abrir: () => setActiveTab('rateio') },
+        { titulo: <>Pedidos aos Produtores ({filteredPedidos.length}){pendingPedidosCount > 0 && <span className="ml-2 text-sm text-amber-700">{pendingPedidosCount} pendente(s)</span>}</>, descricao: 'Emita pedidos e acompanhe seu andamento.', icone: ShoppingBag, abrir: () => setActiveTab('pedidos') },
+        { titulo: <>Programação de Entregas ({filteredEntregas.length})</>, descricao: 'Organize o cronograma de entregas.', icone: Truck, abrir: () => setActiveTab('entregas') },
+        { titulo: 'Relatórios de Pedidos e Entregas', descricao: 'Consulte os relatórios de acompanhamento da comercialização.', icone: FileText, abrir: () => setActiveTab('relatorios') }
+      ]} />
 
       {/* Tab Chamadas Públicas */}
       {activeTab === 'chamadas' && (
