@@ -30,7 +30,7 @@ import {
   listarEventosGoogle,
   criarEventoGoogle,
   atualizarEventoGoogle,
-  excluirEventoGoogle,
+  excluirEventoGoogle, atualizarStatusPessoalGoogle,
   type EventoGoogle
 } from '../services/googleCalendarService';
 
@@ -56,6 +56,9 @@ const horaDoEvento = (e: EventoGoogle) => {
 const tomStatus = (s: StatusAtividade): 'success' | 'warning' | 'danger' | 'neutral' =>
   s === 'CONCLUIDA' ? 'success' : s === 'CANCELADA' ? 'danger' : s === 'EM_ANDAMENTO' ? 'warning' : 'neutral';
 
+const statusPessoalGoogle = (evento: EventoGoogle): StatusAtividade =>
+  STATUS_ATIVIDADE.find(s => s.valor === evento.extendedProperties?.private?.sicoopStatus)?.valor || 'PENDENTE';
+
 const inputCls = 'w-full p-2.5 border border-slate-200 rounded-xl bg-white';
 const labelCls = 'block text-slate-700 font-bold mb-1';
 
@@ -65,30 +68,44 @@ export const AgendaAtividadesView: React.FC = () => {
 
   // ---------------------------------------------------------------- Google Agenda
   const [conectada, setConectada] = useState(agendaConectada());
-  const [eventos, setEventos] = useState<EventoGoogle[]>([]);
+  const emailUsuario = currentUser?.email?.trim().toLowerCase() || '';
+  const emailGoogle = agendaConectada() ? emailAgendaConectada()?.trim().toLowerCase() : '';
+  const contaAgenda = emailUsuario && emailUsuario === emailGoogle ? emailUsuario : '';
+  const [loteEventos, setLoteEventos] = useState<{ conta: string; mes: string; itens: EventoGoogle[] }>();
   const [carregando, setCarregando] = useState(false);
   const [erroAgenda, setErroAgenda] = useState('');
   const hoje = new Date();
   const [mesRef, setMesRef] = useState({ ano: hoje.getFullYear(), mes: hoje.getMonth() });
 
+  const mesAgenda = isoDe(mesRef.ano, mesRef.mes, 1);
+  const eventos = contaAgenda && loteEventos?.conta === contaAgenda && loteEventos.mes === mesAgenda ? loteEventos.itens : [];
+  const ultimaConsulta = useRef(0);
   const carregarEventos = useCallback(async () => {
     if (!agendaConectada()) { setConectada(false); return; }
+    if (!contaAgenda) return;
+    const consulta = ++ultimaConsulta.current;
     setCarregando(true);
     setErroAgenda('');
     try {
       const inicio = isoDe(mesRef.ano, mesRef.mes, 1);
       const proximo = new Date(mesRef.ano, mesRef.mes + 1, 1);
       const fim = isoDe(proximo.getFullYear(), proximo.getMonth(), 1);
-      setEventos(await listarEventosGoogle(inicio, fim));
+      const itens = await listarEventosGoogle(inicio, fim);
+      if (consulta === ultimaConsulta.current) setLoteEventos({ conta: contaAgenda, mes: mesAgenda, itens });
     } catch (e: any) {
       setErroAgenda(e?.message || 'Erro ao carregar a agenda.');
       setConectada(agendaConectada());
     } finally {
       setCarregando(false);
     }
-  }, [mesRef]);
+  }, [mesRef, contaAgenda, mesAgenda]);
 
-  useEffect(() => { if (conectada) carregarEventos(); }, [conectada, carregarEventos]);
+  useEffect(() => {
+    if (!conectada || !contaAgenda) return;
+    void carregarEventos();
+    const timer = window.setInterval(() => { if (document.visibilityState === 'visible') void carregarEventos(); }, 60000);
+    return () => { window.clearInterval(timer); ultimaConsulta.current++; };
+  }, [conectada, contaAgenda, carregarEventos]);
 
   const conectar = async () => {
     setErroAgenda('');
@@ -103,7 +120,7 @@ export const AgendaAtividadesView: React.FC = () => {
   const desconectar = () => {
     desconectarGoogleAgenda();
     setConectada(false);
-    setEventos([]);
+    setLoteEventos(undefined);
   };
 
   const mudarMes = (delta: number) => {
@@ -195,25 +212,36 @@ export const AgendaAtividadesView: React.FC = () => {
 
   const [filtroStatus, setFiltroStatus] = useState<'TODOS' | 'ABERTAS' | StatusAtividade>('ABERTAS');
   const [filtroResp, setFiltroResp] = useState('TODOS');
+  const idsVinculados = new Set((atividades || []).map(a => a.googleEventId));
+  const eventosPessoais = new Map(eventos.filter(e => !idsVinculados.has(e.id)).map(e => [`google:${e.id}`, e] as const));
+  const atividadesExibidas: Atividade[] = [
+    ...(atividades || []),
+    ...Array.from(eventosPessoais, ([id, evento]): Atividade => ({
+      id, tenantId: '', criadoEm: '', titulo: evento.summary || '(sem título)',
+      responsavelNome: currentUser?.name || contaAgenda, prazo: diaDoEvento(evento),
+      prioridade: 'MEDIA', status: statusPessoalGoogle(evento), googleEventId: evento.id,
+      descricao: evento.description
+    }))
+  ];
   const responsaveis = useMemo(
-    () => Array.from(new Set((atividades || []).map(a => a.responsavelNome).filter(Boolean))).sort(),
-    [atividades]
+    () => Array.from(new Set(atividadesExibidas.map(a => a.responsavelNome).filter(Boolean))).sort(),
+    [atividadesExibidas]
   );
-  const atividadesFiltradas = useMemo(() => (atividades || [])
+  const atividadesFiltradas = useMemo(() => atividadesExibidas
     .filter(a => filtroStatus === 'TODOS'
       || (filtroStatus === 'ABERTAS' ? (a.status === 'PENDENTE' || a.status === 'EM_ANDAMENTO') : a.status === filtroStatus))
     .filter(a => filtroResp === 'TODOS' || a.responsavelNome === filtroResp)
-    .sort((a, b) => (a.prazo || '9999').localeCompare(b.prazo || '9999')), [atividades, filtroStatus, filtroResp]);
+    .sort((a, b) => (a.prazo || '9999').localeCompare(b.prazo || '9999')), [atividadesExibidas, filtroStatus, filtroResp]);
 
   const contagem = useMemo(() => {
     const c: Record<string, number> = { PENDENTE: 0, EM_ANDAMENTO: 0, CONCLUIDA: 0, CANCELADA: 0, ATRASADA: 0 };
     const hj = hojeISO();
-    (atividades || []).forEach(a => {
+    atividadesExibidas.forEach(a => {
       c[a.status] = (c[a.status] || 0) + 1;
       if ((a.status === 'PENDENTE' || a.status === 'EM_ANDAMENTO') && a.prazo && a.prazo < hj) c.ATRASADA++;
     });
     return c;
-  }, [atividades]);
+  }, [atividadesExibidas]);
 
   const [showAtividade, setShowAtividade] = useState(false);
   const [editandoAtiv, setEditandoAtiv] = useState<Atividade | null>(null);
@@ -233,6 +261,8 @@ export const AgendaAtividadesView: React.FC = () => {
   const [ativForm, setAtivForm] = useState(formVazio());
 
   const abrirAtividade = (a?: Atividade) => {
+    const evento = a && eventosPessoais.get(a.id);
+    if (evento) { abrirEvento(evento); return; }
     if (a) {
       setEditandoAtiv(a);
       setAtivForm({
@@ -373,8 +403,8 @@ export const AgendaAtividadesView: React.FC = () => {
     }
   };
 
-  const atividadesKanban = useMemo(() => [...(atividades || [])]
-    .sort((a, b) => (a.prazo || '9999').localeCompare(b.prazo || '9999')), [atividades]);
+  const atividadesKanban = useMemo(() => [...atividadesExibidas]
+    .sort((a, b) => (a.prazo || '9999').localeCompare(b.prazo || '9999')), [atividadesExibidas]);
   const [movendoAtividades, setMovendoAtividades] = useState<Set<string>>(new Set());
   const mudancasEmCurso = useRef(new Set<string>());
 
@@ -383,6 +413,12 @@ export const AgendaAtividadesView: React.FC = () => {
     mudancasEmCurso.current.add(a.id);
     setMovendoAtividades(new Set(mudancasEmCurso.current));
     try {
+      const evento = eventosPessoais.get(a.id);
+      if (evento) {
+        await atualizarStatusPessoalGoogle(evento.id, status);
+        await carregarEventos();
+        return;
+      }
       await updateAtividade(a.id, { status });
       const patch = await sincronizarAtividade({ ...a, status });
       await updateAtividade(a.id, patch);
@@ -396,6 +432,10 @@ export const AgendaAtividadesView: React.FC = () => {
   };
 
   const removerAtividade = async (a: Atividade) => {
+    if (eventosPessoais.has(a.id)) {
+      setErroAgenda('Para excluir este compromisso da Google Agenda, use a aba Agenda.');
+      return;
+    }
     const naAgenda = !!a.googleEventId;
     const podeRemover = naAgenda && agendaConectada()
       && (!a.agendaDonoEmail || a.agendaDonoEmail.toLowerCase() === (emailAgendaConectada() || '').toLowerCase());
@@ -440,7 +480,7 @@ export const AgendaAtividadesView: React.FC = () => {
       </div>
 
       <div className="flex border-b border-slate-200 gap-2 overflow-x-auto">
-        {([['agenda', 'Agenda', CalendarDays], ['atividades', `Atividades (${(atividades || []).length})`, ListChecks], ['kanban', 'Kanban', ListChecks]] as [Aba, string, React.ElementType][]).map(([id, rotulo, Icone]) => (
+        {([['agenda', 'Agenda', CalendarDays], ['atividades', `Atividades (${atividadesExibidas.length})`, ListChecks], ['kanban', 'Kanban', ListChecks]] as [Aba, string, React.ElementType][]).map(([id, rotulo, Icone]) => (
           <button
             key={id}
             onClick={() => setActiveTab(id)}
@@ -547,6 +587,7 @@ export const AgendaAtividadesView: React.FC = () => {
                               <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {horaDoEvento(item.e)}</span>
                               {item.e.location && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {item.e.location}</span>}
                             </div>
+                            <GridStatus tone={tomStatus(statusPessoalGoogle(item.e))} label={rotuloStatusAtividade(statusPessoalGoogle(item.e))} />
                             {item.e.description && <div className="text-[11px] text-slate-500 mt-1 line-clamp-2 whitespace-pre-line">{item.e.description}</div>}
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
@@ -565,6 +606,9 @@ export const AgendaAtividadesView: React.FC = () => {
         </div>
       )}
 
+      {activeTab !== 'agenda' && contaAgenda && (
+        <p className="text-xs text-slate-600">Compromissos pessoais de {MESES[mesRef.mes]} de {mesRef.ano}. Para ver outro mês, altere o período na aba Agenda.</p>
+      )}
       {activeTab === 'kanban' && (
         <div className="overflow-x-auto pb-3">
           <div className="grid grid-cols-4 gap-3 min-w-[880px] items-start">
@@ -657,7 +701,7 @@ export const AgendaAtividadesView: React.FC = () => {
               <button onClick={() => { setFiltroStatus('ABERTAS'); setFiltroResp('TODOS'); }} className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl">
                 <RotateCcw className="w-3.5 h-3.5" /> Limpar
               </button>
-              <span className="text-[11px] text-slate-400 font-semibold ml-auto">{atividadesFiltradas.length} de {(atividades || []).length} atividade(s)</span>
+              <span className="text-[11px] text-slate-400 font-semibold ml-auto">{atividadesFiltradas.length} de {atividadesExibidas.length} atividade(s)</span>
             </div>
 
             <DataGrid
