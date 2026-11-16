@@ -1,3 +1,4 @@
+import { NavegacaoSecoes } from '../components/ui/NavegacaoSecoes';
 import { formatarData } from '../utils/dateHelpers';
 import React, { useState } from 'react';
 import { useCoop } from '../context/CoopContext';
@@ -42,7 +43,7 @@ export const SisContView: React.FC = () => {
   };
 
 
-  const [activeTab, setActiveTab] = useState<'plano' | 'lancamentos' | 'balancete' | 'balanco' | 'dsp' | 'patrimonio'>('lancamentos');
+  const [activeTab, setActiveTab] = useState<'plano' | 'lancamentos' | 'balancete' | 'balanco' | 'dsp' | 'patrimonio' | null>(null);
 
   // Modals & Editing
   const [showLancModal, setShowLancModal] = useState(false);
@@ -315,69 +316,14 @@ if (p) {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-slate-200 gap-2 overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('lancamentos')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-            activeTab === 'lancamentos'
-              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <FileSpreadsheet className="w-4 h-4" /> Lançamentos Contábeis ({lancamentosContabeis.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('plano')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-            activeTab === 'plano'
-              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <Calculator className="w-4 h-4" /> Plano de Contas ({planoContas.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('balancete')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-            activeTab === 'balancete'
-              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <TrendingUp className="w-4 h-4" /> Balancete de Verificação
-        </button>
-        <button
-          onClick={() => setActiveTab('balanco')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-            activeTab === 'balanco'
-              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <TrendingUp className="w-4 h-4" /> Balanço Patrimonial
-        </button>
-        <button
-          onClick={() => setActiveTab('dsp')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-            activeTab === 'dsp'
-              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <TrendingUp className="w-4 h-4" /> Sobras ou Perdas
-        </button>
-        <button
-          onClick={() => setActiveTab('patrimonio')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-            activeTab === 'patrimonio'
-              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <Building2 className="w-4 h-4" /> Patrimônio e Ativos ({patrimonio.length})
-        </button>
-      </div>
+      <NavegacaoSecoes selecionada={activeTab !== null} voltar={() => setActiveTab(null)} secoes={[
+        { titulo: <>Lançamentos Contábeis ({lancamentosContabeis.length})</>, descricao: "Consulte e registre os lançamentos.", icone: FileSpreadsheet, abrir: () => setActiveTab('lancamentos') },
+        { titulo: <>Plano de Contas ({planoContas.length})</>, descricao: "Gerencie as contas contábeis.", icone: Calculator, abrir: () => setActiveTab('plano') },
+        { titulo: <>Balancete de Verificação</>, descricao: "Confira saldos e movimentações contábeis.", icone: TrendingUp, abrir: () => setActiveTab('balancete') },
+        { titulo: <>Balanço Patrimonial</>, descricao: "Consulte a posição patrimonial e financeira.", icone: TrendingUp, abrir: () => setActiveTab('balanco') },
+        { titulo: <>Sobras ou Perdas</>, descricao: "Acompanhe o resultado do período.", icone: TrendingUp, abrir: () => setActiveTab('dsp') },
+        { titulo: <>Patrimônio e Ativos ({patrimonio.length})</>, descricao: "Consulte os bens e ativos registrados.", icone: Building2, abrir: () => setActiveTab('patrimonio') }
+      ]} />
 
       {/* Tab Lançamentos */}
       {activeTab === 'lancamentos' && (

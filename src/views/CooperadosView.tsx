@@ -1,3 +1,4 @@
+import { NavegacaoSecoes } from '../components/ui/NavegacaoSecoes';
 import { formatarData } from '../utils/dateHelpers';
 import React, { useState } from 'react';
 import { useCoop } from '../context/CoopContext';
@@ -325,7 +326,7 @@ export const CooperadosView: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isImportCsvOpen, setIsImportCsvOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'geral' | 'capital' | 'endereco' | 'contatos' | 'documentos' | 'banco' | 'historico' | 'producao'>('geral');
+  const [activeTab, setActiveTab] = useState<'geral' | 'capital' | 'endereco' | 'contatos' | 'documentos' | 'banco' | 'historico' | 'producao' | null>(null);
 
   const [fichaModalCooperado, setFichaModalCooperado] = useState<Cooperado | null>(null);
   const [loadingCep, setLoadingCep] = useState(false);
@@ -466,7 +467,7 @@ export const CooperadosView: React.FC = () => {
       ...initialFormState,
       matricula: `COOP-${String(cooperados.length + 1).padStart(4, '0')}`
     });
-    setActiveTab('geral');
+    setActiveTab(null);
     setIsFormOpen(true);
   };
 
@@ -475,7 +476,7 @@ export const CooperadosView: React.FC = () => {
     const cleanCoop = sanitizeCooperado(coop);
     setEditingId(cleanCoop.id);
     setFormData({ ...cleanCoop });
-    setActiveTab('geral');
+    setActiveTab(null);
     setIsFormOpen(true);
   };
 
@@ -500,6 +501,7 @@ export const CooperadosView: React.FC = () => {
     e.preventDefault();
     if (!canWrite) { blockWriteAction(); return; }
     if (!formData.nome || !formData.cpf) {
+      setActiveTab('geral');
       alert('Por favor, preencha o Nome e o CPF do cooperado.');
       return;
     }
@@ -876,93 +878,18 @@ export const CooperadosView: React.FC = () => {
               </div>
             </div>
 
-            {/* Modal Tab Headers */}
-            <div className="flex items-center gap-1 px-4 pt-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50 overflow-x-auto text-xs">
-              <button
-                type="button"
-                onClick={() => setActiveTab('geral')}
-                className={`px-3 py-2 font-medium border-b-2 flex items-center gap-1.5 transition-colors whitespace-nowrap ${
-                  activeTab === 'geral' ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400 font-bold' : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-              >
-                <User className="w-3.5 h-3.5" /> Dados Gerais
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('capital')}
-                className={`px-3 py-2 font-medium border-b-2 flex items-center gap-1.5 transition-colors whitespace-nowrap ${
-                  activeTab === 'capital' ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400 font-bold' : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-              >
-                <DollarSign className="w-3.5 h-3.5" /> Capital Social & Cotas
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('endereco')}
-                className={`px-3 py-2 font-medium border-b-2 flex items-center gap-1.5 transition-colors whitespace-nowrap ${
-                  activeTab === 'endereco' ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400 font-bold' : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-              >
-                <MapPin className="w-3.5 h-3.5" /> Endereço
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('contatos')}
-                className={`px-3 py-2 font-medium border-b-2 flex items-center gap-1.5 transition-colors whitespace-nowrap ${
-                  activeTab === 'contatos' ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400 font-bold' : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-              >
-                <Phone className="w-3.5 h-3.5" /> Contatos
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('documentos')}
-                className={`px-3 py-2 font-medium border-b-2 flex items-center gap-1.5 transition-colors whitespace-nowrap ${
-                  activeTab === 'documentos' ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400 font-bold' : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-              >
-                <FileText className="w-3.5 h-3.5" /> Documentos & Anexos
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('banco')}
-                className={`px-3 py-2 font-medium border-b-2 flex items-center gap-1.5 transition-colors whitespace-nowrap ${
-                  activeTab === 'banco' ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400 font-bold' : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-              >
-                <CreditCard className="w-3.5 h-3.5" /> Dados Bancários
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('producao')}
-                className={`px-3 py-2 font-medium border-b-2 flex items-center gap-1.5 transition-colors whitespace-nowrap ${
-                  activeTab === 'producao' ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400 font-bold' : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-              >
-                <Sprout className="w-3.5 h-3.5" /> Histórico de Produção
-              </button>
-
-              {editingId && (
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('historico')}
-                  className={`px-3 py-2 font-medium border-b-2 flex items-center gap-1.5 transition-colors whitespace-nowrap ${
-                    activeTab === 'historico' ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400 font-bold' : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                  }`}
-                >
-                  <History className="w-3.5 h-3.5" /> Histórico Auditado
-                </button>
-              )}
-            </div>
-
             {/* Modal Form Body */}
             <form onSubmit={handleSave} className="p-6 overflow-y-auto flex-1 space-y-4">
+              <NavegacaoSecoes selecionada={activeTab !== null} voltar={() => setActiveTab(null)} secoes={[
+                  { titulo: "Dados Gerais", descricao: "Identificação e situação cadastral.", icone: User, abrir: () => setActiveTab('geral') },
+                  { titulo: "Capital Social & Cotas", descricao: "Consulte as cotas e integralizações.", icone: DollarSign, abrir: () => setActiveTab('capital') },
+                  { titulo: "Endereço", descricao: "Atualize a localização do cooperado.", icone: MapPin, abrir: () => setActiveTab('endereco') },
+                  { titulo: "Contatos", descricao: "Atualize telefone, WhatsApp e e-mail.", icone: Phone, abrir: () => setActiveTab('contatos') },
+                  { titulo: "Documentos & Anexos", descricao: "Consulte e atualize documentos do cadastro.", icone: FileText, abrir: () => setActiveTab('documentos') },
+                  { titulo: "Dados Bancários", descricao: "Atualize os dados para pagamento.", icone: CreditCard, abrir: () => setActiveTab('banco') },
+                  { titulo: "Histórico de Produção", descricao: "Consulte a produção e as entregas.", icone: Sprout, abrir: () => setActiveTab('producao') },
+                  ...(editingId ? [{ titulo: "Histórico Auditado", descricao: "Consulte as alterações do cadastro.", icone: History, abrir: () => setActiveTab('historico') }] : [])
+              ]} />
               {/* TAB 1: DADOS GERAIS */}
               {activeTab === 'geral' && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">

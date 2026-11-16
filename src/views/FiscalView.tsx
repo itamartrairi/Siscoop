@@ -1,3 +1,4 @@
+import { NavegacaoSecoes } from '../components/ui/NavegacaoSecoes';
 import React, { useState } from 'react';
 import {
   FileText,
@@ -64,7 +65,7 @@ export const FiscalView: React.FC = () => {
     alert('Seu perfil de acesso tem permissão apenas de leitura neste módulo. Fale com um administrador para solicitar permissão de edição.');
   };
 
-  const [activeTab, setActiveTab] = useState<'lista' | 'nova' | 'config' | 'reforma'>('lista');
+  const [activeTab, setActiveTab] = useState<'lista' | 'nova' | 'config' | 'reforma' | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('TODOS');
   const [modeloFilter, setModeloFilter] = useState<string>('TODOS');
@@ -499,49 +500,12 @@ export const FiscalView: React.FC = () => {
         </div>
       </div>
 
-      {/* Tabs Navigation */}
-      <div className="flex border-b border-slate-200 bg-white px-4 pt-2 rounded-xl shadow-xs overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('lista')}
-          className={`py-3 px-4 font-semibold text-sm border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
-            activeTab === 'lista'
-              ? 'border-emerald-600 text-emerald-700'
-              : 'border-transparent text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <Layers className="w-4 h-4" /> Notas Fiscais Emitidas ({notasFiscais.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('nova')}
-          className={`py-3 px-4 font-semibold text-sm border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
-            activeTab === 'nova'
-              ? 'border-emerald-600 text-emerald-700'
-              : 'border-transparent text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <Plus className="w-4 h-4" /> Nova Emissão (NF-e / NFA-e)
-        </button>
-        <button
-          onClick={() => setActiveTab('reforma')}
-          className={`py-3 px-4 font-semibold text-sm border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
-            activeTab === 'reforma'
-              ? 'border-emerald-600 text-emerald-700'
-              : 'border-transparent text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <Scale className="w-4 h-4 text-amber-600" /> Reforma Tributária (CBS / IBS / Cronograma)
-        </button>
-        <button
-          onClick={() => setActiveTab('config')}
-          className={`py-3 px-4 font-semibold text-sm border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
-            activeTab === 'config'
-              ? 'border-emerald-600 text-emerald-700'
-              : 'border-transparent text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <Settings className="w-4 h-4" /> Configurações SEFAZ-CE & Certificado
-        </button>
-      </div>
+      <NavegacaoSecoes selecionada={activeTab !== null} voltar={() => setActiveTab(null)} secoes={[
+        { titulo: <>Notas Fiscais Emitidas ({notasFiscais.length})</>, descricao: "Consulte as notas fiscais emitidas.", icone: Layers, abrir: () => setActiveTab('lista') },
+        { titulo: <>Nova Emissão (NF-e / NFA-e)</>, descricao: "Preencha os dados para emitir uma nota fiscal.", icone: Plus, abrir: () => setActiveTab('nova') },
+        { titulo: <>Reforma Tributária (CBS / IBS / Cronograma)</>, descricao: "Consulte tributos e cronograma de transição.", icone: Scale, abrir: () => setActiveTab('reforma') },
+        { titulo: <>Configurações SEFAZ-CE & Certificado</>, descricao: "Configure a integração fiscal e o certificado.", icone: Settings, abrir: () => setActiveTab('config') }
+      ]} />
 
       {/* Alerta de Transição da Reforma Tributária */}
       <div className="p-4 bg-gradient-to-r from-amber-500/10 via-emerald-500/10 to-teal-500/10 border border-amber-300/80 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-xs">

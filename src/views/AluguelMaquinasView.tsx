@@ -1,3 +1,4 @@
+import { NavegacaoSecoes } from '../components/ui/NavegacaoSecoes';
 import React, { useState } from 'react';
 import { useCoop } from '../context/CoopContext';
 import { DataGrid, GridStatus } from '../components/ui/DataGrid';
@@ -39,7 +40,7 @@ export const AluguelMaquinasView: React.FC = () => {
     alert('Seu perfil não tem permissão para editar.');
   };
 
-  const [activeTab, setActiveTab] = useState<'maquinas' | 'locacoes'>('maquinas');
+  const [activeTab, setActiveTab] = useState<'maquinas' | 'locacoes' | null>(null);
 
   // Modals
   const [showMaquinaModal, setShowMaquinaModal] = useState(false);
@@ -171,28 +172,10 @@ export const AluguelMaquinasView: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex border-b border-slate-200">
-        <button
-          onClick={() => setActiveTab('maquinas')}
-          className={`flex items-center gap-2 px-6 py-3 font-medium text-sm transition-colors relative ${
-            activeTab === 'maquinas' ? 'text-emerald-700' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-          }`}
-        >
-          <Tractor className="w-4 h-4" />
-          Cadastro de Máquinas
-          {activeTab === 'maquinas' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-600" />}
-        </button>
-        <button
-          onClick={() => setActiveTab('locacoes')}
-          className={`flex items-center gap-2 px-6 py-3 font-medium text-sm transition-colors relative ${
-            activeTab === 'locacoes' ? 'text-emerald-700' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-          }`}
-        >
-          <FileText className="w-4 h-4" />
-          Gerenciar Locações
-          {activeTab === 'locacoes' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-600" />}
-        </button>
-      </div>
+      <NavegacaoSecoes selecionada={activeTab !== null} voltar={() => setActiveTab(null)} secoes={[
+        { titulo: <>Cadastro de Máquinas</>, descricao: "Consulte o cadastro de equipamentos.", icone: Tractor, abrir: () => setActiveTab('maquinas') },
+        { titulo: <>Gerenciar Locações</>, descricao: "Acompanhe os contratos e as locações.", icone: FileText, abrir: () => setActiveTab('locacoes') }
+      ]} />
 
       {activeTab === 'maquinas' && (
         <div className="bg-white rounded-xl shadow-xs border border-slate-200 overflow-hidden">

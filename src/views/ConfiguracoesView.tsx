@@ -1,3 +1,4 @@
+import { NavegacaoSecoes } from '../components/ui/NavegacaoSecoes';
 import React, { useState, useEffect, useRef } from 'react';
 import { useCoop } from '../context/CoopContext';
 import { UserRole, PermissionLevel, SystemToolModule, User as UserType, WebhookEndpoint, WebhookEvent } from '../types';
@@ -203,9 +204,7 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
     alert('Seu perfil de acesso tem permissão apenas de leitura neste módulo. Fale com um administrador para solicitar permissão de edição.');
   };
 
-  const [activeTab, setActiveTab] = useState<'meu-perfil' | 'usuarios' | 'permissoes' | 'integracoes' | 'webhooks' | 'auditoria' | 'backup'>(() => {
-    return initialTab || 'meu-perfil';
-  });
+  const [activeTab, setActiveTab] = useState<'meu-perfil' | 'usuarios' | 'permissoes' | 'integracoes' | 'webhooks' | 'auditoria' | 'backup' | null>(initialTab ?? null);
 
   useEffect(() => {
     if (initialTab) {
@@ -867,75 +866,15 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-1 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-1 rounded-xl text-xs overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('meu-perfil')}
-          className={`px-4 py-2 font-bold rounded-lg flex items-center gap-2 transition-all shrink-0 ${
-            activeTab === 'meu-perfil' ? 'bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-400 shadow-xs' : 'text-slate-500'
-          }`}
-        >
-          <User className="w-4 h-4 text-emerald-600" /> Meu Perfil
-        </button>
-
-        <button
-          onClick={() => setActiveTab('usuarios')}
-          className={`px-4 py-2 font-bold rounded-lg flex items-center gap-2 transition-all shrink-0 ${
-            activeTab === 'usuarios' ? 'bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-400 shadow-xs' : 'text-slate-500'
-          }`}
-        >
-          <Users className="w-4 h-4 text-blue-600" /> Usuários ({users.length})
-        </button>
-
-        <button
-          onClick={() => setActiveTab('permissoes')}
-          className={`px-4 py-2 font-bold rounded-lg flex items-center gap-2 transition-all shrink-0 ${
-            activeTab === 'permissoes' ? 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-400 shadow-xs' : 'text-slate-500'
-          }`}
-        >
-          <Shield className="w-4 h-4 text-amber-600" /> Permissões & RBAC
-        </button>
-
-        {isSystemCreator && (
-          <>
-            <button
-              onClick={() => setActiveTab('integracoes')}
-              className={`px-4 py-2 font-bold rounded-lg flex items-center gap-2 transition-all shrink-0 ${
-                activeTab === 'integracoes' ? 'bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-400 shadow-xs' : 'text-slate-500'
-              }`}
-            >
-              <Key className="w-4 h-4 text-purple-600" /> Integrações & APIs
-            </button>
-
-            <button
-              onClick={() => setActiveTab('webhooks')}
-              className={`px-4 py-2 font-bold rounded-lg flex items-center gap-2 transition-all shrink-0 ${
-                activeTab === 'webhooks' ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-400 shadow-xs' : 'text-slate-500'
-              }`}
-            >
-              <Webhook className="w-4 h-4 text-indigo-600" /> Webhooks ({webhooks.length})
-            </button>
-
-            <button
-              onClick={() => setActiveTab('auditoria')}
-              className={`px-4 py-2 font-bold rounded-lg flex items-center gap-2 transition-all shrink-0 ${
-                activeTab === 'auditoria' ? 'bg-white dark:bg-slate-800 text-rose-700 dark:text-rose-400 shadow-xs' : 'text-slate-500'
-              }`}
-            >
-              <Activity className="w-4 h-4 text-rose-600" /> Auditoria ({auditoriaLogs.length})
-            </button>
-          </>
-        )}
-
-        <button
-          onClick={() => setActiveTab('backup')}
-          className={`px-4 py-2 font-bold rounded-lg flex items-center gap-2 transition-all shrink-0 ${
-            activeTab === 'backup' ? 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-400 shadow-xs' : 'text-slate-500'
-          }`}
-        >
-          <Database className="w-4 h-4 text-amber-600" /> Backup & Sistema
-        </button>
-      </div>
+      <NavegacaoSecoes selecionada={activeTab !== null} voltar={() => setActiveTab(null)} secoes={[
+        { titulo: <>Meu Perfil</>, descricao: "Atualize seus dados e preferências.", icone: User, abrir: () => setActiveTab('meu-perfil') },
+        { titulo: <>Usuários ({users.length})</>, descricao: "Gerencie os usuários cadastrados.", icone: Users, abrir: () => setActiveTab('usuarios') },
+        { titulo: <>Permissões & RBAC</>, descricao: "Consulte os perfis e níveis de acesso.", icone: Shield, abrir: () => setActiveTab('permissoes') },
+        ...(isSystemCreator ? [{ titulo: <>Integrações & APIs</>, descricao: "Configure as integrações disponíveis.", icone: Key, abrir: () => setActiveTab('integracoes') }] : []),
+        ...(isSystemCreator ? [{ titulo: <>Webhooks ({webhooks.length})</>, descricao: "Gerencie as notificações para sistemas externos.", icone: Webhook, abrir: () => setActiveTab('webhooks') }] : []),
+        ...(isSystemCreator ? [{ titulo: <>Auditoria ({auditoriaLogs.length})</>, descricao: "Consulte o histórico de alterações.", icone: Activity, abrir: () => setActiveTab('auditoria') }] : []),
+        { titulo: <>Backup & Sistema</>, descricao: "Consulte as opções de backup e manutenção.", icone: Database, abrir: () => setActiveTab('backup') }
+      ]} />
 
       {/* TAB 1: MEU PERFIL */}
       {activeTab === 'meu-perfil' && (
