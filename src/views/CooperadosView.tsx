@@ -196,7 +196,6 @@ type LinhaProducaoCooperado = {
   id: string;
   produtoId: string;
   produtoNome: string;
-  nip: string;
   unidade: string;
   periodo: string;
   irrigado: string;
@@ -215,7 +214,7 @@ const CadastroProducao: React.FC = () => {
   const itens = rascunho ?? produtor?.cadastroProducao?.itens ?? [];
   const catalogo = [...produtos].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
   const novaLinha = (): LinhaProducaoCooperado => ({
-    id: crypto.randomUUID(), produtoId: '', produtoNome: '', nip: '', unidade: '', periodo: '', irrigado: '', area: ''
+    id: crypto.randomUUID(), produtoId: '', produtoNome: '', unidade: '', periodo: '', irrigado: '', area: ''
   });
   const selecionarCooperado = (id: string) => {
     setCooperadoId(id);
@@ -259,7 +258,7 @@ const CadastroProducao: React.FC = () => {
         {itens.length > 0 ? <div className="overflow-x-auto">
           <table className="w-full min-w-[800px] text-left text-sm">
             <thead className="bg-slate-100 dark:bg-slate-900"><tr>
-              {['Produto', 'NIP', 'Unid. mercadoria', 'Período de produção', 'Irrigado', 'Área plantada (ha)'].map(label => <th key={label} scope="col" className="p-2">{label}</th>)}
+              {['Produto', 'Unid. mercadoria', 'Período de produção', 'Irrigado', 'Área plantada (ha)'].map(label => <th key={label} scope="col" className="p-2">{label}</th>)}
               {rascunho && <th scope="col" className="p-2">Ações</th>}
             </tr></thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
@@ -269,13 +268,13 @@ const CadastroProducao: React.FC = () => {
                     const produto = catalogo.find(p => p.id === e.target.value);
                     editarLinha(item.id, { produtoId: produto?.id || '', produtoNome: produto?.nome || '', unidade: produto?.unidadeMedida || '' });
                   }}>
-                    <option value="">Selecione</option>
+                    <option value="">Selecione um produto cadastrado</option>
                     {item.produtoId && !catalogo.some(p => p.id === item.produtoId) && <option value={item.produtoId}>{item.produtoNome}</option>}
                     {catalogo.map(p => <option key={p.id} value={p.id}>{p.nome} · {p.unidadeMedida}</option>)}
                   </select>
-                ) : item.produtoNome}</td>
+                ) : (catalogo.find(p => p.id === item.produtoId)?.nome ?? item.produtoNome)}</td>
                 {([
-                  ['nip', 'NIP', simNao], ['unidade', 'Unidade', undefined],
+                  ['unidade', 'Unidade', undefined],
                   ['periodo', 'Período', ['Diário', 'Semanal', 'Quinzenal', 'Mensal', 'Trimestral', 'Semestral', 'Anual', 'Por safra']],
                   ['irrigado', 'Irrigado', simNao], ['area', 'Área plantada', undefined]
                 ] as const).map(([chave, label, opcoes]) => (
