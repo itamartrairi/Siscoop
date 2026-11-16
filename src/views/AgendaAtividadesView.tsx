@@ -64,7 +64,7 @@ const labelCls = 'block text-slate-700 font-bold mb-1';
 
 export const AgendaAtividadesView: React.FC = () => {
   const { atividades, addAtividade, updateAtividade, deleteAtividade, users, currentUser, currentTenant } = useCoop();
-  const [activeTab, setActiveTab] = useState<Aba>('agenda');
+  const [activeTab, setActiveTab] = useState<Aba | null>(null);
 
   // ---------------------------------------------------------------- Google Agenda
   const [conectada, setConectada] = useState(agendaConectada());
@@ -471,7 +471,7 @@ export const AgendaAtividadesView: React.FC = () => {
               <Plus className="w-4 h-4" /> Novo Evento
             </button>
           )}
-          {activeTab !== 'agenda' && (
+          {activeTab && activeTab !== 'agenda' && (
             <button onClick={() => abrirAtividade()} className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-2">
               <Plus className="w-4 h-4" /> Nova Atividade
             </button>
@@ -479,19 +479,28 @@ export const AgendaAtividadesView: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex border-b border-slate-200 gap-2 overflow-x-auto">
-        {([['agenda', 'Agenda', CalendarDays], ['atividades', `Atividades (${atividadesExibidas.length})`, ListChecks], ['kanban', 'Kanban', ListChecks]] as [Aba, string, React.ElementType][]).map(([id, rotulo, Icone]) => (
-          <button
-            key={id}
-            onClick={() => setActiveTab(id)}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
-              activeTab === id ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-xl' : 'border-transparent text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <Icone className="w-4 h-4" /> {rotulo}
-          </button>
-        ))}
-      </div>
+      {activeTab ? (
+        <button type="button" onClick={() => setActiveTab(null)} className="rounded-lg px-3 py-2 text-sm font-semibold text-orange-800 hover:bg-orange-50">
+          ← Voltar à Agenda & Atividades
+        </button>
+      ) : (
+        <ol aria-label="Seções de Agenda & Atividades" className="rounded-2xl border border-slate-200 border-t-2 border-t-orange-500 bg-white p-6">
+          {([
+            ['agenda', 'Agenda', 'Consulte os compromissos do mês e conecte a Google Agenda.', CalendarDays],
+            ['atividades', `Atividades (${atividadesExibidas.length})`, 'Consulte as atividades, os responsáveis e os prazos.', ListChecks],
+            ['kanban', 'Kanban', 'Acompanhe as atividades por status e mova os cartões entre colunas.', ListChecks]
+          ] as [Aba, string, string, React.ElementType][]).map(([id, titulo, descricao, Icone], index) => (
+            <li key={id} className="relative grid grid-cols-[3rem_minmax(0,1fr)] gap-4 pb-7 last:pb-0 before:absolute before:bottom-0 before:left-6 before:top-12 before:w-px before:bg-slate-200 last:before:hidden">
+              <span className="relative flex h-12 w-12 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600"><Icone className="h-5 w-5" aria-hidden="true" /></span>
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">{index + 1}. {titulo}</h2>
+                <p className="mt-1 text-sm text-slate-600">{descricao}</p>
+                <button type="button" onClick={() => setActiveTab(id)} className="mt-3 rounded-full bg-orange-700 px-5 py-2.5 text-sm font-bold text-white hover:bg-orange-800">Abrir {id === 'atividades' ? 'Atividades' : titulo} →</button>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
 
       {erroAgenda && (
         <div className="p-3 rounded-xl border border-rose-200 bg-rose-50 text-xs font-semibold text-rose-700 flex items-start justify-between gap-3">
