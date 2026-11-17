@@ -125,7 +125,8 @@ async function solicitarTokenFiscal(config: SefazCeConfig, escopo: string, persi
   params.append('client_secret', clientSecret);
   params.append('scope', escopo);
 
-  const response = await fetch(ACBR_AUTH_URL, {
+  const tokenUrl = !persistir && usaProxyFiscal() ? '/api/acbr/token' : ACBR_AUTH_URL;
+  const response = await fetch(tokenUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -364,6 +365,15 @@ export async function transmitirParaNuvemFiscal(
   }
 }
 
+function usaProxyFiscal(): boolean {
+  return typeof window !== 'undefined' && window.location.hostname === 'appsiscoop.netlify.app';
+}
+
+function urlOperacaoFiscal(config: SefazCeConfig): string {
+  if (!usaProxyFiscal()) return obterUrlBaseApiFiscal(config);
+  return '/api/acbr/' + (config.ambiente === 'PRODUCAO' ? 'producao' : 'homologacao');
+}
+
 function cnpjDaIntegracao(config: SefazCeConfig): string {
   const cnpj = (config.cnpjEmitente || '').replace(/\D/g, '');
   if (cnpj.length !== 14) throw new Error('Configure o CNPJ do emitente antes de continuar.');
@@ -379,7 +389,7 @@ export async function enviarCertificadoFiscal(config: SefazCeConfig, arquivo: Fi
   const dados = new FormData();
   dados.append('file', arquivo);
   dados.append('password', senha);
-  const resposta = await fetch(`${obterUrlBaseApiFiscal(config)}/empresas/${cnpj}/certificado/upload`, {
+  const resposta = await fetch(`${urlOperacaoFiscal(config)}/empresas/${cnpj}/certificado/upload`, {
     method: 'PUT', headers: { Authorization: `Bearer ${token}` }, body: dados
   });
   if (!resposta.ok) throw new Error(`A ACBr não aceitou o certificado (HTTP ${resposta.status}). Confira a empresa, a senha e o ambiente.`);
@@ -389,7 +399,7 @@ export async function enviarCertificadoFiscal(config: SefazCeConfig, arquivo: Fi
 export async function consultarStatusFiscal(config: SefazCeConfig): Promise<{ codigo_status: number; motivo_status: string; ambiente: string }> {
   const cnpj = cnpjDaIntegracao(config);
   const token = await solicitarTokenFiscal(config, 'nfe', false);
-  const resposta = await fetch(`${obterUrlBaseApiFiscal(config)}/nfe/sefaz/status?cpf_cnpj=${cnpj}`, {
+  const resposta = await fetch(`${urlOperacaoFiscal(config)}/nfe/sefaz/status?cpf_cnpj=${cnpj}`, {
     headers: { Authorization: `Bearer ${token}` }
   });
   if (!resposta.ok) throw new Error(`Não foi possível consultar a SEFAZ pela ACBr (HTTP ${resposta.status}).`);
