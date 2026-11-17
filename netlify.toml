@@ -59,7 +59,7 @@
 
 [[redirects]]
   from = "/api/acbr/token"
-  to = "https://auth.acbr.api.br/realms/ACBrAPI/protocol/openid-connect/token"
+  to = "/.netlify/functions/acbr-token"
   status = 200
   force = true
 
