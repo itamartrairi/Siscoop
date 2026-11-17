@@ -47,6 +47,7 @@ const OBJETOS = new Set<string>(OBJETOS_SINCRONIZADOS);
 
 /** Limite de segurança abaixo de 1 MiB (limite de documento do Firestore). */
 const TAMANHO_MAXIMO = 900_000;
+const codificadorUtf8 = new TextEncoder();
 const LOTE = 400;
 const ESPERA_GRAVACAO_MS = 2500;
 
@@ -182,11 +183,13 @@ export const iniciarSincronizacaoFirestore = (
     if (sessao !== atual) return;
     definirStatus({ fase: 'carregando', mensagem: 'Carregando dados do Firestore...' });
     const q = query(collection(db, COLECAO_FIRESTORE), where('tenantId', '==', tenantId));
-    atual.cancelar = onSnapshot(q, snap => {
+    atual.cancelar = onSnapshot(q, { includeMetadataChanges: true }, snap => {
       if (sessao !== atual) return;
       atual.tentativas = 0;
 
       if (!atual.carregado) {
+        // O cache pode estar incompleto. Só reconcilie e libere gravações após ler o servidor.
+        if (snap.metadata.fromCache || snap.metadata.hasPendingWrites) return;
         const listas = new Map<string, Registro[]>();
         snap.docs.forEach(d => {
           const dados = d.data() as { colecao?: string; registroId?: string; json?: string };
@@ -319,7 +322,7 @@ const gravarPendente = async () => {
     desejados.forEach((d, id) => {
       const h = hash(d.json);
       if (s.conhecidos.get(id) === h) return;
-      if (d.json.length > TAMANHO_MAXIMO) { grandes.push(`${d.colecao}/${d.registroId}`); return; }
+      if (codificadorUtf8.encode(d.json).byteLength > TAMANHO_MAXIMO) { grandes.push(`${d.colecao}/${d.registroId}`); return; }
       gravar.push([id, d, h]);
     });
 
