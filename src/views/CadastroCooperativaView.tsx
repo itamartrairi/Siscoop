@@ -32,12 +32,12 @@ export const CadastroCooperativaView: React.FC<Props> = ({ onComplete }) => {
   const [cnpjConsulta, setCnpjConsulta] = useState<{ tipo: 'ok' | 'aviso' | 'erro'; mensagem: string } | null>(null);
 
   // Endereço
-  const [cep, setCep] = useState(currentTenant?.cep || '01310-100');
-  const [logradouro, setLogradouro] = useState(currentTenant?.logradouro || 'Avenida Paulista');
-  const [numero, setNumero] = useState(currentTenant?.numero || '1000');
-  const [bairro, setBairro] = useState(currentTenant?.bairro || 'Bela Vista');
-  const [cidade, setCidade] = useState(currentTenant?.cidade || 'São Paulo');
-  const [estado, setEstado] = useState(currentTenant?.estado || 'SP');
+  const [cep, setCep] = useState(currentTenant?.cep ?? '');
+  const [logradouro, setLogradouro] = useState(currentTenant?.logradouro ?? '');
+  const [numero, setNumero] = useState(currentTenant?.numero ?? '');
+  const [bairro, setBairro] = useState(currentTenant?.bairro ?? '');
+  const [cidade, setCidade] = useState(currentTenant?.cidade ?? '');
+  const [estado, setEstado] = useState(currentTenant?.estado ?? '');
 
   // Capital Social
   const [cotaParteValor, setCotaParteValor] = useState<number>(currentTenant?.cotaParteValor ?? 100.00);
@@ -58,12 +58,12 @@ export const CadastroCooperativaView: React.FC<Props> = ({ onComplete }) => {
       setTelefone(currentTenant.telefone || '(11) 3456-7890');
       setInscricaoEstadual(currentTenant.inscricaoEstadual || '');
       setInscricaoMunicipal(currentTenant.inscricaoMunicipal || '');
-      setCep(currentTenant.cep || '01310-100');
-      setLogradouro(currentTenant.logradouro || 'Avenida Paulista');
-      setNumero(currentTenant.numero || '1000');
-      setBairro(currentTenant.bairro || 'Bela Vista');
-      setCidade(currentTenant.cidade || 'São Paulo');
-      setEstado(currentTenant.estado || 'SP');
+      setCep(currentTenant.cep ?? '');
+      setLogradouro(currentTenant.logradouro ?? '');
+      setNumero(currentTenant.numero ?? '');
+      setBairro(currentTenant.bairro ?? '');
+      setCidade(currentTenant.cidade ?? '');
+      setEstado(currentTenant.estado ?? '');
       setCotaParteValor(currentTenant.cotaParteValor ?? 100.00);
       setCotaParteMinima(currentTenant.cotaParteMinima ?? 10);
       setLogoUrl(currentTenant.logoUrl || 'https://images.unsplash.com/photo-1595273670150-bd0c3c392e46?w=120&auto=format&fit=crop&q=80');
