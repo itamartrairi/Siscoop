@@ -1630,16 +1630,18 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Firestore são o que impede alguém de ler/escrever direto na API,
   // ignorando o app).
   useEffect(() => {
+    let cancelado = false;
     if (isAuthenticated && currentUser?.id && currentTenant?.id) {
       saveUserTenantMappingToFirestore(currentUser.id, currentTenant.id, currentUser.email).then(() => {
         // Publica o cadastro da cooperativa para que a equipe consiga
         // carregá-lo ao entrar de outro computador (ver montarSessaoFirebase).
-        if (auth.currentUser && ['ADMIN', 'PRESIDENTE', 'DIRETOR_FINANCEIRO'].includes(currentUser.role)) {
+        if (!cancelado && auth.currentUser?.uid === currentUser.id && ['ADMIN', 'PRESIDENTE', 'DIRETOR_FINANCEIRO'].includes(currentUser.role)) {
           saveTenantToFirestore(currentTenant as any);
         }
       });
     }
-  }, [isAuthenticated, currentUser?.id, currentTenant?.id, currentUser?.email]);
+    return () => { cancelado = true; };
+  }, [isAuthenticated, currentUser?.id, currentUser?.role, currentTenant, currentUser?.email]);
 
   // Equipe da cooperativa gravada no Firestore (tenantMembers) → lista de
   // usuários de Configurações. Assim um usuário cadastrado em um computador
