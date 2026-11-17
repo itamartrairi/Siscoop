@@ -8,7 +8,7 @@ interface Props {
 }
 
 export const CadastroCooperativaView: React.FC<Props> = ({ onComplete }) => {
-  const { currentTenant, updateTenant, addTenant, updateConfig, fetchAddressByCep, currentUser, setCurrentUser } = useCoop();
+  const { currentTenant, updateTenant, addTenant, fetchAddressByCep, currentUser, setCurrentUser } = useCoop();
 
   const [isLoading, setIsLoading] = useState(false);
   const [isSearchingCep, setIsSearchingCep] = useState(false);
@@ -229,29 +229,6 @@ export const CadastroCooperativaView: React.FC<Props> = ({ onComplete }) => {
       } else {
         addTenant(payload);
       }
-
-      updateConfig({
-        nomeCooperativa: name,
-        cooperativaNome: name,
-        razaoSocial: razaoSocial || name,
-        cnpj,
-        cooperativaCnpj: cnpj,
-        emailOficial: email,
-        telefoneOficial: telefone,
-        inscricaoEstadual: inscricaoEstadual.trim(),
-        inscricaoMunicipal: inscricaoMunicipal.trim(),
-        logoUrl,
-        cotaParteValor: Number(cotaParteValor) || 100,
-        cotaParteMinima: Number(cotaParteMinima) || 10,
-        enderecoSede: {
-          cep,
-          logradouro,
-          numero,
-          bairro,
-          cidade,
-          estado
-        }
-      });
 
       setIsLoading(false);
       setSuccessBanner(true);
@@ -634,9 +611,11 @@ export const CadastroCooperativaView: React.FC<Props> = ({ onComplete }) => {
                 </label>
                 <select
                   value={estado}
-                  onChange={e => setEstado(e.target.value)}
+                  onChange={e =>
+ setEstado(e.target.value)}
                   className="w-full px-2 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500"
                 >
+                  <option value="">Selecione</option>
                   {ufs.map(u => (
                     <option key={u} value={u}>{u}</option>
                   ))}
