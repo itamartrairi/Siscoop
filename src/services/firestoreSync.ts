@@ -49,6 +49,7 @@ const OBJETOS = new Set<string>(OBJETOS_SINCRONIZADOS);
 const TAMANHO_MAXIMO = 900_000;
 const codificadorUtf8 = new TextEncoder();
 const LOTE = 400;
+const MAX_BYTES_LOTE = 8_000_000;
 const ESPERA_GRAVACAO_MS = 2500;
 
 type Registro = Record<string, any>;
@@ -357,10 +358,20 @@ const gravarPendente = async () => {
     const operacoes: (() => void)[] = [];
     let batch = writeBatch(db);
     let noLote = 0;
-    const commits: Promise<void>[] = [];
-    const fecharLote = () => { if (noLote) { commits.push(batch.commit()); batch = writeBatch(db); noLote = 0; } };
+    let bytesNoLote = 0;
+    const commits: ReturnType<typeof writeBatch>[] = [];
+    const fecharLote = () => {
+      if (!noLote) return;
+      commits.push(batch);
+      batch = writeBatch(db);
+      noLote = 0;
+      bytesNoLote = 0;
+    };
 
     for (const [id, d, h] of gravar) {
+      const bytes = codificadorUtf8.encode(d.json).byteLength + 4096;
+      if (bytesNoLote + bytes > MAX_BYTES_LOTE) fecharLote();
+      bytesNoLote += bytes;
       batch.set(doc(db, COLECAO_FIRESTORE, id), {
         tenantId: s.tenantId,
         colecao: d.colecao,
@@ -378,7 +389,10 @@ const gravarPendente = async () => {
       if (++noLote >= LOTE) fecharLote();
     }
     fecharLote();
-    await Promise.all(commits);
+    for (const lote of commits) {
+      if (sessao !== s) return;
+      await lote.commit();
+    }
     if (sessao === s) operacoes.forEach(op => op());
     definirStatus({
       fase: grandes.length ? 'erro' : 'sincronizado',
