@@ -444,7 +444,7 @@ export const PortalEscolaView: React.FC = () => {
       </div>
 
       {abaAtiva === 'proposta' && (
-        <PropostaCompraEscola escola={{ id: escolaAtual.id, nomeEscola: escolaAtual.nomeEscola, email: escolaAtual.email }} />
+        <PropostaCompraEscola tenantId={usarRemoto ? remoto.dados?.tenantId : undefined} escola={{ id: escolaAtual.id, nomeEscola: escolaAtual.nomeEscola, email: escolaAtual.email }} />
       )}
 
       {abaAtiva === 'pedidos' && <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-xs space-y-4">
