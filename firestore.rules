@@ -148,6 +148,20 @@ service cloud.firestore {
       allow delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
     }
 
+    match /portalEscolas/{portalId}/propostas/{propostaId} {
+      function escolaAutorizada() {
+        return isEmailVerified() && request.auth.token.email_verified == true &&
+          get(/databases/$(database)/documents/portalEscolas/$(portalId)).data.escolaEmail == request.auth.token.email.lower();
+      }
+      allow read: if escolaAutorizada() || isAdmin() ||
+        belongsToTenant(get(/databases/$(database)/documents/portalEscolas/$(portalId)).data.tenantId);
+      allow create: if escolaAutorizada() &&
+        request.resource.data.keys().hasOnly(['nome', 'titulo', 'enviadoEm']) &&
+        request.resource.data.nome is string && request.resource.data.nome.size() <= 512 &&
+        request.resource.data.titulo is string && request.resource.data.titulo.size() <= 512 &&
+        request.resource.data.enviadoEm is string && request.resource.data.enviadoEm.size() == 24;
+    }
+
     // Comprovantes de entrega registrados pela escola
     match /portalEscolasComprovantes/{docId} {
       allow create: if isSignedIn() && request.auth.token.email_verified == true &&
