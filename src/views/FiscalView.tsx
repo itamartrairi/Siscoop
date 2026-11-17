@@ -1258,13 +1258,25 @@ export const FiscalView: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-semibold">Arquivo do certificado A1
-                  <input type="file" accept=".pfx,.p12" disabled={!canWrite || !!operacaoFiscal} onChange={e => setArquivoFiscal(e.target.files?.[0] || null)} className="block w-full mt-1 text-xs" />
+                  <input type="file" accept=".pfx,.p12" disabled={!canWrite || !!operacaoFiscal} onChange={e => {
+                    const arquivo = e.currentTarget.files?.[0];
+                    setSenhaFiscal('');
+                    setResultadoFiscal('');
+                    if (arquivo && (!/\.(pfx|p12)$/i.test(arquivo.name) || !arquivo.size)) {
+                      e.currentTarget.value = '';
+                      setArquivoFiscal(null);
+                      setResultadoFiscal('Selecione um arquivo A1 válido (.pfx ou .p12).');
+                      return;
+                    }
+                    setArquivoFiscal(arquivo || null);
+                  }} className="block w-full mt-1 text-xs" />
                 </label>
               </div>
+              {arquivoFiscal && <p className="text-xs text-emerald-700">Arquivo anexado: {arquivoFiscal.name}</p>}
               <label className="block text-xs font-semibold">Senha do certificado
-                <input type="password" autoComplete="off" value={senhaFiscal} onChange={e => setSenhaFiscal(e.target.value)} disabled={!canWrite || !!operacaoFiscal} className="block w-full px-3 py-2 border rounded-lg mt-1" />
+                <input type="password" autoComplete="off" value={senhaFiscal} onChange={e => setSenhaFiscal(e.target.value)} disabled={!canWrite || !!operacaoFiscal || !arquivoFiscal} className="block w-full px-3 py-2 border rounded-lg mt-1" />
               </label>
-              <p className="text-xs text-slate-600">O arquivo e a senha são enviados à ACBr no ambiente selecionado. A senha é limpa após o envio.</p>
+              <p className="text-xs text-slate-600">{!arquivoFiscal ? 'Anexe o certificado A1 para liberar o campo de senha.' : !senhaFiscal ? 'Digite a senha do certificado para liberar o envio.' : 'O arquivo e a senha serão enviados à ACBr no ambiente selecionado.'}</p>
               <div className="flex flex-wrap gap-2">
                 <button type="button" disabled={!canWrite || !!operacaoFiscal || !arquivoFiscal || !senhaFiscal} onClick={() => void executarIntegracaoFiscal('upload')} className="px-3 py-2 rounded-lg bg-emerald-700 text-white text-xs font-bold disabled:opacity-50">Enviar certificado à ACBr</button>
                 <button type="button" disabled={!canWrite || !!operacaoFiscal} onClick={() => void executarIntegracaoFiscal('status')} className="px-3 py-2 rounded-lg border text-xs font-bold disabled:opacity-50">Testar conexão</button>
