@@ -402,6 +402,15 @@ export async function consultarStatusFiscal(config: SefazCeConfig): Promise<{ co
   const resposta = await fetch(`${urlOperacaoFiscal(config)}/nfe/sefaz/status?cpf_cnpj=${cnpj}`, {
     headers: { Authorization: `Bearer ${token}` }
   });
-  if (!resposta.ok) throw new Error(`Não foi possível consultar a SEFAZ pela ACBr (HTTP ${resposta.status}).`);
+  if (!resposta.ok) {
+    const corpo = await resposta.json().catch(() => null);
+    const erro = corpo?.error;
+    const detalhe = [erro?.message, corpo?.message, erro?.code, typeof erro === 'string' ? erro : null]
+      .find(valor => typeof valor === 'string' && valor.trim());
+    const contexto = detalhe
+      ? ` ${detalhe.trim().slice(0, 300)}`
+      : ' Confira se o emitente e seu certificado estão cadastrados no ambiente selecionado.';
+    throw new Error(`Não foi possível consultar a SEFAZ pela ACBr (HTTP ${resposta.status}).${contexto}`);
+  }
   return resposta.json();
 }
