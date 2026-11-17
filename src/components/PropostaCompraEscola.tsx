@@ -1,4 +1,6 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { dbPortal } from '../services/portalEscolaRemoto';
 import { Upload, FileText, Loader2, CheckCircle2, AlertTriangle, X } from 'lucide-react';
 
 /**
@@ -85,13 +87,29 @@ async function enviarParaDrive(dados: {
   return { nome: json.nome || dados.arquivo.name };
 }
 
-export const PropostaCompraEscola: React.FC<{ escola: EscolaInfo }> = ({ escola }) => {
+export const PropostaCompraEscola: React.FC<{ escola: EscolaInfo; tenantId?: string }> = ({ escola, tenantId }) => {
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [titulo, setTitulo] = useState('');
   const [observacao, setObservacao] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [mensagem, setMensagem] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
   const [historico, setHistorico] = useState<PropostaEnviada[]>(() => lerHistorico(escola));
+  const [erroNuvem, setErroNuvem] = useState(false);
+  const portalId = tenantId ? `${tenantId}__${escola.id}` : '';
+  useEffect(() => {
+    setHistorico(lerHistorico(escola));
+    setErroNuvem(false);
+    if (!portalId) return;
+    const ref = collection(dbPortal, 'portalEscolas', portalId, 'propostas');
+    return onSnapshot(ref, snap => {
+      const remoto = snap.docs.map(item => item.data() as PropostaEnviada);
+      const registros = [...remoto, ...lerHistorico(escola)];
+      const unicos = new Map(registros.map(item => [item.enviadoEm + '|' + item.nome, item]));
+      setHistorico([...unicos.values()].sort((a, b) => b.enviadoEm.localeCompare(a.enviadoEm)));
+      setErroNuvem(false);
+    }, () => setErroNuvem(true));
+  }, [portalId, escola.id, escola.email]);
+
   const inputRef = useRef<HTMLInputElement>(null);
 
   const selecionarArquivo = (f: File | undefined | null) => {
@@ -131,8 +149,17 @@ export const PropostaCompraEscola: React.FC<{ escola: EscolaInfo }> = ({ escola 
       const lista = [novo, ...historico];
       setHistorico(lista);
       salvarHistorico(escola, lista);
-      setMensagem({ tipo: 'ok', texto: 'Proposta enviada para a cooperativa com sucesso.' });
       limpar();
+      if (portalId) {
+        try {
+          const ref = doc(collection(dbPortal, 'portalEscolas', portalId, 'propostas'));
+          await setDoc(ref, { ...novo });
+        } catch {
+          setMensagem({ tipo: 'erro', texto: 'PDF enviado ao Drive. O histórico ficou salvo neste navegador porque a gravação na nuvem falhou.' });
+          return;
+        }
+      }
+      setMensagem({ tipo: 'ok', texto: 'Proposta enviada para a cooperativa com sucesso.' });
     } catch (err: any) {
       setMensagem({ tipo: 'erro', texto: err?.message || 'Falha ao enviar a proposta. Tente novamente.' });
     } finally {
@@ -237,6 +264,7 @@ export const PropostaCompraEscola: React.FC<{ escola: EscolaInfo }> = ({ escola 
         </form>
       )}
 
+      {erroNuvem && <p role="status">Não foi possível carregar o histórico de propostas da nuvem.</p>}
       {mensagem && (
         <div
           className={`p-3 rounded-xl text-xs flex gap-2 ${
