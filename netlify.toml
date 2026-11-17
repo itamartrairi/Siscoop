@@ -57,6 +57,36 @@
 #   status = 200
 #   force = true
 
+[[redirects]]
+  from = "/api/acbr/token"
+  to = "https://auth.acbr.api.br/realms/ACBrAPI/protocol/openid-connect/token"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/acbr/homologacao/empresas/:cnpj/certificado/upload"
+  to = "https://hom.acbr.api.br/empresas/:cnpj/certificado/upload"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/acbr/homologacao/nfe/sefaz/status"
+  to = "https://hom.acbr.api.br/nfe/sefaz/status"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/acbr/producao/empresas/:cnpj/certificado/upload"
+  to = "https://prod.acbr.api.br/empresas/:cnpj/certificado/upload"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/acbr/producao/nfe/sefaz/status"
+  to = "https://prod.acbr.api.br/nfe/sefaz/status"
+  status = 200
+  force = true
+
 # Fallback de SPA — precisa vir por último.
 [[redirects]]
   from = "/*"
