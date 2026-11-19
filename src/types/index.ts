@@ -314,6 +314,12 @@ export interface AuditoriaLog {
   depoisObj?: string;
 }
 
+export interface OpcaoCatalogoProduto {
+  codigo: string;
+  nome: string;
+  inativa?: boolean;
+}
+
 export interface SistemaConfig {
   nomeCooperativa: string;
   cooperativaNome?: string;
@@ -344,6 +350,10 @@ export interface SistemaConfig {
   themeMode: 'light' | 'dark';
   /** Configuração tributária da revenda (Compras → Revendas). */
   tributacaoRevenda?: ConfigTributariaRevenda;
+  opcoesCatalogoProduto?: {
+    categorias?: OpcaoCatalogoProduto[];
+    unidades?: OpcaoCatalogoProduto[];
+  };
 }
 
 export interface SystemNotification {
@@ -450,8 +460,8 @@ export interface ProdutoAgro {
   tenantId: string;
   codigo: string;
   nome: string;
-  categoria: 'HORTIFRUTI' | 'GRAOS' | 'LATICINIOS' | 'PROCESSADOS' | 'CARNES' | 'OUTROS';
-  unidadeMedida: 'KG' | 'UN' | 'MACO' | 'LITRO' | 'CAIXA' | 'SACAS';
+  categoria: string;
+  unidadeMedida: string;
   precoReferencia: number;
   codigoNcm?: string;
   // Código do produto conforme a tabela de Grupos/Produtos da CONAB
