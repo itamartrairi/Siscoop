@@ -672,11 +672,10 @@ export const CooperadosView: React.FC = () => {
       return;
     }
 
-    if (editingId) {
-      updateCooperado(editingId, formData);
-    } else {
-      addCooperado(formData);
-    }
+    const salvo = editingId
+      ? updateCooperado(editingId, formData)
+      : addCooperado(formData);
+    if (!salvo) { setActiveTab('geral'); return; }
 
     setIsFormOpen(false);
   };
@@ -1082,6 +1081,7 @@ export const CooperadosView: React.FC = () => {
                     <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">CPF *</label>
                     <input
                       type="text"
+                      inputMode="numeric"
                       required
                       placeholder="000.000.000-00"
                       value={formData.cpf}
