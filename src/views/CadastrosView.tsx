@@ -528,11 +528,11 @@ export const CadastrosView: React.FC = () => {
       alert('Por favor, informe Nome e CPF do cooperado.');
       return;
     }
-    if (editingCooperado) {
-      updateCooperado(editingCooperado.id, cooperadoForm as any);
-    } else {
-      addCooperado(cooperadoForm as any);
-    }
+    const salvo = editingCooperado
+      ? updateCooperado(editingCooperado.id, cooperadoForm as any)
+      : addCooperado(cooperadoForm as any);
+    if (!salvo) return;
+
     setShowCooperadoModal(false);
   };
 
@@ -2389,6 +2389,7 @@ export const CadastrosView: React.FC = () => {
                   <label className="block text-slate-700 font-bold mb-1">CPF *</label>
                   <input
                     type="text"
+                    inputMode="numeric"
                     required
                     value={cooperadoForm.cpf}
                     onChange={e => setCooperadoForm({ ...cooperadoForm, cpf: e.target.value })}
