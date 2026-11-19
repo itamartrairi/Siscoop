@@ -3,6 +3,7 @@ import { Plus, X, Store, MessageCircle, BadgeDollarSign, Ban, Trash2, Eye, Landm
 import { useCoop } from '../context/CoopContext';
 import { VendaRevenda, ItemVendaRevenda, FormaPagamentoComercial, TributacaoIcmsItem, ImpostosVenda, TipoOperacaoRevenda } from '../types';
 import { DataGrid, GridStatus } from './ui/DataGrid';
+import { nomeContaBancaria, SelectContaBancaria } from './ContasBancariasTab';
 import { abrirLinkExterno, montarLinkWhatsApp, getTelefoneContato } from '../utils/whatsappHelpers';
 import { mensagemCobranca, mensagemComprovanteVenda } from '../utils/mensagensWhatsApp';
 import {
@@ -28,6 +29,7 @@ interface FormVenda {
   clienteId: string;
   desconto: number;
   formaPagamento: FormaPagamentoComercial;
+  contaBancariaId: string;
   numeroParcelas: number;
   intervaloDias: number;
   primeiroVencimento: string;
@@ -42,6 +44,7 @@ const novoForm = (): FormVenda => ({
   clienteId: '',
   desconto: 0,
   formaPagamento: 'PIX',
+  contaBancariaId: '',
   numeroParcelas: 1,
   intervaloDias: 30,
   primeiroVencimento: hojeISO(),
@@ -54,7 +57,7 @@ const itemVazio = (): ItemVendaRevenda => ({ estoqueItemId: '', descricao: '', u
 export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }> = ({ canWrite, onBlocked }) => {
   const {
     vendasRevenda, addVendaRevenda, cancelarVendaRevenda, deleteVendaRevenda,
-    clientes, estoque, fornecedores, contasPagarReceber, currentTenant, config,
+    clientes, estoque, fornecedores, contasPagarReceber, contasBancarias, currentTenant, config,
   } = useCoop();
   const cfgTrib = configTributaria(config?.tributacaoRevenda);
   const [showConfigTrib, setShowConfigTrib] = useState(false);
@@ -71,6 +74,8 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
 
   const cooperativa = currentTenant?.name || currentTenant?.razaoSocial || 'Cooperativa';
   const clientesAtivos = clientes.filter(c => c.ativo !== false);
+  const contasAtivas = contasBancarias.filter(conta => conta.ativa !== false);
+  const contaRecebimento = contasAtivas.find(conta => conta.id === form.contaBancariaId);
   // Produtos ativos; os marcados "para revenda" (Compras → Produtos & Insumos) aparecem primeiro.
   const produtosVenda = estoque
     .filter(p => p.ativo !== false)
@@ -106,7 +111,8 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
 
   const abrirNova = () => {
     if (!canWrite) { onBlocked(); return; }
-    setForm(novoForm());
+    const contaPadrao = contasAtivas.find(conta => conta.padrao);
+    setForm({ ...novoForm(), contaBancariaId: contaPadrao?.id || (contasAtivas.length === 1 ? contasAtivas[0].id : '') });
     setConfirmarFinanceiro(false);
     setItens([itemVazio()]);
     setErro('');
@@ -154,6 +160,10 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
     if (!validos.length) { setErro('Adicione ao menos um produto com quantidade.'); return; }
     if (venda && totalVenda <= 0) { setErro('O total da venda deve ser maior que zero.'); return; }
     if (venda && registrarFinanceiro === undefined) { setConfirmarFinanceiro(true); return; }
+    if (venda && registrarFinanceiro && !contaRecebimento) {
+      setErro('Selecione uma conta bancária ativa para receber a venda.');
+      return;
+    }
     setConfirmarFinanceiro(false);
     const id = addVendaRevenda({
       numeroVenda: form.numeroVenda.trim() || `VD-${Date.now().toString().slice(-6)}`,
@@ -171,6 +181,7 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
       observacoes: form.observacoes,
       ...(venda ? { impostos: calcularImpostosVenda(validos, Number(form.desconto) || 0, ufCliente, clienteContribuinte, cfgTrib) } : {}),
       registrarFinanceiro: venda && registrarFinanceiro === true,
+      contaBancariaId: venda && registrarFinanceiro === true ? contaRecebimento?.id : undefined,
       quitarPrimeiraParcela: venda && registrarFinanceiro === true && form.quitarPrimeiraParcela,
     });
     if (id) setShowModal(false);
@@ -283,7 +294,7 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
               <div className="font-bold text-slate-700 mb-1">Parcelas no Contas a Receber</div>
               {parcelasDaVenda(detalhe).sort((a, b) => a.dataVencimento.localeCompare(b.dataVencimento)).map(c => (
                 <div key={c.id} className="flex justify-between border-t border-slate-100 py-1">
-                  <span>{c.descricao}</span>
+                  <span>{c.descricao}{c.contaBancariaId && <span className="block text-slate-500">{nomeContaBancaria(contasBancarias, c.contaBancariaId)}</span>}</span>
                   <span>{dataBR(c.dataVencimento)} · {formatarMoeda(c.valor)} · <strong className={c.status === 'PAGO' ? 'text-emerald-700' : c.status === 'CANCELADO' ? 'text-slate-400' : 'text-amber-600'}>{c.status === 'PAGO' ? 'Recebido' : c.status === 'CANCELADO' ? 'Cancelado' : 'Em aberto'}</strong></span>
                 </div>
               ))}
@@ -409,6 +420,18 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
                 <div><label className={labelCls}>Intervalo (dias)</label><input type="number" min="0" disabled={form.numeroParcelas === 1} value={form.intervaloDias} onChange={e => setForm({ ...form, intervaloDias: Number(e.target.value) || 0 })} className={inputCls} /></div>
               </div>
 
+              <label className="block font-bold text-slate-700">
+                Conta bancária para recebimento
+                <SelectContaBancaria
+                  value={contaRecebimento?.id || ''}
+                  onChange={id => { setForm(prev => ({ ...prev, contaBancariaId: id })); setErro(''); }}
+                  contas={contasAtivas}
+                  vazioLabel="Selecione a conta"
+                  className={`${inputCls} mt-1 bg-white font-normal`}
+                />
+                {!contasAtivas.length && <span className="mt-1 block font-normal text-amber-700">Para lançar no financeiro, cadastre uma conta ativa em Financeiro → Contas Bancárias.</span>}
+              </label>
+
               <label className="flex items-center gap-2 font-bold text-slate-700">
                 <input type="checkbox" checked={form.quitarPrimeiraParcela} onChange={e => setForm({ ...form, quitarPrimeiraParcela: e.target.checked })} />
                 {form.numeroParcelas === 1 ? 'Valor já recebido (lança como pago)' : '1ª parcela já recebida (entrada)'}
@@ -437,6 +460,7 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
                   <p>{form.quitarPrimeiraParcela
                     ? 'O valor marcado como recebido entra no Caixa. Qualquer parcela restante fica em aberto.'
                     : 'As parcelas ficarão em aberto no Contas a Receber. O Caixa será atualizado quando o pagamento for registrado.'}</p>
+                  {contaRecebimento && <p>Conta de recebimento <strong>{nomeContaBancaria(contasBancarias, contaRecebimento.id)}</strong></p>}
                   <div className="flex flex-wrap justify-end gap-2">
                     <button type="button" onClick={() => setConfirmarFinanceiro(false)} className="rounded-lg border px-3 py-2">Voltar</button>
                     <button type="button" onClick={e => { if (e.currentTarget.form?.reportValidity()) salvar(false); }} className="rounded-lg border px-3 py-2 font-bold">Salvar sem financeiro</button>
