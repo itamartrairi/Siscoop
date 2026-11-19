@@ -110,18 +110,14 @@ export const AluguelMaquinasView: React.FC = () => {
 
   const openNewLocacao = () => {
     if (!canWrite) return blockWriteAction();
-    const maqId = maquinas.find(m => m.status === 'DISPONIVEL')?.id || '';
-    const coopId = cooperados[0]?.id || '';
-    const valDiaria = maquinas.find(m => m.id === maqId)?.valorDiaria || 0;
-    
     setLocacaoForm({
-      maquinaId: maqId,
-      cooperadoId: coopId,
+      maquinaId: '',
+      cooperadoId: '',
       dataInicio: new Date().toISOString().split('T')[0],
       dataFim: new Date(Date.now() + 86400000).toISOString().split('T')[0],
       tipoCobranca: 'DIARIA',
       quantidadeCobranca: 1,
-      valorTotal: valDiaria,
+      valorTotal: 0,
       observacoes: ''
     });
     setShowLocacaoModal(true);
