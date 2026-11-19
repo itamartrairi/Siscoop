@@ -2863,7 +2863,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           ],
           dapCaf: cleanRow.dapCaf || cleanRow['DAP/CAF'] || cleanRow['DAP'] || existing?.dapCaf || 'SIM',
-          cafDapValidade: (cleanRow.cafDapValidade || cleanRow['Validade CAF/DAP'] || cleanRow['Validade CAF'] || cleanRow['Validade DAP'] || existing?.cafDapValidade || '2028-12-31').toString(),
+          cafDapValidade: (cleanRow.cafDapValidade || cleanRow['Validade CAF/DAP'] || cleanRow['Validade CAF'] || cleanRow['Validade DAP'] || existing?.cafDapValidade || '').toString(),
           aptoPaa: cleanRow.aptoPaa !== undefined 
             ? Boolean(cleanRow.aptoPaa) 
             : (cleanRow['Apto PAA'] === 'SIM' || cleanRow['Apto PAA'] === 'Sim' || cleanRow['Apto PAA'] === 'sim' || cleanRow['Apto PAA'] === true || (existing?.aptoPaa ?? true)),
