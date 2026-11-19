@@ -750,7 +750,7 @@ interface CoopContextType {
   updateCliente: (id: string, c: Partial<Cliente>) => void;
   deleteCliente: (id: string) => void;
   vendasRevenda: VendaRevenda[];
-  addVendaRevenda: (v: Omit<VendaRevenda, 'id' | 'tenantId' | 'status' | 'contasReceberIds'> & { quitarPrimeiraParcela?: boolean; registrarFinanceiro?: boolean }) => string;
+  addVendaRevenda: (v: Omit<VendaRevenda, 'id' | 'tenantId' | 'status' | 'contasReceberIds'> & { quitarPrimeiraParcela?: boolean; registrarFinanceiro?: boolean; contaBancariaId?: string }) => string;
   cancelarVendaRevenda: (id: string) => void;
   deleteVendaRevenda: (id: string) => void;
   // Agenda & Atividades
@@ -4635,6 +4635,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         status: quitar ? ('PAGO' as const) : ('PENDENTE' as const),
         dataPagamento: quitar ? hoje : undefined,
         formaPagamento: p.formaPagamento,
+        contaBancariaId: p.contaBancariaId,
         centroCusto: p.centroCusto
       }));
       if (id) ids.push(id);
@@ -4706,11 +4707,18 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // contas a receber (parcelas) no Financeiro e lançamento contábil da receita.
   // ---------------------------------------------------------------------------
   const addVendaRevenda = (
-    vData: Omit<VendaRevenda, 'id' | 'tenantId' | 'status' | 'contasReceberIds'> & { quitarPrimeiraParcela?: boolean; registrarFinanceiro?: boolean }
+    vData: Omit<VendaRevenda, 'id' | 'tenantId' | 'status' | 'contasReceberIds'> & { quitarPrimeiraParcela?: boolean; registrarFinanceiro?: boolean; contaBancariaId?: string }
   ): string => {
-    const { quitarPrimeiraParcela, registrarFinanceiro, ...dados } = vData;
+    const { quitarPrimeiraParcela, registrarFinanceiro, contaBancariaId, ...dados } = vData;
     const tipoOperacao = dados.tipoOperacao ?? 'VENDA';
     const venda = tipoOperacao === 'VENDA';
+    const gerarFinanceiro = venda && registrarFinanceiro === true;
+    if (gerarFinanceiro && !contasBancarias.some(conta =>
+      conta.id === contaBancariaId && conta.ativa !== false && pertenceAoTenant(conta, currentTenant.id)
+    )) {
+      alert('Selecione uma conta bancária ativa desta cooperativa para receber a venda.');
+      return '';
+    }
     if (venda && (!dados.clienteId || !Number.isFinite(dados.valorTotal) || dados.valorTotal <= 0)) return '';
     if (!dados.itens.length || dados.itens.some(i => !Number.isFinite(Number(i.quantidade)) || Number(i.quantidade) <= 0)) return '';
     const porItem = new Map<string, number>();
@@ -4739,7 +4747,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       usuarioResponsavel: currentUser?.name || 'Sistema'
     }));
 
-    const contasReceberIds = venda && registrarFinanceiro === true ? lancarParcelasFinanceiras({
+    const contasReceberIds = gerarFinanceiro ? lancarParcelasFinanceiras({
       tipo: 'RECEBER',
       descricaoBase: `Venda ${dados.numeroVenda} - ${dados.clienteNome}`,
       pessoaNome: dados.clienteNome,
@@ -4750,6 +4758,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       primeiroVencimento: dados.primeiroVencimento,
       intervaloDias: dados.intervaloDias,
       formaPagamento: dados.formaPagamento,
+      contaBancariaId,
       dataEmissao: dados.dataVenda,
       centroCusto: 'Revenda de Produtos',
       quitarPrimeiraParcela
