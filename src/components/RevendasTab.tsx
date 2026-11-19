@@ -309,7 +309,7 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
 
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-[80.5rem] w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-slate-100 my-8">
+          <div className="bg-white rounded-3xl max-w-[96.6rem] w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-slate-100 my-8">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <h2 className="text-xl font-black text-slate-900 flex items-center gap-2"><Store className="w-5 h-5 text-emerald-600" /> Nova Operação (Revenda)</h2>
               <button onClick={() => setShowModal(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl"><X className="w-5 h-5" /></button>
@@ -420,25 +420,32 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
                 <div><label className={labelCls}>Intervalo (dias)</label><input type="number" min="0" disabled={form.numeroParcelas === 1} value={form.intervaloDias} onChange={e => setForm({ ...form, intervaloDias: Number(e.target.value) || 0 })} className={inputCls} /></div>
               </div>
 
-              <label className="block font-bold text-slate-700">
-                Conta bancária para recebimento
-                <SelectContaBancaria
-                  value={contaRecebimento?.id || ''}
-                  onChange={id => { setForm(prev => ({ ...prev, contaBancariaId: id })); setErro(''); }}
-                  contas={contasAtivas}
-                  vazioLabel="Selecione a conta"
-                  className={`${inputCls} mt-1 bg-white font-normal`}
-                />
-                {!contasAtivas.length && <span className="mt-1 block font-normal text-amber-700">Para lançar no financeiro, cadastre uma conta ativa em Financeiro → Contas Bancárias.</span>}
-              </label>
-
-              <label className="flex items-center gap-2 font-bold text-slate-700">
-                <input type="checkbox" checked={form.quitarPrimeiraParcela} onChange={e => setForm({ ...form, quitarPrimeiraParcela: e.target.checked })} />
-                {form.numeroParcelas === 1 ? 'Valor já recebido (lança como pago)' : '1ª parcela já recebida (entrada)'}
-              </label>
               </>}
 
-              <div><label className={labelCls}>Observações</label><input value={form.observacoes} onChange={e => setForm({ ...form, observacoes: e.target.value })} className={inputCls} /></div>
+              <div className={venda ? 'grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(12rem,0.65fr)_minmax(0,1.3fr)]' : ''}>
+                {venda && <>
+                  <label className="block min-w-0 font-bold text-slate-700">
+                    Conta bancária para recebimento
+                    <SelectContaBancaria
+                      value={contaRecebimento?.id || ''}
+                      onChange={id => { setForm(prev => ({ ...prev, contaBancariaId: id })); setErro(''); }}
+                      contas={contasAtivas}
+                      vazioLabel="Selecione a conta"
+                      className={`${inputCls} mt-1 bg-white font-normal`}
+                    />
+                    {!contasAtivas.length && <span className="mt-1 block font-normal text-amber-700">Para lançar no financeiro, cadastre uma conta ativa em Financeiro → Contas Bancárias.</span>}
+                  </label>
+
+                  <label className="flex min-h-10 items-center gap-2 font-bold text-slate-700 lg:mt-5">
+                    <input className="shrink-0" type="checkbox" checked={form.quitarPrimeiraParcela} onChange={e => setForm({ ...form, quitarPrimeiraParcela: e.target.checked })} />
+                    {form.numeroParcelas === 1 ? 'Valor já recebido (lança como pago)' : '1ª parcela já recebida (entrada)'}
+                  </label>
+                </>}
+                <label className="block min-w-0 font-bold text-slate-700">
+                  Observações
+                  <input value={form.observacoes} onChange={e => setForm({ ...form, observacoes: e.target.value })} className={`${inputCls} mt-1 font-normal`} />
+                </label>
+              </div>
 
               {venda && <div className="bg-emerald-50 p-3.5 rounded-xl border border-emerald-200 text-[11px] text-emerald-800 space-y-1">
                 <div className="flex justify-between font-black text-sm"><span>Total da venda</span><span>{formatarMoeda(totalVenda)}</span></div>
