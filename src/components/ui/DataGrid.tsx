@@ -118,7 +118,7 @@ export function DataGrid<T>({
   const [panelOpen, setPanelOpen] = useState(true);
 
   const filtered = useMemo(() => {
-    const active = Object.entries(filters).filter(([, v]) => v.trim() !== '');
+    const active = Object.entries<string>(filters).filter(([, v]) => v.trim() !== '');
     let out = rows;
     if (active.length) {
       out = rows.filter(row =>
