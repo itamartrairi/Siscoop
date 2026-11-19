@@ -1,3 +1,4 @@
+import { cpfValido, somenteDigitos } from '../utils/documentos';
 import { encontrarVinculos, mensagemExclusaoBloqueada, type EntidadeVinculavel, type ReferenciaPorValor } from '../services/integridadeReferencial';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
@@ -540,8 +541,8 @@ interface CoopContextType {
   addAuditLog: (modulo: AuditoriaLog['modulo'], acao: AuditoriaLog['acao'], detalhes: string, antesObj?: string, depoisObj?: string) => void;
 
   // Cooperado CRUD
-  addCooperado: (cooperadoData: Omit<Cooperado, 'id' | 'tenantId' | 'historico' | 'capitalSubscrito' | 'capitalIntegralizado'>) => Cooperado;
-  updateCooperado: (id: string, updatedData: Partial<Cooperado>) => void;
+  addCooperado: (cooperadoData: Omit<Cooperado, 'id' | 'tenantId' | 'historico' | 'capitalSubscrito' | 'capitalIntegralizado'>) => Cooperado | null;
+  updateCooperado: (id: string, updatedData: Partial<Cooperado>) => boolean;
   deleteCooperado: (id: string) => void;
   deleteAllCooperados: () => number;
   restaurarCooperadosBaseCompleta: () => void;
@@ -2568,23 +2569,41 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const validarCpfCooperado = (valor: string, id?: string) => {
+    const cpf = somenteDigitos(valor);
+    if (!cpf) {
+      alert('Informe o CPF do cooperado. O preenchimento é obrigatório.');
+      return null;
+    }
+    if (!/^[\d.\s-]+$/.test(valor) || !cpfValido(cpf)) {
+      alert('Informe um CPF válido.');
+      return null;
+    }
+    if (cooperados.some(c => c.id !== id && pertenceAoTenant(c, currentTenant.id) && somenteDigitos(c.cpf) === cpf)) {
+      alert('Já existe um cooperado cadastrado com este CPF.');
+      return null;
+    }
+    return cpf;
+  };
+
   // Cooperado CRUD
   const addCooperado = (cooperadoData: Omit<Cooperado, 'id' | 'tenantId' | 'historico' | 'capitalSubscrito' | 'capitalIntegralizado'>) => {
-    const cpf = chaveUnica(cooperadoData.cpf);
+    const cpf = validarCpfCooperado(cooperadoData.cpf);
+    if (!cpf) return null;
     const matricula = chaveUnica(cooperadoData.matricula);
     const nomeData = `${chaveUnica(cooperadoData.nome)}|${chaveUnica(cooperadoData.dataNascimento)}`;
     const duplicado = cooperados.some(c => pertenceAoTenant(c, currentTenant.id) && (
-      (cpf && chaveUnica(c.cpf) === cpf) ||
       (matricula && chaveUnica(c.matricula) === matricula) ||
       (nomeData !== '|' && `${chaveUnica(c.nome)}|${chaveUnica(c.dataNascimento)}` === nomeData)
     ));
     if (duplicado) {
-      alert('Cadastro não realizado: já existe um cooperado com o mesmo CPF, matrícula ou combinação de nome e data de nascimento.');
-      return null as any;
+      alert('Cadastro não realizado: já existe um cooperado com a mesma matrícula ou combinação de nome e data de nascimento.');
+      return null;
     }
     const newId = `cop-${Date.now()}`;
     const rawCooperado: Cooperado = {
       ...cooperadoData,
+      cpf,
       id: newId,
       tenantId: currentTenant.id,
       capitalSubscrito: config.cotaParteValor * config.cotaParteMinima,
@@ -2600,7 +2619,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ]
     };
 
-    const newCooperado = sanitizeCooperado(rawCooperado);
+    const newCooperado = { ...sanitizeCooperado(rawCooperado), cpf };
 
     setCooperados(prev => {
       const nextList = [newCooperado, ...prev];
@@ -2614,11 +2633,15 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 
   const updateCooperado = (id: string, updatedData: Partial<Cooperado>) => {
+    const atual = cooperados.find(c => c.id === id && pertenceAoTenant(c, currentTenant.id));
+    if (!atual) return false;
+    const cpf = updatedData.cpf === undefined ? undefined : validarCpfCooperado(updatedData.cpf, id);
+    if (cpf === null) return false;
     setCooperados(prev => {
       const nextList = prev.map(c => {
         if (c.id === id) {
           const oldState = JSON.stringify({ nome: c.nome, situacao: c.situacao, telefone: c.telefone });
-          const merged = sanitizeCooperado({ ...c, ...updatedData });
+          const merged = { ...sanitizeCooperado({ ...c, ...updatedData }), cpf: cpf ?? c.cpf };
           const newState = JSON.stringify(merged);
           
           const updatedHistorico = [
@@ -2644,6 +2667,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       syncCooperadosWithProdutores(nextList);
       return nextList;
     });
+    return true;
   };
 
   const deleteCooperado = (id: string) => {
@@ -2784,108 +2808,117 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, totalInseridos: 0, totalAtualizados: 0, message: 'Nenhum registro válido encontrado na planilha.' };
     }
 
+    const mapByCpf = new Map<string, Cooperado>();
+    const mapByMatricula = new Map<string, Cooperado>();
+    cooperados.filter(c => pertenceAoTenant(c, currentTenant.id)).forEach(c => {
+      const cpf = somenteDigitos(c.cpf);
+      if (cpfValido(cpf)) mapByCpf.set(cpf, c);
+      if (c.matricula) mapByMatricula.set(c.matricula.trim().toLowerCase(), c);
+    });
+
+    const linhas = rows.map((row, idx) => ({
+      row,
+      cpf: somenteDigitos(row?.cpf || row?.CPF || row?.['CPF/CNPJ']),
+      numero: idx + 1,
+    }));
+    const cpfsPlanilha = new Set<string>();
+    const matriculasPlanilha = new Set<string>();
+    const rejeitar = (message: string) => ({ success: false, totalInseridos: 0, totalAtualizados: 0, message });
+    for (const { row, cpf, numero } of linhas) {
+      if (!cpfValido(cpf)) return rejeitar(`Registro ${numero}: informe um CPF válido na planilha.`);
+      if (cpfsPlanilha.has(cpf)) return rejeitar(`Registro ${numero}: CPF repetido na planilha.`);
+      cpfsPlanilha.add(cpf);
+      const matricula = String(row.matricula || row['Matrícula'] || row['Matricula'] || '').trim().toLowerCase();
+      if (!matricula) continue;
+      if (matriculasPlanilha.has(matricula)) return rejeitar(`Registro ${numero}: matrícula repetida na planilha.`);
+      matriculasPlanilha.add(matricula);
+      const existente = mapByMatricula.get(matricula);
+      if (existente && ((cpfValido(existente.cpf) && somenteDigitos(existente.cpf) !== cpf) ||
+        (mapByCpf.has(cpf) && mapByCpf.get(cpf)?.id !== existente.id))) {
+        return rejeitar(`Registro ${numero}: o CPF e a matrícula pertencem a cadastros diferentes.`);
+      }
+    }
+
     let totalInseridos = 0;
     let totalAtualizados = 0;
+    const newArr = [...cooperados];
+    linhas.forEach(({ row, cpf, numero }) => {
+      const cleanRow = sanitizeCooperado(row);
+      const rawNome = cleanRow.nome.trim();
+      const rawMatricula = String(row.matricula || row['Matrícula'] || row['Matricula'] || mapByCpf.get(cpf)?.matricula || `IMP-${Date.now()}-${numero}`).trim();
+      const existing = mapByCpf.get(cpf) || mapByMatricula.get(rawMatricula.toLowerCase());
 
-    setCooperados(prev => {
-      const mapByCpf = new Map<string, Cooperado>();
-      const mapByMatricula = new Map<string, Cooperado>();
+      const newCoopObj: Cooperado = { ...sanitizeCooperado({
+        id: existing ? existing.id : `cop-imp-${Date.now()}-${numero}`,
+        tenantId: currentTenant?.id || 'coop-01',
+        matricula: rawMatricula,
+        nome: rawNome.toUpperCase(),
+        cpf,
+        rg: (cleanRow.rg || cleanRow.RG || cleanRow['RG'] || existing?.rg || '1234567 SSP-CE').toString(),
+        dataNascimento: (cleanRow.dataNascimento || cleanRow['Data Nasc.'] || cleanRow['Data Nascimento'] || existing?.dataNascimento || '1980-01-01').toString(),
+        sexo: (cleanRow.sexo || cleanRow.Sexo || existing?.sexo || 'M').toString().toUpperCase().startsWith('F') ? 'F' : 'M',
+        estadoCivil: (cleanRow.estadoCivil || cleanRow['Estado Civil'] || existing?.estadoCivil || 'CASADO').toString().toUpperCase() as any,
+        profissao: (cleanRow.profissao || cleanRow['Profissão'] || cleanRow['Profissao'] || existing?.profissao || 'AGRICULTOR').toString().toUpperCase(),
+        escolaridade: (cleanRow.escolaridade || cleanRow['Escolaridade'] || existing?.escolaridade || 'Ensino Fundamental').toString(),
+        naturalidade: (cleanRow.naturalidade || cleanRow['Naturalidade'] || existing?.naturalidade || 'TRAIRI').toString(),
+        nacionalidade: (cleanRow.nacionalidade || cleanRow['Nacionalidade'] || existing?.nacionalidade || 'BRASILEIRO').toString(),
+        situacao: (cleanRow.situacao || cleanRow['Situação'] || cleanRow['Situacao'] || existing?.situacao || 'ATIVO').toString().toUpperCase() as any,
+        dataFiliacao: (cleanRow.dataFiliacao || cleanRow['Data Admissão'] || cleanRow['Data Filiacao'] || existing?.dataFiliacao || new Date().toISOString().substring(0, 10)).toString(),
+        categoria: (cleanRow.categoria || cleanRow['Categoria'] || existing?.categoria || 'EFETIVO').toString().toUpperCase() as any,
+        fotoUrl: existing?.fotoUrl || '',
+        cep: (cleanRow.cep || cleanRow['CEP'] || existing?.cep || '62.690-000').toString(),
+        logradouro: (cleanRow.logradouro || cleanRow.endereco || cleanRow['Logradouro'] || cleanRow['Endereço'] || existing?.logradouro || 'Sede Cooperativa').toString(),
+        numero: (cleanRow.numero || cleanRow['Número'] || existing?.numero || 'S/N').toString(),
+        complemento: (cleanRow.complemento || cleanRow['Complemento'] || existing?.complemento || '').toString(),
+        bairro: (cleanRow.bairro || cleanRow['Bairro'] || existing?.bairro || 'Centro').toString(),
+        cidade: (cleanRow.cidade || cleanRow['Cidade'] || existing?.cidade || 'Trairi').toString(),
+        estado: (cleanRow.estado || cleanRow['Estado'] || cleanRow['UF'] || existing?.estado || 'CE').toString(),
+        pais: 'Brasil',
+        telefone: (cleanRow.telefone || cleanRow['Telefone'] || existing?.telefone || '').toString(),
+        celular: (cleanRow.celular || cleanRow['Celular'] || existing?.celular || '').toString(),
+        whatsapp: (cleanRow.whatsapp || cleanRow['WhatsApp'] || existing?.whatsapp || '').toString(),
+        email: (cleanRow.email || cleanRow['E-mail'] || cleanRow['Email'] || existing?.email || '').toString(),
+        contatoEmergencia: (cleanRow.contatoEmergencia || existing?.contatoEmergencia || 'Secretaria').toString(),
+        documentos: existing?.documentos || [],
+        banco: (cleanRow.banco || cleanRow['Banco'] || existing?.banco || 'Banco do Brasil').toString(),
+        agencia: (cleanRow.agencia || cleanRow['Agência'] || existing?.agencia || '0001').toString(),
+        conta: (cleanRow.conta || cleanRow['Conta'] || existing?.conta || '10000-1').toString(),
+        tipoConta: (cleanRow.tipoConta || existing?.tipoConta || 'CORRENTE').toString() as any,
+        chavePix: (cleanRow.chavePix || cleanRow['Chave PIX'] || existing?.chavePix || '').toString(),
+        capitalSubscrito: Number(cleanRow.capitalSubscrito || cleanRow['Capital Subscrito'] || existing?.capitalSubscrito || 1000),
+        capitalIntegralizado: Number(cleanRow.capitalIntegralizado || cleanRow['Capital Integralizado (R$)'] || cleanRow['Capital Integralizado'] || existing?.capitalIntegralizado || 0),
+        historico: existing?.historico || [
+          {
+            id: `h-imp-${Date.now()}-${numero}`,
+            data: new Date().toISOString().substring(0, 10),
+            usuario: currentUser?.name || 'Sistema',
+            acao: 'Importação CSV/Excel',
+            detalhes: 'Cooperado importado via planilha CSV/Excel'
+          }
+        ],
+        dapCaf: cleanRow.dapCaf || cleanRow['DAP/CAF'] || cleanRow['DAP'] || existing?.dapCaf || 'SIM',
+        cafDapValidade: (cleanRow.cafDapValidade || cleanRow['Validade CAF/DAP'] || cleanRow['Validade CAF'] || cleanRow['Validade DAP'] || existing?.cafDapValidade || '').toString(),
+        aptoPaa: cleanRow.aptoPaa !== undefined
+          ? Boolean(cleanRow.aptoPaa)
+          : (cleanRow['Apto PAA'] === 'SIM' || cleanRow['Apto PAA'] === 'Sim' || cleanRow['Apto PAA'] === 'sim' || cleanRow['Apto PAA'] === true || (existing?.aptoPaa ?? true)),
+        localidadeComunidade: cleanRow.localidadeComunidade || cleanRow['Comunidade/Localidade'] || cleanRow['Comunidade'] || existing?.localidadeComunidade || 'SEDE',
+        nomeUsual: cleanRow.nomeUsual || cleanRow['Nome Usual/Apelido'] || cleanRow['Nome Usual'] || existing?.nomeUsual || rawNome,
+        aptoAVotar: cleanRow.aptoAVotar === true || cleanRow['Apto a Votar'] === 'SIM' || cleanRow['Apto Votar'] === 'SIM' || existing?.aptoAVotar || true,
+        falecido: cleanRow.falecido === true || cleanRow['Falecido'] === 'SIM' || existing?.falecido || false
+      }), cpf };
 
-      prev.forEach(c => {
-        if (c.cpf) mapByCpf.set(c.cpf.replace(/\D/g, ''), c);
-        if (c.matricula) mapByMatricula.set(c.matricula.trim().toLowerCase(), c);
-      });
-
-      const newArr = [...prev];
-
-      rows.forEach((row, idx) => {
-        // Pre-sanitize raw row first
-        const cleanRow = sanitizeCooperado(row);
-
-        const rawNome = (cleanRow.nome || cleanRow.nomeCompleto || cleanRow['Nome Completo'] || cleanRow['Nome'] || cleanRow['NOME'] || cleanRow.nomeUsual || '').toString().trim();
-        if (!rawNome) return;
-
-        const rawCpf = (cleanRow.cpf || cleanRow.CPF || cleanRow['cpf'] || '').toString().trim();
-        const cleanCpf = rawCpf.replace(/\D/g, '');
-
-        const rawMatricula = (cleanRow.matricula || cleanRow.Matricula || cleanRow['Matrícula'] || cleanRow['Matricula'] || `IMP-${Date.now()}-${idx}`).toString().trim();
-
-        const existingByCpf = cleanCpf ? mapByCpf.get(cleanCpf) : undefined;
-        const existingByMat = mapByMatricula.get(rawMatricula.toLowerCase());
-        const existing = existingByCpf || existingByMat;
-
-        const newCoopObj: Cooperado = sanitizeCooperado({
-          id: existing ? existing.id : `cop-imp-${Date.now()}-${idx}`,
-          tenantId: currentTenant?.id || 'coop-01',
-          matricula: rawMatricula,
-          nome: rawNome.toUpperCase(),
-          cpf: rawCpf || existing?.cpf || '000.000.000-00',
-          rg: (cleanRow.rg || cleanRow.RG || cleanRow['RG'] || existing?.rg || '1234567 SSP-CE').toString(),
-          dataNascimento: (cleanRow.dataNascimento || cleanRow['Data Nasc.'] || cleanRow['Data Nascimento'] || existing?.dataNascimento || '1980-01-01').toString(),
-          sexo: (cleanRow.sexo || cleanRow.Sexo || existing?.sexo || 'M').toString().toUpperCase().startsWith('F') ? 'F' : 'M',
-          estadoCivil: (cleanRow.estadoCivil || cleanRow['Estado Civil'] || existing?.estadoCivil || 'CASADO').toString().toUpperCase() as any,
-          profissao: (cleanRow.profissao || cleanRow['Profissão'] || cleanRow['Profissao'] || existing?.profissao || 'AGRICULTOR').toString().toUpperCase(),
-          escolaridade: (cleanRow.escolaridade || cleanRow['Escolaridade'] || existing?.escolaridade || 'Ensino Fundamental').toString(),
-          naturalidade: (cleanRow.naturalidade || cleanRow['Naturalidade'] || existing?.naturalidade || 'TRAIRI').toString(),
-          nacionalidade: (cleanRow.nacionalidade || cleanRow['Nacionalidade'] || existing?.nacionalidade || 'BRASILEIRO').toString(),
-          situacao: (cleanRow.situacao || cleanRow['Situação'] || cleanRow['Situacao'] || existing?.situacao || 'ATIVO').toString().toUpperCase() as any,
-          dataFiliacao: (cleanRow.dataFiliacao || cleanRow['Data Admissão'] || cleanRow['Data Filiacao'] || existing?.dataFiliacao || new Date().toISOString().substring(0, 10)).toString(),
-          categoria: (cleanRow.categoria || cleanRow['Categoria'] || existing?.categoria || 'EFETIVO').toString().toUpperCase() as any,
-          fotoUrl: existing?.fotoUrl || '',
-          cep: (cleanRow.cep || cleanRow['CEP'] || existing?.cep || '62.690-000').toString(),
-          logradouro: (cleanRow.logradouro || cleanRow.endereco || cleanRow['Logradouro'] || cleanRow['Endereço'] || existing?.logradouro || 'Sede Cooperativa').toString(),
-          numero: (cleanRow.numero || cleanRow['Número'] || existing?.numero || 'S/N').toString(),
-          complemento: (cleanRow.complemento || cleanRow['Complemento'] || existing?.complemento || '').toString(),
-          bairro: (cleanRow.bairro || cleanRow['Bairro'] || existing?.bairro || 'Centro').toString(),
-          cidade: (cleanRow.cidade || cleanRow['Cidade'] || existing?.cidade || 'Trairi').toString(),
-          estado: (cleanRow.estado || cleanRow['Estado'] || cleanRow['UF'] || existing?.estado || 'CE').toString(),
-          pais: 'Brasil',
-          telefone: (cleanRow.telefone || cleanRow['Telefone'] || existing?.telefone || '').toString(),
-          celular: (cleanRow.celular || cleanRow['Celular'] || existing?.celular || '').toString(),
-          whatsapp: (cleanRow.whatsapp || cleanRow['WhatsApp'] || existing?.whatsapp || '').toString(),
-          email: (cleanRow.email || cleanRow['E-mail'] || cleanRow['Email'] || existing?.email || '').toString(),
-          contatoEmergencia: (cleanRow.contatoEmergencia || existing?.contatoEmergencia || 'Secretaria').toString(),
-          documentos: existing?.documentos || [],
-          banco: (cleanRow.banco || cleanRow['Banco'] || existing?.banco || 'Banco do Brasil').toString(),
-          agencia: (cleanRow.agencia || cleanRow['Agência'] || existing?.agencia || '0001').toString(),
-          conta: (cleanRow.conta || cleanRow['Conta'] || existing?.conta || '10000-1').toString(),
-          tipoConta: (cleanRow.tipoConta || existing?.tipoConta || 'CORRENTE').toString() as any,
-          chavePix: (cleanRow.chavePix || cleanRow['Chave PIX'] || existing?.chavePix || '').toString(),
-          capitalSubscrito: Number(cleanRow.capitalSubscrito || cleanRow['Capital Subscrito'] || existing?.capitalSubscrito || 1000),
-          capitalIntegralizado: Number(cleanRow.capitalIntegralizado || cleanRow['Capital Integralizado (R$)'] || cleanRow['Capital Integralizado'] || existing?.capitalIntegralizado || 0),
-          historico: existing?.historico || [
-            {
-              id: `h-imp-${Date.now()}-${idx}`,
-              data: new Date().toISOString().substring(0, 10),
-              usuario: currentUser?.name || 'Sistema',
-              acao: 'Importação CSV/Excel',
-              detalhes: 'Cooperado importado via planilha CSV/Excel'
-            }
-          ],
-          dapCaf: cleanRow.dapCaf || cleanRow['DAP/CAF'] || cleanRow['DAP'] || existing?.dapCaf || 'SIM',
-          cafDapValidade: (cleanRow.cafDapValidade || cleanRow['Validade CAF/DAP'] || cleanRow['Validade CAF'] || cleanRow['Validade DAP'] || existing?.cafDapValidade || '').toString(),
-          aptoPaa: cleanRow.aptoPaa !== undefined 
-            ? Boolean(cleanRow.aptoPaa) 
-            : (cleanRow['Apto PAA'] === 'SIM' || cleanRow['Apto PAA'] === 'Sim' || cleanRow['Apto PAA'] === 'sim' || cleanRow['Apto PAA'] === true || (existing?.aptoPaa ?? true)),
-          localidadeComunidade: cleanRow.localidadeComunidade || cleanRow['Comunidade/Localidade'] || cleanRow['Comunidade'] || existing?.localidadeComunidade || 'SEDE',
-          nomeUsual: cleanRow.nomeUsual || cleanRow['Nome Usual/Apelido'] || cleanRow['Nome Usual'] || existing?.nomeUsual || rawNome,
-          aptoAVotar: cleanRow.aptoAVotar === true || cleanRow['Apto a Votar'] === 'SIM' || cleanRow['Apto Votar'] === 'SIM' || existing?.aptoAVotar || true,
-          falecido: cleanRow.falecido === true || cleanRow['Falecido'] === 'SIM' || existing?.falecido || false
-        });
-
-        if (existing) {
-          totalAtualizados++;
-          const targetIdx = newArr.findIndex(c => c.id === existing.id);
-          if (targetIdx !== -1) newArr[targetIdx] = newCoopObj;
-        } else {
-          totalInseridos++;
-          newArr.push(newCoopObj);
-        }
-      });
-
-      syncCooperadosWithProdutores(newArr);
-      return newArr;
+      if (existing) {
+        totalAtualizados++;
+        const targetIdx = newArr.findIndex(c => c.id === existing.id);
+        if (targetIdx !== -1) newArr[targetIdx] = newCoopObj;
+      } else {
+        totalInseridos++;
+        newArr.push(newCoopObj);
+      }
     });
+
+    setCooperados(newArr);
+    syncCooperadosWithProdutores(newArr);
 
     addAuditLog('COOPERADOS', 'INCLUSAO', `Importação de planilha CSV/Excel realizada: ${totalInseridos} inseridos, ${totalAtualizados} atualizados.`);
     return {
