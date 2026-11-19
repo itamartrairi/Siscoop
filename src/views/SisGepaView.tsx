@@ -276,26 +276,27 @@ export const SisGepaView: React.FC = () => {
   const [isGeneratingNfe, setIsGeneratingNfe] = useState(false);
 
   // Form Chamada Pública
-  const [chamadaForm, setChamadaForm] = useState({
+  const chamadaVazia = () => ({
     numeroEdital: '',
     orgaoComprador: '',
     programaId: '',
     programaNome: '',
     programa: 'PNAE' as 'PAA' | 'PNAE' | string,
-    fonteRecurso: 'FNDE / PNAE Federal',
-    fonteRecursos: 'FNDE / PNAE Federal',
+    fonteRecurso: '',
+    fonteRecursos: '',
     escolaId: '',
     escolaNome: '',
     escolasIds: [] as string[],
     escolasNomes: [] as string[],
     escolasContempladas: [] as EscolaContempladaChamada[],
     dataAbertura: new Date().toISOString().split('T')[0],
-    dataEncerramento: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0],
-    valorTotalEdital: 150000,
+    dataEncerramento: '',
+    valorTotalEdital: 0,
     status: 'ABERTA' as 'ABERTA' | 'EM_EXECUCAO' | 'ENCERRADA',
     observacoes: '',
     itensSolicitados: [] as ItemChamadaPublica[]
   });
+  const [chamadaForm, setChamadaForm] = useState(chamadaVazia);
 
   // State para adicionar nova escola avulsa no modal da chamada
   const [customEscolaNome, setCustomEscolaNome] = useState('');
@@ -304,7 +305,7 @@ export const SisGepaView: React.FC = () => {
   const [customEscolaAlunos, setCustomEscolaAlunos] = useState(250);
 
   // Form Proposta de Oferta
-  const [ofertaForm, setOfertaForm] = useState({
+  const ofertaVazia = () => ({
     chamadaPublicaId: '',
     chamadaPublicaEdital: '',
     programaId: '',
@@ -312,33 +313,34 @@ export const SisGepaView: React.FC = () => {
     produtorId: '',
     produtorNome: '',
     apto: 'SIM',
-    ano: '2026',
+    ano: String(new Date().getFullYear()),
     produtoId: '',
     produtoNome: '',
     unidadeMedida: 'KG',
-    quantidadeOfertada: 100,
-    quantidadeKg: 100,
-    precoUnitario: 5.50,
+    quantidadeOfertada: 0,
+    quantidadeKg: 0,
+    precoUnitario: 0,
     status: 'SUBMETIDA' as any,
     itens: [] as {
       produtoId: string;
       produtoNome: string;
       unidadeMedida: string;
-      quantidadeKg: number;
-      precoUnitario: number;
+      quantidadeKg: 0
+      precoUnitario: 0
     }[]
   });
+  const [ofertaForm, setOfertaForm] = useState(ofertaVazia);
 
   // Form Pedido
-  const [pedidoForm, setPedidoForm] = useState({
+  const pedidoVazio = () => ({
     numeroPedido: '', // placeholder — o número real (PED-01/2026) é gerado ao abrir o formulário, em handleOpenPedido
     programaId: '',
     programaNome: '',
     programa: 'PAA' as 'PAA' | 'PNAE' | 'MERCADO_LIVRE' | string,
     produtoId: '',
     produtoNome: '',
-    nucleo: 'Sede',
-    qtdeEntregas: 1,
+    nucleo: '',
+    qtdeEntregas: 0,
     intervaloFrequencia: 'SEMANAL' as 'SEMANAL' | 'QUINZENAL' | 'MENSAL' | 'CUSTOM',
     cronogramaEntregas: [] as Array<{
       numero: number;
@@ -357,20 +359,21 @@ export const SisGepaView: React.FC = () => {
     escolaNome: '',
     escolasIds: [] as string[],
     escolasNomes: [] as string[],
-    fonteRecursos: 'E. Fundamental',
+    fonteRecursos: '',
     dataPedido: new Date().toISOString().split('T')[0],
-    dataPrevistaEntrega: new Date(Date.now() + 7*24*60*60*1000).toISOString().split('T')[0],
-    observacoes: 'Coleta agendada na propriedade dos produtores cadastrados para entrega nas escolas.',
+    dataPrevistaEntrega: '',
+    observacoes: '',
     status: 'PENDENTE' as any,
     funruralAtivo: false,
     funruralAliquota: 1.5,
     taxaAdministrativaAtiva: false,
     taxaAdministrativaPercentual: 5
   });
+  const [pedidoForm, setPedidoForm] = useState(pedidoVazio);
 
   // Form Entrega
   const [viewingRomaneio, setViewingRomaneio] = useState<ProgramacaoEntregaPAA | null>(null);
-  const [entregaForm, setEntregaForm] = useState({
+  const entregaVazia = () => ({
     programaId: '',
     programaNome: '',
     chamadaPublicaId: '',
@@ -382,23 +385,23 @@ export const SisGepaView: React.FC = () => {
     escolaOrgaoDestino: '',
     localEntrega: '',
     dataPrevista: new Date().toISOString().split('T')[0],
-    horarioSaidaPrevisto: '07:30',
-    motoristaNome: 'Francisco Reginaldo (Seu Chico)',
-    motoristaTelefone: '(85) 99822-4411',
-    veiculoPlaca: 'PMN-4A92',
-    veiculoModelo: 'Mercedes-Benz Accelo 815 (Baú)',
-    quantidadeTotalKg: 500,
+    horarioSaidaPrevisto: '',
+    motoristaNome: '',
+    motoristaTelefone: '',
+    veiculoPlaca: '',
+    veiculoModelo: '',
+    quantidadeTotalKg: 0,
     status: 'AGENDADA' as any,
     itens: [] as { produtorId?: string; produtorNome: string; produtoId?: string; produtoNome: string; quantidadePrevista: number; unidade: string }[],
     paradasEntrega: [] as ParadaEntregaEscola[],
     distanciaTotalKm: 0,
-    autonomiaKmL: 8.0,
+    autonomiaKmL: 0,
     consumoCombustivelLitros: 0,
-    precoLitroCombustivel: 6.29,
+    precoLitroCombustivel: 0,
     despesaCombustivel: 0,
-    despesaDiariaMotorista: 80.00,
-    despesaManutencao: 25.00,
-    outrasDespesas: 15.00,
+    despesaDiariaMotorista: 0,
+    despesaManutencao: 0,
+    outrasDespesas: 0,
     totalDespesasEntrega: 0,
     observacoesRota: '',
     // Multi-entregas & Cronograma
@@ -418,6 +421,7 @@ export const SisGepaView: React.FC = () => {
     parcelaRotulo: '',
     cronogramaGrupoId: ''
   });
+  const [entregaForm, setEntregaForm] = useState(entregaVazia);
 
   const [selectedProdutoresIds, setSelectedProdutoresIds] = useState<string[]>([]);
   const [pedidoItens, setPedidoItens] = useState<ItemPedidoProdutor[]>([]);
@@ -493,51 +497,13 @@ export const SisGepaView: React.FC = () => {
         itensSolicitados: initialItens
       });
     } else {
-      const defaultProg = programas.find(p => p.tipo === 'PNAE') || programas[0];
-      const allEscolasIds = escolasPnae.map(e => e.id);
-      const allEscolasNomes = escolasPnae.map(e => e.nomeEscola);
-      const allEscolasContempladas: EscolaContempladaChamada[] = escolasPnae.map(e => ({
-        id: e.id,
-        nomeEscola: e.nomeEscola,
-        polo: e.polo || 'Polo Sede',
-        codigoInep: e.codigoInep || '',
-        endereco: e.endereco || '',
-        alunosAtendidos: e.alunosAtendidos || 250
-      }));
-
-      const initialItens: ItemChamadaPublica[] = produtos.slice(0, 3).map(p => ({
-        produtoId: p.id,
-        produtoNome: p.nome,
-        unidade: p.unidadeMedida,
-        quantidadeTotal: 5000,
-        precoMaximoUnitario: p.precoReferencia,
-        valorTotalItem: 5000 * p.precoReferencia
-      }));
-
-      const totalEditalCalc = initialItens.reduce((s, it) => s + (it.valorTotalItem || 0), 0);
-
       setEditingChamada(null);
-      setChamadaForm({
-        numeroEdital: `Chamada Pública PNAE 00${chamadasPublicas.length + 1}/2026`,
-        orgaoComprador: 'Secretaria Municipal de Educação de Trairi / Prefeitura Municipal',
-        programaId: defaultProg?.id || '',
-        programaNome: defaultProg?.nome || 'PNAE - Programa Nacional de Alimentação Escolar',
-        programa: defaultProg?.tipo || 'PNAE',
-        fonteRecurso: 'FNDE / PNAE Federal',
-        fonteRecursos: 'FNDE / PNAE Federal',
-        escolaId: escolasPnae[0]?.id || '',
-        escolaNome: allEscolasNomes.join(', '),
-        escolasIds: allEscolasIds,
-        escolasNomes: allEscolasNomes,
-        escolasContempladas: allEscolasContempladas,
-        dataAbertura: new Date().toISOString().split('T')[0],
-        dataEncerramento: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0],
-        valorTotalEdital: totalEditalCalc > 0 ? totalEditalCalc : 150000,
-        status: 'ABERTA',
-        observacoes: 'Aquisição de gêneros alimentícios da Agricultura Familiar para atendimento da alimentação escolar.',
-        itensSolicitados: initialItens
-      });
+      setChamadaForm(chamadaVazia());
     }
+    setCustomEscolaNome('');
+    setCustomEscolaPolo('');
+    setCustomEscolaInep('');
+    setCustomEscolaAlunos(0);
     setShowChamadaModal(true);
   };
 
@@ -857,48 +823,8 @@ export const SisGepaView: React.FC = () => {
         itens: initialItens
       });
     } else {
-      const defaultChamada = chamadasPublicas[0];
-      const defaultProdutor = produtores[0];
-      const defaultPrograma = programas[0];
-
-      const prodHistorico = defaultProdutor ? registrosProducao.filter(r => r.produtorId === defaultProdutor.id) : [];
-      const itensHistoricoExpandidos = expandirItensHistoricoProducao(prodHistorico);
-      const defaultItens = itensHistoricoExpandidos.length > 0
-        ? itensHistoricoExpandidos.map(item => {
-            const pObj = produtos.find(p => p.id === item.produtoId);
-            return {
-              produtoId: item.produtoId,
-              produtoNome: item.produtoNome || pObj?.nome || 'Produto',
-              unidadeMedida: item.unidadeMedida || pObj?.unidadeMedida || 'KG',
-              quantidadeKg: item.quantidadeKg || 100,
-              precoUnitario: pObj?.precoReferencia || 5.50
-            };
-          })
-        : (produtos[0] ? [{
-            produtoId: produtos[0].id,
-            produtoNome: produtos[0].nome,
-            unidadeMedida: produtos[0].unidadeMedida || 'KG',
-            quantidadeKg: 100,
-            precoUnitario: produtos[0].precoReferencia || 5.50
-          }] : []);
-
       setEditingOferta(null);
-      setOfertaForm({
-        chamadaPublicaId: defaultChamada?.id || '',
-        chamadaPublicaEdital: defaultChamada?.numeroEdital || '',
-        programaId: defaultPrograma?.id || '',
-        programaNome: defaultPrograma?.nome || 'PAA',
-        produtorId: defaultProdutor?.id || '',
-        produtorNome: defaultProdutor?.nome || '',
-        produtoId: defaultItens[0]?.produtoId || '',
-        produtoNome: defaultItens[0]?.produtoNome || '',
-        unidadeMedida: defaultItens[0]?.unidadeMedida || 'KG',
-        quantidadeOfertada: defaultItens[0]?.quantidadeKg || 100,
-        quantidadeKg: defaultItens[0]?.quantidadeKg || 100,
-        precoUnitario: defaultItens[0]?.precoUnitario || 5.50,
-        status: 'SUBMETIDA',
-        itens: defaultItens
-      });
+      setOfertaForm(ofertaVazia());
     }
     setShowOfertaModal(true);
   };
@@ -1707,47 +1633,8 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
       const uniqueProdIds = Array.from(new Set((p.itens || []).map(it => it.produtorId)));
       setSelectedProdutoresIds(uniqueProdIds);
     } else {
-      const defaultProg = programas[0];
-      const defaultChm = chamadasPublicas[0];
-      const defaultDataPrevista = new Date(Date.now() + 7*24*60*60*1000).toISOString().split('T')[0];
-
       setEditingPedido(null);
-      setPedidoForm({
-        numeroPedido: defaultChm ? getNumeroPedidoParaChamada(defaultChm.id, defaultChm.numeroEdital) : gerarProximoNumeroPedido(),
-        programaId: defaultProg?.id || '',
-        programaNome: defaultProg?.nome || 'PAA',
-        programa: defaultProg?.tipo || 'PAA',
-        produtoId: produtos[0]?.id || '',
-        produtoNome: produtos[0]?.nome || '',
-        nucleo: 'Sede',
-        // Nenhuma entrega é pré-criada ao abrir um pedido novo. O cronograma
-        // só é gerado quando o usuário definir a quantidade de entregas
-        // (campo "Quantas Entregas Serão Feitas?" ou um dos botões 1x/2x/...).
-        qtdeEntregas: 0,
-        intervaloFrequencia: 'SEMANAL',
-        cronogramaEntregas: [],
-        autoGerarRotasLogistica: true,
-        chamadaPublicaId: defaultChm?.id || '',
-        chamadaPublicaEdital: defaultChm?.numeroEdital || '',
-        escolaId: '',
-        escolaNome: '',
-        // Nenhuma escola é pré-selecionada ao abrir um pedido novo. A escola
-        // de destino é definida automaticamente a partir da(s) proposta(s)
-        // de oferta carregada(s) para o produtor (handleLoadOfertasToPedido)
-        // — antes, o pedido nascia com TODAS as escolas cadastradas
-        // marcadas como destino, mesmo sem nenhum produto carregado ainda.
-        escolasIds: [],
-        escolasNomes: [],
-        fonteRecursos: 'E. Fundamental',
-        dataPedido: new Date().toISOString().split('T')[0],
-        dataPrevistaEntrega: defaultDataPrevista,
-        observacoes: 'Coleta agendada na propriedade dos produtores cadastrados para entrega nas escolas.',
-        status: 'PENDENTE',
-        funruralAtivo: false,
-        funruralAliquota: 1.5,
-        taxaAdministrativaAtiva: false,
-        taxaAdministrativaPercentual: 5
-      });
+      setPedidoForm({ ...pedidoVazio(), numeroPedido: gerarProximoNumeroPedido() });
       setSelectedProdutoresIds([]);
       setPedidoItens([]);
     }
@@ -2802,7 +2689,7 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
                 endereco: esc?.endereco || eItem.localEntrega || 'Sede da Unidade Escolar',
                 polo: esc?.polo || 'Polo Sede',
                 distanciaKm: getEstimativaDistanciaEscola(esc?.nomeEscola || eid, esc?.polo),
-                quantidadeKg: Math.round((eItem.quantidadeTotalKg || 500) / rawIds.length),
+                quantidadeKg: Math.round((eItem.quantidadeTotalKg ?? 0) / rawIds.length),
                 statusEntrega: (eItem.status === 'ENTREGUE' ? 'ENTREGUE' : 'PENDENTE') as any,
                 observacoes: ''
               };
@@ -2832,11 +2719,11 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
         localEntrega: eItem.localEntrega || '',
         dataPrevista: eItem.dataPrevista || '',
         horarioSaidaPrevisto: eItem.horarioSaidaPrevisto || '07:30',
-        motoristaNome: eItem.motoristaNome || 'Francisco Reginaldo (Seu Chico)',
-        motoristaTelefone: eItem.motoristaTelefone || '(85) 99822-4411',
-        veiculoPlaca: eItem.veiculoPlaca || 'PMN-4A92',
-        veiculoModelo: eItem.veiculoModelo || 'Mercedes-Benz Accelo 815 (Baú)',
-        quantidadeTotalKg: eItem.quantidadeTotalKg || 500,
+        motoristaNome: eItem.motoristaNome || '',
+        motoristaTelefone: eItem.motoristaTelefone || '',
+        veiculoPlaca: eItem.veiculoPlaca || '',
+        veiculoModelo: eItem.veiculoModelo || '',
+        quantidadeTotalKg: eItem.quantidadeTotalKg ?? 0,
         status: eItem.status || 'AGENDADA',
         itens: eItem.itens || [],
         paradasEntrega: initialParadas,
@@ -2862,18 +2749,10 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
       setEditingEntrega(null);
       const paradas = buildParadasFromPedido(pedOrigin);
       const dist = paradas.reduce((s, p) => s + (p.distanciaKm || 0), 0);
-      const aut = 8.0;
-      const precoL = 6.29;
-      const consumoL = Number((dist / aut).toFixed(2));
-      const despComb = Number((consumoL * precoL).toFixed(2));
-      const diaria = 80.00;
-      const manut = 25.00;
-      const outras = 15.00;
-      const totalDesp = Number((despComb + diaria + manut + outras).toFixed(2));
 
       const linkedEscolasNomes = paradas.map(p => p.escolaNome);
       const linkedEscolasIds = paradas.map(p => p.escolaId);
-      const totalPedidoKg = pedOrigin.itens?.reduce((s, i) => s + (i.quantidadePedida || 0), 0) || 500;
+      const totalPedidoKg = pedOrigin.itens?.reduce((s, i) => s + (i.quantidadePedida || 0), 0) || 0;
       const baseDate = pedOrigin.dataPrevistaEntrega || new Date().toISOString().split('T')[0];
       const initialParcelas = generateCronogramaParcelas(1, baseDate, 'SEMANAL', totalPedidoKg);
 
@@ -2890,10 +2769,10 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
         localEntrega: 'Entrega direta nas Unidades Escolares do Pedido',
         dataPrevista: baseDate,
         horarioSaidaPrevisto: '07:30',
-        motoristaNome: 'Francisco Reginaldo (Seu Chico)',
-        motoristaTelefone: '(85) 99822-4411',
-        veiculoPlaca: 'PMN-4A92',
-        veiculoModelo: 'Mercedes-Benz Accelo 815 (Baú)',
+        motoristaNome: '',
+        motoristaTelefone: '',
+        veiculoPlaca: '',
+        veiculoModelo: '',
         quantidadeTotalKg: totalPedidoKg,
         status: 'AGENDADA',
         itens: (pedOrigin.itens || []).map(i => ({
@@ -2906,14 +2785,14 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
         })),
         paradasEntrega: paradas,
         distanciaTotalKm: dist,
-        autonomiaKmL: aut,
-        consumoCombustivelLitros: consumoL,
-        precoLitroCombustivel: precoL,
-        despesaCombustivel: despComb,
-        despesaDiariaMotorista: diaria,
-        despesaManutencao: manut,
-        outrasDespesas: outras,
-        totalDespesasEntrega: totalDesp,
+        autonomiaKmL: 0,
+        consumoCombustivelLitros: 0,
+        precoLitroCombustivel: 0,
+        despesaCombustivel: 0,
+        despesaDiariaMotorista: 0,
+        despesaManutencao: 0,
+        outrasDespesas: 0,
+        totalDespesasEntrega: 0,
         observacoesRota: `Rota gerada automaticamente para atender todas as escolas do pedido ${pedOrigin.numeroPedido}.`,
         numeroEntregas: 1,
         intervaloFrequencia: 'SEMANAL',
@@ -2924,86 +2803,8 @@ Por favor, confirme o recebimento desta mensagem e prepare os produtos conforme 
         cronogramaGrupoId: ''
       });
     } else {
-      const defaultPedido = pedidosProdutorPAA[0];
-      const defaultProg = programas[0];
-      const defaultChm = chamadasPublicas[0];
-
       setEditingEntrega(null);
-      const paradas = defaultPedido ? buildParadasFromPedido(defaultPedido) : (escolasPnae.slice(0, 3).map((esc, idx) => ({
-        id: `stop-${Date.now()}-${idx}`,
-        ordem: idx + 1,
-        escolaId: esc.id,
-        escolaNome: esc.nomeEscola,
-        endereco: esc.endereco || 'Sede da Unidade Escolar',
-        polo: esc.polo || 'Polo Sede',
-        distanciaKm: getEstimativaDistanciaEscola(esc.nomeEscola, esc.polo),
-        quantidadeKg: 180,
-        statusEntrega: 'PENDENTE' as const,
-        observacoes: ''
-      })));
-
-      const dist = paradas.reduce((s, p) => s + (p.distanciaKm || 0), 0);
-      const aut = 8.0;
-      const precoL = 6.29;
-      const consumoL = Number((dist / aut).toFixed(2));
-      const despComb = Number((consumoL * precoL).toFixed(2));
-      const diaria = 80.00;
-      const manut = 25.00;
-      const outras = 15.00;
-      const totalDesp = Number((despComb + diaria + manut + outras).toFixed(2));
-
-      const linkedEscolasNomes = paradas.map(p => p.escolaNome);
-      const linkedEscolasIds = paradas.map(p => p.escolaId);
-      const totalPedidoKg = defaultPedido?.itens?.reduce((s, i) => s + (i.quantidadePedida || 0), 0) || paradas.reduce((s, p) => s + (p.quantidadeKg || 0), 0);
-      const baseDate = new Date().toISOString().split('T')[0];
-      const initialParcelas = generateCronogramaParcelas(1, baseDate, 'SEMANAL', totalPedidoKg);
-
-      setEntregaForm({
-        programaId: defaultPedido?.programaId || defaultProg?.id || '',
-        programaNome: defaultPedido?.programaNome || defaultPedido?.programa || defaultProg?.nome || 'PNAE',
-        chamadaPublicaId: defaultPedido?.chamadaPublicaId || defaultChm?.id || '',
-        chamadaPublicaEdital: defaultPedido?.chamadaPublicaEdital || defaultChm?.numeroEdital || '',
-        pedidoId: defaultPedido?.id || '',
-        pedidoNumero: defaultPedido?.numeroPedido || '',
-        escolaId: linkedEscolasIds[0] || '',
-        escolaNome: linkedEscolasNomes.join(', ') || '',
-        escolaOrgaoDestino: `Roteiro (${paradas.length} Escolas: ${linkedEscolasNomes.join(', ')})`,
-        localEntrega: 'Entrega direta nas Unidades Escolares',
-        dataPrevista: baseDate,
-        horarioSaidaPrevisto: '07:30',
-        motoristaNome: 'Francisco Reginaldo (Seu Chico)',
-        motoristaTelefone: '(85) 99822-4411',
-        veiculoPlaca: 'PMN-4A92',
-        veiculoModelo: 'Mercedes-Benz Accelo 815 (Baú)',
-        quantidadeTotalKg: totalPedidoKg,
-        status: 'AGENDADA',
-        itens: (defaultPedido?.itens || []).map(i => ({
-          produtorId: i.produtorId,
-          produtorNome: i.produtorNome,
-          produtoId: i.produtoId,
-          produtoNome: i.produtoNome,
-          quantidadePrevista: i.quantidadePedida,
-          unidade: i.unidadeMedida
-        })),
-        paradasEntrega: paradas,
-        distanciaTotalKm: dist,
-        autonomiaKmL: aut,
-        consumoCombustivelLitros: consumoL,
-        precoLitroCombustivel: precoL,
-        despesaCombustivel: despComb,
-        despesaDiariaMotorista: diaria,
-        despesaManutencao: manut,
-        outrasDespesas: outras,
-        totalDespesasEntrega: totalDesp,
-        observacoesRota: 'Roteiro de entregas programado para atendimento de todas as escolas do pedido.',
-        numeroEntregas: 1,
-        intervaloFrequencia: 'SEMANAL',
-        cronogramaParcelas: initialParcelas,
-        numeroEntrega: 1,
-        totalEntregas: 1,
-        parcelaRotulo: 'Entrega Única (100%)',
-        cronogramaGrupoId: ''
-      });
+      setEntregaForm(entregaVazia());
     }
     setShowEntregaModal(true);
   };
