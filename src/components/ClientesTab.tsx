@@ -199,7 +199,7 @@ export const ClientesTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
           { key: 'documento', header: 'CPF/CNPJ', width: 160 },
           { key: 'cidade', header: 'Cidade/UF', width: 160, value: c => [c.cidade, c.uf].filter(Boolean).join('/') },
           { key: 'whatsapp', header: 'WhatsApp', width: 140, value: c => getTelefoneContato(c) },
-          { key: 'compras', header: 'Compras', width: 90, align: 'right', value: c => vendasRevenda.filter(v => v.clienteId === c.id && v.status !== 'CANCELADA').length },
+          { key: 'compras', header: 'Compras', width: 90, align: 'right', value: c => vendasRevenda.filter(v => (v.tipoOperacao ?? 'VENDA') === 'VENDA' && v.clienteId === c.id && v.status !== 'CANCELADA').length },
           { key: 'aberto', header: 'A receber', width: 130, align: 'right', value: c => emAberto(c), render: c => formatarMoeda(emAberto(c)) },
         ]}
         actions={[
