@@ -112,7 +112,7 @@ export const ApuracaoImpostosModal: React.FC<{ canWrite: boolean; onBlocked: () 
   const rotuloComp = `${competencia.slice(5, 7)}/${competencia.slice(0, 4)}`;
 
   const { vendas, totais } = useMemo(() => {
-    const doMes = vendasRevenda.filter(v => v.status !== 'CANCELADA' && (v.dataVenda || '').slice(0, 7) === competencia);
+    const doMes = vendasRevenda.filter(v => (v.tipoOperacao ?? 'VENDA') === 'VENDA' && v.status !== 'CANCELADA' && (v.dataVenda || '').slice(0, 7) === competencia);
     const soma: Record<string, number> = {};
     doMes.forEach(v => {
       let imp: ImpostosVenda | undefined = v.impostos;
