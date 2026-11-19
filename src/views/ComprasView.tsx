@@ -190,10 +190,10 @@ export const ComprasView: React.FC = () => {
   const [solicitacaoForm, setSolicitacaoForm] = useState({
     departamentoSolicitante: 'LOGISTICA_E_EMBALAGEM',
     itemDescricao: '',
-    quantidade: 100,
+    quantidade: 0,
     unidadeMedida: 'UNIDADE',
     prioridade: 'MEDIA' as 'BAIXA' | 'MEDIA' | 'ALTA',
-    valorEstimado: 2500,
+    valorEstimado: 0,
     justificativa: ''
   });
 
@@ -203,14 +203,14 @@ export const ComprasView: React.FC = () => {
     solicitacaoId: '',
     fornecedorId: '',
     fornecedorNome: '',
-    itemDescricao: 'Caixas de Papelão PNAE 20kg',
-    quantidade: 100,
+    itemDescricao: '',
+    quantidade: 0,
     unidadeMedida: 'UN',
     dataEmissao: new Date().toISOString().split('T')[0],
     dataPrevisaoEntrega: new Date(Date.now() + 5*24*60*60*1000).toISOString().split('T')[0],
-    valorTotal: 3500,
-    condicoesPagamento: '30 Dias Fatura Boleto',
-    observacoes: 'Entregar no Galpão Central da Cooperativa em Caixas Identificadas.'
+    valorTotal: 0,
+    condicoesPagamento: '',
+    observacoes: ''
   });
 
   const [fornecedorForm, setFornecedorForm] = useState({
@@ -299,13 +299,12 @@ if (s) {
       setSolicitacaoForm({
         departamentoSolicitante: 'LOGISTICA_E_EMBALAGEM',
         itemDescricao: '',
-        quantidade: 100,
+        quantidade: 0,
         unidadeMedida: 'UN',
         prioridade: 'MEDIA',
-        valorEstimado: 2500,
-        justificativa: 'Aquisição preventiva para operações do PAA/PNAE'
+        valorEstimado: 0,
+        justificativa: ''
       });
-      setSolicitacaoItens([{ descricao: '', quantidade: 1, unidade: 'UN' }]);
       setSolicitacaoItens([{ descricao: '', quantidade: 1, unidade: 'UN' }]);
     }
     setShowSolicitacaoModal(true);
@@ -361,21 +360,20 @@ if (o) {
       setOrdemItens(o.itens?.length ? o.itens : [{ descricao: firstItem?.descricao || '', quantidade: firstItem?.quantidade || 1, unidade: firstItem?.unidade || 'UN', precoUnitario: firstItem?.precoUnitario || 0, subtotal: firstItem?.subtotal || 0 }]);
     } else {
       setEditingOrdem(null);
-      const fPadrao = fornecedores[0];
       setOrdemForm({
         ...OC_PAGTO_PADRAO(),
         numeroOrdem: `OC-${Date.now().toString().slice(-5)}`,
         solicitacaoId: '',
-        fornecedorId: fPadrao?.id || 'f-1',
-        fornecedorNome: fPadrao?.razaoSocial || 'Fornecedor Agro Insumos LTDA',
-        itemDescricao: 'Caixas de Papelão PNAE 20kg',
-        quantidade: 100,
+        fornecedorId: '',
+        fornecedorNome: '',
+        itemDescricao: '',
+        quantidade: 0,
         unidadeMedida: 'UN',
         dataEmissao: new Date().toISOString().split('T')[0],
         dataPrevisaoEntrega: new Date(Date.now() + 5*24*60*60*1000).toISOString().split('T')[0],
-        valorTotal: 3500,
-        condicoesPagamento: '30 Dias Fatura Boleto',
-        observacoes: 'Entregar no Galpão Central da Cooperativa em Caixas Identificadas.'
+        valorTotal: 0,
+        condicoesPagamento: '',
+        observacoes: ''
       });
       setOrdemItens([{ descricao: '', quantidade: 1, unidade: 'UN', precoUnitario: 0, subtotal: 0 }]);
     }
@@ -487,7 +485,7 @@ if (f) {
         cnpj: '',
         categoria: 'EMBALAGENS',
         contatoNome: '',
-        telefone: '(88) 98888-0000',
+        telefone: '',
         email: '',
         tipoPessoa: 'PJ',
         inscricaoEstadual: '',
