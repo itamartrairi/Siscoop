@@ -231,13 +231,13 @@ export const RelatoriosPdfTab: React.FC<{ tipoInicial?: TipoRelatorio; tiposPerm
 
     const lista = vendasRevenda
       .filter(v => {
-        if (!naData(v.dataVenda)) return false;
+        if ((v.tipoOperacao ?? 'VENDA') !== 'VENDA' || !naData(v.dataVenda)) return false;
         if (cliente && v.clienteId !== cliente.id) return false;
         if (fornecedor && !v.itens.some(i => i.fornecedorId === fornecedor.id)) return false;
         if (status === 'CANCELADA') return v.status === 'CANCELADA';
         if (status === 'CONCLUIDA') return v.status !== 'CANCELADA';
         if (status === 'RECEBER_ABERTO') return v.status !== 'CANCELADA' && abertoDe(parcelasVenda(v)) > 0;
-        if (status === 'RECEBIDA') return v.status !== 'CANCELADA' && abertoDe(parcelasVenda(v)) === 0;
+        if (status === 'RECEBIDA') return v.status !== 'CANCELADA' && abertoDe(parcelasVenda(v)) === 0 && parcelasVenda(v).some(c => c.status === 'PAGO');
         return true;
       })
       .sort((a, b) => (a.dataVenda || '').localeCompare(b.dataVenda || ''));
@@ -256,13 +256,15 @@ export const RelatoriosPdfTab: React.FC<{ tipoInicial?: TipoRelatorio; tiposPerm
         dataBR(v.dataVenda), v.numeroVenda, v.clienteNome,
         v.itens.map(i => `${i.quantidade} ${i.unidade} ${i.descricao}`).join('; '),
         `${rotuloFormaPagamento(v.formaPagamento)} ${v.numeroParcelas > 1 ? `${v.numeroParcelas}x` : 'à vista'}`,
-        v.status === 'CANCELADA' ? 'Cancelada' : abertoDe(parcelasVenda(v)) > 0 ? 'Em aberto' : 'Recebida',
+        v.status === 'CANCELADA' ? 'Cancelada' : abertoDe(parcelasVenda(v)) > 0 ? 'Em aberto' :
+          parcelasVenda(v).some(c => c.status === 'PAGO') ? 'Recebida' : 'Sem recebimento',
         formatarMoeda(v.status === 'CANCELADA' ? 0 : abertoDe(parcelasVenda(v))), formatarMoeda(v.valorTotal),
       ]),
       totais: [
         ['Vendas', String(lista.length)],
         ['Total vendido (exceto canceladas)', formatarMoeda(totalVendas)],
-        ['Recebido', formatarMoeda(totalVendas - aberto)],
+        ['Recebido', formatarMoeda(validas.reduce((s, v) => s + parcelasVenda(v)
+          .filter(c => c.status === 'PAGO').reduce((total, c) => total + (Number(c.valor) || 0), 0), 0))],
         ['A receber em aberto', formatarMoeda(aberto)],
         ['Custo dos produtos', formatarMoeda(custo)],
         ['Margem bruta', formatarMoeda(totalVendas - custo)],
