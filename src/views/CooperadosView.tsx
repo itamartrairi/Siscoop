@@ -289,6 +289,43 @@ type LinhaProducaoCooperado = {
 type CadastroProducaoCooperado = { dataAtualizacao: string; itens: LinhaProducaoCooperado[] };
 type CooperadoComProducao = Cooperado & { cadastroProducao?: CadastroProducaoCooperado };
 
+const CapacidadeNoHistorico: React.FC<{ cooperado?: CooperadoComProducao }> = ({ cooperado }) => {
+  const cadastro = cooperado?.cadastroProducao;
+  return (
+    <section className="space-y-2 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+      <h5 className="text-sm font-bold">Capacidade de Produção Cadastrada</h5>
+      {!cadastro?.itens.length ? (
+        <p className="text-xs text-slate-500">{cooperado ? 'Nenhuma capacidade cadastrada para este cooperado.' : 'Salve o cooperado para consultar a capacidade de produção.'}</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="text-slate-500">
+              <tr>
+                <th className="p-2">Produto</th>
+                <th className="p-2">Quantidade prevista</th>
+                <th className="p-2">Período</th>
+                <th className="p-2">Irrigado</th>
+                <th className="p-2">Área (ha)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+              {cadastro.itens.map(item => (
+                <tr key={item.id}>
+                  <td className="p-2 font-semibold">{item.produtoNome || '—'}</td>
+                  <td className="p-2">{[item.quantidade, item.unidade].filter(Boolean).join(' ') || '—'}</td>
+                  <td className="p-2">{item.periodo || '—'}</td>
+                  <td className="p-2">{item.irrigado || '—'}</td>
+                  <td className="p-2">{item.area || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+};
+
 const CadastroProducao: React.FC = () => {
   const { cooperados, produtos, updateCooperado, canWriteModule } = useCoop();
   const [cooperadoId, setCooperadoId] = useState('');
@@ -449,10 +486,21 @@ export const CooperadosView: React.FC = () => {
     currentUser,
     config,
     registrosProducao,
+    produtores,
     transacoesCapital,
     addTransacaoCapital,
     canWriteModule
   } = useCoop();
+
+  const producaoDoCooperado = (cooperadoId: string | null) => {
+    if (!cooperadoId) return [];
+    const produtoresVinculados = new Set(
+      produtores.filter(produtor => produtor.cooperadoId === cooperadoId).map(produtor => produtor.id)
+    );
+    return registrosProducao.filter(registro => registro.cooperadoId
+      ? registro.cooperadoId === cooperadoId
+      : produtoresVinculados.has(registro.produtorId));
+  };
 
   // Nível de permissão do usuário logado para este módulo (Cooperados).
   const canWrite = canWriteModule('cooperados');
@@ -1721,10 +1769,10 @@ export const CooperadosView: React.FC = () => {
                     </div>
                   </div>
 
+                  <CapacidadeNoHistorico cooperado={cooperados.find(c => c.id === editingId)} />
+                  <h5 className="text-sm font-bold">Registros de Produção e Entregas</h5>
                   {(() => {
-                    const producaoCooperado = registrosProducao.filter(
-                      r => r.cooperadoId === editingId || r.cooperadoNome === formData.nome || r.produtorNome === formData.nome
-                    );
+                    const producaoCooperado = producaoDoCooperado(editingId);
 
                     if (producaoCooperado.length === 0) {
                       return (
@@ -1985,10 +2033,10 @@ export const CooperadosView: React.FC = () => {
                 <h5 className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 text-xs">
                   <Sprout className="w-4 h-4 text-emerald-600" /> Histórico de Produção & Entregas
                 </h5>
+                <CapacidadeNoHistorico cooperado={cooperados.find(c => c.id === fichaModalCooperado.id)} />
+                <h5 className="text-sm font-bold">Registros de Produção e Entregas</h5>
                 {(() => {
-                  const items = registrosProducao.filter(
-                    r => r.cooperadoId === fichaModalCooperado.id || r.cooperadoNome === fichaModalCooperado.nome || r.produtorNome === fichaModalCooperado.nome
-                  );
+                  const items = producaoDoCooperado(fichaModalCooperado.id);
                   if (items.length === 0) {
                     return <p className="text-slate-400 italic text-[11px]">Nenhuma entrega ou produção declarada até o momento.</p>;
                   }
