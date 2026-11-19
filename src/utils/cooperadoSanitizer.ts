@@ -161,7 +161,7 @@ export function sanitizeCooperado<T extends Record<string, any>>(record: T): T {
     capitalSubscrito: typeof record.capitalSubscrito === 'number' ? record.capitalSubscrito : (Number(record.capitalSubscrito) || 1000),
     capitalIntegralizado: typeof record.capitalIntegralizado === 'number' ? record.capitalIntegralizado : (Number(record.capitalIntegralizado) || 0),
     dapCaf: record.dapCaf || 'DAP-TRAIRI-2026',
-    cafDapValidade: record.cafDapValidade || '2028-12-31',
+    cafDapValidade: record.cafDapValidade || '',
     aptoPaa: record.aptoPaa !== false
   };
 }
