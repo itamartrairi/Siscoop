@@ -129,11 +129,11 @@ export const PortalEscolaView: React.FC = () => {
     observacaoRestricao: '',
     itensRecebidos: [] as { produto: string; qtdEsperada: number; qtdRecebida: number }[],
     avaliacao: {
-      aparenciaVisual: 5,
-      qualidadeGeral: 5,
-      higieneEmbalagem: 5,
-      pontualidadeEntrega: 5,
-      quantidadeCorreta: true,
+      aparenciaVisual: 0,
+      qualidadeGeral: 0,
+      higieneEmbalagem: 0,
+      pontualidadeEntrega: 0,
+      quantidadeCorreta: false,
       comentarios: ''
     }
   });
@@ -143,17 +143,16 @@ export const PortalEscolaView: React.FC = () => {
   const [assinaturaVazia, setAssinaturaVazia] = useState(true);
 
   const handleOpenComprovante = () => {
-    const programacao = programacoesDaEscola[0];
     setComprovanteForm({
-      pedidoId: programacao?.pedidoId || '',
-      programacaoId: programacao?.id || '',
-      motoristaNome: programacao?.motoristaNome || '',
-      placaVeiculo: programacao?.veiculoPlaca || '',
+      pedidoId: '',
+      programacaoId: '',
+      motoristaNome: '',
+      placaVeiculo: '',
       assinadoPor: '',
       statusConfirmacao: 'RECEBIDO_OK',
       observacaoRestricao: '',
-      itensRecebidos: programacao ? itensDaProgramacao(programacao) : [],
-      avaliacao: { aparenciaVisual: 5, qualidadeGeral: 5, higieneEmbalagem: 5, pontualidadeEntrega: 5, quantidadeCorreta: true, comentarios: '' }
+      itensRecebidos: [],
+      avaliacao: { aparenciaVisual: 0, qualidadeGeral: 0, higieneEmbalagem: 0, pontualidadeEntrega: 0, quantidadeCorreta: false, comentarios: '' }
     });
     setFotoComprovanteBase64('');
     setAssinaturaVazia(true);
@@ -162,14 +161,13 @@ export const PortalEscolaView: React.FC = () => {
 
   const handleSelecionarProgramacaoComprovante = (programacaoId: string) => {
     const programacao = programacoesDaEscola.find(p => p.id === programacaoId);
-    if (!programacao) return;
     setComprovanteForm(prev => ({
       ...prev,
       programacaoId,
-      pedidoId: programacao.pedidoId || '',
-      motoristaNome: programacao.motoristaNome || '',
-      placaVeiculo: programacao.veiculoPlaca || '',
-      itensRecebidos: itensDaProgramacao(programacao)
+      pedidoId: programacao?.pedidoId || '',
+      motoristaNome: programacao?.motoristaNome || '',
+      placaVeiculo: programacao?.veiculoPlaca || '',
+      itensRecebidos: programacao ? itensDaProgramacao(programacao) : []
     }));
   };
 
@@ -254,6 +252,10 @@ export const PortalEscolaView: React.FC = () => {
     }
 
     const { aparenciaVisual, qualidadeGeral, higieneEmbalagem, pontualidadeEntrega } = comprovanteForm.avaliacao;
+    if ([aparenciaVisual, qualidadeGeral, higieneEmbalagem, pontualidadeEntrega].some(nota => nota < 1)) {
+      alert('Preencha as quatro notas da avaliação antes de salvar.');
+      return;
+    }
     const notaMedia = Number(((aparenciaVisual + qualidadeGeral + higieneEmbalagem + pontualidadeEntrega) / 4).toFixed(1));
     const assinaturaUrl = canvasAssinaturaRef.current?.toDataURL('image/png') || '';
     const pedidoSelecionado = pedidosProdutorPAA.find(p => p.id === comprovanteForm.pedidoId);
