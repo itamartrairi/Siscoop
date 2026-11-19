@@ -63,13 +63,24 @@ export const AssembleiasView: React.FC = () => {
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newTipo, setNewTipo] = useState<TipoAssembleia>('AGO');
-  const [newDataHora, setNewDataHora] = useState('2026-09-10T19:00');
-  const [newLocal, setNewLocal] = useState('Auditório Central CoopBrasil');
+  const [newDataHora, setNewDataHora] = useState('');
+  const [newLocal, setNewLocal] = useState('');
   const [newQuorumPercent, setNewQuorumPercent] = useState<number>(50);
   const [newConvocatoria, setNewConvocatoria] = useState('');
-  const [pautasDraftText, setPautasDraftText] = useState('Aprovação das Contas do Exercício\nDestinação das Sobras Líquidas\nEleição dos Membros do Conselho Fiscal');
+  const [pautasDraftText, setPautasDraftText] = useState('');
 
   // Edit Assembly Modal State
+  const abrirNovaAssembleia = () => {
+    setNewTitle('');
+    setNewTipo('AGO');
+    setNewDataHora('');
+    setNewLocal('');
+    setNewQuorumPercent(50);
+    setNewConvocatoria('');
+    setPautasDraftText('');
+    setIsNewModalOpen(true);
+  };
+
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editTipo, setEditTipo] = useState<TipoAssembleia>('AGO');
@@ -86,6 +97,13 @@ export const AssembleiasView: React.FC = () => {
   const [pautaTipoQuorum, setPautaTipoQuorum] = useState<'SIMPLES' | 'ABSOLUTA' | 'QUALIFICADO'>('SIMPLES');
 
   // Ata Officials State
+  const abrirNovaPauta = () => {
+    setPautaTitulo('');
+    setPautaDescricao('');
+    setPautaTipoQuorum('SIMPLES');
+    setIsAddPautaOpen(true);
+  };
+
   const [presidenteNome, setPresidenteNome] = useState('Diretor Presidente');
   const [secretarioNome, setSecretarioNome] = useState('Secretário Geral');
 
@@ -347,7 +365,7 @@ ${secretarioNome} - Secretário ad-hoc`;
         </div>
         {currentUser.role !== 'CONSULTA' && (
           <button
-            onClick={() => setIsNewModalOpen(true)}
+            onClick={abrirNovaAssembleia}
             className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-extrabold flex items-center gap-2 shadow-md transition-all active:scale-95"
           >
             <Plus className="w-4 h-4" /> Nova Assembleia / Reunião
@@ -612,7 +630,7 @@ ${secretarioNome} - Secretário ad-hoc`;
                   </div>
                   {currentUser.role !== 'CONSULTA' && (
                     <button
-                      onClick={() => setIsAddPautaOpen(true)}
+                      onClick={abrirNovaPauta}
                       className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-sm transition-all active:scale-95"
                     >
                       <Plus className="w-4 h-4" /> Incluir Nova Pauta

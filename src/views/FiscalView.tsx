@@ -88,7 +88,7 @@ export const FiscalView: React.FC = () => {
   // Form State para Nova Nota Fiscal
   const [formModelo, setFormModelo] = useState<'NFE_55' | 'NFCE_65' | 'NFAE_AVULSA'>('NFE_55');
   const [formTipoOp, setFormTipoOp] = useState<'SAIDA_PNAE_PAA' | 'SAIDA_VENDA' | 'ENTRADA_PRODUTOR' | 'DEVOLUCAO'>('SAIDA_PNAE_PAA');
-  const [formNatureza, setFormNatureza] = useState('Venda de Produção Agrícola Familiar para Alimentação Escolar (PNAE CE)');
+  const [formNatureza, setFormNatureza] = useState('');
   const [formSistemaTributario, setFormSistemaTributario] = useState<SistemaTributarioNFe>('NOVO_SISTEMA_REFORMA_2026');
   
   // Emitente
@@ -99,38 +99,15 @@ export const FiscalView: React.FC = () => {
   // Destinatário
   const [formDestNome, setFormDestNome] = useState('');
   const [formDestCnpjCpf, setFormDestCnpjCpf] = useState('');
-  const [formDestIe, setFormDestIe] = useState('ISENTO');
+  const [formDestIe, setFormDestIe] = useState('');
   const [formDestEndereco, setFormDestEndereco] = useState('');
-  const [formDestMunicipio, setFormDestMunicipio] = useState('Trairi');
-  const [formDestUf, setFormDestUf] = useState('CE');
+  const [formDestMunicipio, setFormDestMunicipio] = useState('');
+  const [formDestUf, setFormDestUf] = useState('');
   const [formDestEmail, setFormDestEmail] = useState('');
 
   // Itens da Nota
-  const [itemsList, setItemsList] = useState<NotaFiscalItem[]>([
-    {
-      id: 'item-1',
-      descricao: 'Feijão Caupi Macassar Orgânico (Kg)',
-      ncm: '0713.35.00',
-      cfop: '5101',
-      unidade: 'KG',
-      quantidade: 100,
-      valorUnitario: 8.50,
-      valorTotal: 850.00,
-      icmsCstCsosn: '400',
-      icmsAliquota: 0,
-      icmsValor: 0,
-      cbsAliquota: 0,
-      cbsValor: 0,
-      ibsAliquota: 0,
-      ibsValor: 0,
-      isAliquota: 0,
-      isValor: 0,
-      funruralAliquota: 0,
-      funruralValor: 0
-    }
-  ]);
-
-  const [formObs, setFormObs] = useState('ISENÇÃO DE ICMS CONFORME REGULAMENTO DO ICMS DO ESTADO DO CEARÁ (DECRETO ESTADUAL PNAE/PAA). NOVO SISTEMA TRIBUTÁRIO: ALÍQUOTA ZERO DE CBS E IBS CONFORME CESTA BÁSICA NACIONAL (EC 132/2023).');
+  const [itemsList, setItemsList] = useState<NotaFiscalItem[]>([]);
+  const [formObs, setFormObs] = useState('');
 
   // Config Form State
   const [configForm, setConfigForm] = useState<SefazCeConfig>(sefazCeConfig);
@@ -204,29 +181,44 @@ export const FiscalView: React.FC = () => {
     handleSelectProdutorParaEntrada(produtorId);
   };
 
+  const abrirNovaNota = () => {
+    setFormModelo('NFE_55');
+    setFormTipoOp('SAIDA_PNAE_PAA');
+    setFormNatureza('');
+    setFormSistemaTributario('NOVO_SISTEMA_REFORMA_2026');
+    setFormEmitenteTipo('COOPERATIVA');
+    setFormSelectedProdutorId('');
+    setFormSelectedEscolaId('');
+    setFormDestNome('');
+    setFormDestCnpjCpf('');
+    setFormDestIe('');
+    setFormDestEndereco('');
+    setFormDestMunicipio('');
+    setFormDestUf('');
+    setFormDestEmail('');
+    setItemsList([]);
+    setFormObs('');
+    setActiveTab('nova');
+  };
+
   // Funções de itens da NF
   const handleAddItem = () => {
-    const defaultVal = 50.00;
-    const impostos = calcularImpostosItem(defaultVal, formTipoOp, formSistemaTributario);
+    const impostos = calcularImpostosItem(0, formTipoOp, formSistemaTributario);
     const newItem: NotaFiscalItem = {
       id: `item-${Date.now()}`,
-      descricao: 'Produto da Agricultura Familiar',
-      ncm: '0810.90.00',
+      descricao: '',
+      ncm: '',
       cfop: formTipoOp === 'ENTRADA_PRODUTOR' ? '1131' : '5101',
       unidade: 'KG',
-      quantidade: 10,
-      valorUnitario: 5.00,
-      valorTotal: defaultVal,
+      quantidade: 0,
+      valorUnitario: 0,
+      valorTotal: 0,
       ...impostos
     };
     setItemsList(prev => [...prev, newItem]);
   };
 
   const handleRemoveItem = (id: string) => {
-    if (itemsList.length <= 1) {
-      alert('A Nota Fiscal deve conter pelo menos 1 item.');
-      return;
-    }
     setItemsList(prev => prev.filter(item => item.id !== id));
   };
 
@@ -257,6 +249,10 @@ export const FiscalView: React.FC = () => {
   const handleCreateNota = (e: React.FormEvent, transmitirDireto: boolean) => {
     e.preventDefault();
     if (!canWrite) { blockWriteAction(); return; }
+    if (!itemsList.length || itemsList.some(item => !item.descricao.trim() || item.quantidade <= 0)) {
+      alert('Adicione pelo menos um item e preencha a descrição e a quantidade.');
+      return;
+    }
     if (!formDestNome || !formDestCnpjCpf) {
       alert('Por favor, informe o Nome/Razão Social e CPF/CNPJ do destinatário.');
       return;
@@ -434,7 +430,7 @@ export const FiscalView: React.FC = () => {
               <Building2 className="w-4 h-4" /> Exportar Fortes Fiscal
             </button>
             <button
-              onClick={() => setActiveTab('nova')}
+              onClick={abrirNovaNota}
               className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl shadow-lg transition-all flex items-center gap-2 text-sm"
             >
               <Plus className="w-4 h-4" /> Emitir Nota Fiscal
@@ -530,7 +526,7 @@ export const FiscalView: React.FC = () => {
 
       <NavegacaoSecoes selecionada={activeTab !== null} voltar={() => setActiveTab(null)} secoes={[
         { titulo: <>Notas Fiscais Emitidas ({notasFiscais.length})</>, descricao: "Consulte as notas fiscais emitidas.", icone: Layers, abrir: () => setActiveTab('lista') },
-        { titulo: <>Nova Emissão (NF-e / NFA-e)</>, descricao: "Preencha os dados para emitir uma nota fiscal.", icone: Plus, abrir: () => setActiveTab('nova') },
+        { titulo: <>Nova Emissão (NF-e / NFA-e)</>, descricao: "Preencha os dados para emitir uma nota fiscal.", icone: Plus, abrir: abrirNovaNota },
         { titulo: <>Reforma Tributária (CBS / IBS / Cronograma)</>, descricao: "Consulte tributos e cronograma de transição.", icone: Scale, abrir: () => setActiveTab('reforma') },
         { titulo: <>Configurações SEFAZ-CE & Certificado</>, descricao: "Configure a integração fiscal e o certificado.", icone: Settings, abrir: () => setActiveTab('config') }
       ]} />
@@ -1020,7 +1016,7 @@ export const FiscalView: React.FC = () => {
                           <input
                             type="number"
                             step="0.01"
-                            value={item.quantidade}
+                            value={item.quantidade || ''}
                             onChange={e => handleItemChange(item.id, 'quantidade', e.target.value)}
                             className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs font-bold font-mono"
                             required
@@ -1030,7 +1026,7 @@ export const FiscalView: React.FC = () => {
                           <input
                             type="number"
                             step="0.01"
-                            value={item.valorUnitario}
+                            value={item.valorUnitario || ''}
                             onChange={e => handleItemChange(item.id, 'valorUnitario', e.target.value)}
                             className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs font-bold font-mono"
                             required
@@ -1133,7 +1129,7 @@ export const FiscalView: React.FC = () => {
               </p>
             </div>
             <button
-              onClick={() => setActiveTab('nova')}
+              onClick={abrirNovaNota}
               className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shrink-0 shadow-xs transition-colors"
             >
               <Plus className="w-4 h-4" /> Emitir NF c/ Reforma 2026

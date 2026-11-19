@@ -81,7 +81,7 @@ export const AppProdutorView: React.FC = () => {
     return email && authEmail.trim() && email.toLowerCase().trim() === authEmail.toLowerCase().trim();
   });
 
-  const [produtoOfertaId, setProdutoOfertaId] = useState(produtos[0]?.id || '');
+  const [produtoOfertaId, setProdutoOfertaId] = useState('');
   const [chamadaOfertaId, setChamadaOfertaId] = useState('');
   // Campo livre — sem valor padrão, o produtor digita a quantidade que quiser.
   const [qtdOfertaKg, setQtdOfertaKg] = useState<string>('');
@@ -97,6 +97,14 @@ export const AppProdutorView: React.FC = () => {
   }[]>([]);
   const [sucessoMsg, setSucessoMsg] = useState(false);
   const [ofertaErro, setOfertaErro] = useState<string | null>(null);
+
+  const limparOferta = () => {
+    setItensOferta([]);
+    setChamadaOfertaId('');
+    setProdutoOfertaId('');
+    setQtdOfertaKg('');
+    setOfertaErro(null);
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -200,9 +208,7 @@ export const AppProdutorView: React.FC = () => {
       });
     }
 
-    setItensOferta([]);
-    setChamadaOfertaId('');
-    setOfertaErro(null);
+    limparOferta();
     setSucessoMsg(true);
     setTimeout(() => setSucessoMsg(false), 3000);
   };
@@ -390,7 +396,7 @@ export const AppProdutorView: React.FC = () => {
     <div className="max-w-5xl mx-auto space-y-6">
       <nav className="sticky top-2 z-10 -mx-1 flex gap-2 overflow-x-auto rounded-2xl bg-slate-950/95 p-2 shadow-lg backdrop-blur" aria-label="Seções do portal do produtor">
         {[['ofertar', 'Ofertar produtos'], ['ofertas', 'Minhas ofertas'], ['historico', 'Pedidos e entregas']].map(([id, label]) => (
-          <button key={id} type="button" onClick={() => setAbaAtiva(id as typeof abaAtiva)} className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-black transition-all ${abaAtiva === id ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-300 hover:bg-slate-800'}`}>
+          <button key={id} type="button" onClick={() => { if (id === 'ofertar' && abaAtiva !== id) limparOferta(); setAbaAtiva(id as typeof abaAtiva); }} className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-black transition-all ${abaAtiva === id ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-300 hover:bg-slate-800'}`}>
             {label}
           </button>
         ))}
@@ -445,14 +451,9 @@ export const AppProdutorView: React.FC = () => {
                 required
                 value={chamadaOfertaId}
                 onChange={e => {
-                  const id = e.target.value;
-                  const chamada = chamadasPublicas.find(c => c.id === id);
-                  const primeiroItem = chamada?.itensSolicitados?.[0];
-                  const primeiroProduto = primeiroItem
-                    ? produtos.find(p => (primeiroItem.produtoId && p.id === primeiroItem.produtoId) || p.nome.trim().toLowerCase() === primeiroItem.produtoNome.trim().toLowerCase())
-                    : undefined;
-                  setChamadaOfertaId(id);
-                  setProdutoOfertaId(primeiroProduto?.id || '');
+                  setChamadaOfertaId(e.target.value);
+                  setProdutoOfertaId('');
+                  setQtdOfertaKg('');
                   setItensOferta([]);
                   setOfertaErro(null);
                 }}
@@ -477,6 +478,7 @@ export const AppProdutorView: React.FC = () => {
                     onChange={e => setProdutoOfertaId(e.target.value)}
                     className="w-full p-3 bg-slate-800 border border-slate-700 text-white rounded-2xl font-bold focus:ring-2 focus:ring-emerald-500"
                   >
+                    <option value="">Selecione um produto</option>
                     {produtosDaChamada.map(p => (
                       <option key={p.id} value={p.id}>{p.nome} ({p.unidadeMedida})</option>
                     ))}
@@ -484,7 +486,7 @@ export const AppProdutorView: React.FC = () => {
                   {produtosDaChamada.length === 0 && (
                     <p className="text-[10px] text-amber-400 mt-1.5">Nenhum produto do catálogo foi vinculado aos itens deste edital.</p>
                   )}
-                  {!itemDaChamada && produtosDaChamada.length > 0 && (
+                  {produtoOfertaId && !itemDaChamada && produtosDaChamada.length > 0 && (
                     <p className="text-[10px] text-amber-400 mt-1.5">Este produto não está na lista de itens solicitados desta chamada.</p>
                   )}
                 </div>

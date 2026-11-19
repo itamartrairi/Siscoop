@@ -273,33 +273,33 @@ export const CadastrosView: React.FC = () => {
     matricula: `COOP-${String(cooperados.length + 1).padStart(4, '0')}`,
     nome: '',
     cpf: '',
-    rg: '12.345.678-9',
-    dataNascimento: '1990-01-01',
+    rg: '',
+    dataNascimento: '',
     sexo: 'M' as 'M' | 'F' | 'OUTRO',
     estadoCivil: 'CASADO' as any,
-    profissao: 'Agricultor(a) Rural',
+    profissao: '',
     nacionalidade: 'Brasileira',
     situacao: 'ATIVO' as 'ATIVO' | 'INATIVO' | 'SUSPENSO' | 'DEMITIDO',
     categoria: 'SUDOESTE_AGRO' as any,
     dataFiliacao: new Date().toISOString().split('T')[0],
-    logradouro: 'Comunidade Rural S/N',
-    numero: 'S/N',
+    logradouro: '',
+    numero: '',
     complemento: '',
-    bairro: 'Zona Rural',
-    cidade: 'Trairi',
-    estado: 'CE',
-    cep: '62690-000',
+    bairro: '',
+    cidade: '',
+    estado: '',
+    cep: '',
     pais: 'Brasil',
-    telefone: '(85) 3351-0000',
-    celular: '(85) 99999-0000',
-    whatsapp: '5585999990000',
-    email: 'cooperado@email.com',
+    telefone: '',
+    celular: '',
+    whatsapp: '',
+    email: '',
     contatoEmergencia: '',
-    banco: 'Sicoob',
-    agencia: '3001-2',
-    conta: '12345-6',
-    chavePix: 'cooperado@email.com',
-    observacoes: 'Cadastrado no Módulo de Cadastros Unificados',
+    banco: '',
+    agencia: '',
+    conta: '',
+    chavePix: '',
+    observacoes: '',
     documentos: []
   });
   const [filterCafStatus, setFilterCafStatus] = useState<'TODOS' | 'PRESTES_A_EXPIRAR' | 'EXPIRADO' | 'VALIDO'>('TODOS');
@@ -355,18 +355,18 @@ export const CadastrosView: React.FC = () => {
     nome: '',
     cpfCnpj: '',
     cafDapNum: '',
-    cafDapValidade: '2028-12-31',
+    cafDapValidade: '',
     nomePropriedade: '',
-    municipio: 'Trairi',
-    uf: 'CE',
+    municipio: '',
+    uf: '',
     comunidade: '',
-    polo: 'Sede',
-    areaHectares: 15,
+    polo: '',
+    areaHectares: 0,
     certificacaoOrganica: false,
     telefone: '',
     situacao: 'ATIVO' as 'ATIVO' | 'INATIVO',
-    latitude: -3.3768,
-    longitude: -39.2689,
+    latitude: undefined as number | undefined,
+    longitude: undefined as number | undefined,
     pontoReferencia: ''
   });
 
@@ -375,8 +375,8 @@ export const CadastrosView: React.FC = () => {
     nome: '',
     categoria: 'HORTIFRUTI' as any,
     unidadeMedida: 'KG' as any,
-    precoReferencia: 4.5,
-    sazonalidade: 'Ano todo',
+    precoReferencia: 0,
+    sazonalidade: '',
     codigoNcm: '',
     codigoConab: '',
     pesoUnitario: 0 as number,
@@ -401,10 +401,10 @@ export const CadastrosView: React.FC = () => {
     codigo: '',
     nome: '',
     tipo: 'PAA' as any,
-    orgaoExecutor: 'Conab / FNDE',
+    orgaoExecutor: '',
     descricao: '',
-    limiteAnualPorProdutor: 15000,
-    orcamentoTotal: 100000,
+    limiteAnualPorProdutor: 0,
+    orcamentoTotal: 0,
     status: 'EM_ANDAMENTO' as any
   });
 
@@ -412,13 +412,13 @@ export const CadastrosView: React.FC = () => {
     nomeEscola: '',
     inepCodigo: '',
     localDeEntrega: '',
-    cnae: '8512-1/00',
+    cnae: '',
     razaoSocial: '',
     cnpj: '',
     logradouroNum: '',
-    localidade: 'Trairi/CE',
-    alunosAtendidos: 250,
-    polo: 'Sede',
+    localidade: '',
+    alunosAtendidos: 0,
+    polo: '',
     representante: '',
     tipo: 'Municipal',
     cpf: '',
@@ -428,13 +428,13 @@ export const CadastrosView: React.FC = () => {
     celular: '',
     diretorResponsavel: '',
     endereco: '',
-    latitude: -3.3768,
-    longitude: -39.2689,
+    latitude: undefined as number | undefined,
+    longitude: undefined as number | undefined,
     pontoReferencia: '',
-    cep: '62690-000',
-    bairro: 'Centro',
-    municipio: 'Trairi',
-    uf: 'CE'
+    cep: '',
+    bairro: '',
+    municipio: '',
+    uf: ''
   });
 
   // Open modals for add/edit
@@ -464,8 +464,8 @@ export const CadastrosView: React.FC = () => {
         estado: cleanC.estado || 'CE',
         cep: cleanC.cep || '62690-000',
         pais: cleanC.pais || 'Brasil',
-        latitude: cleanC.latitude ?? -3.3768,
-        longitude: cleanC.longitude ?? -39.2689,
+        latitude: cleanC.latitude,
+        longitude: cleanC.longitude,
         pontoReferencia: cleanC.pontoReferencia || '',
         telefone: cleanC.telefone || '',
         celular: cleanC.celular || '',
@@ -485,36 +485,36 @@ export const CadastrosView: React.FC = () => {
         matricula: `COOP-${String(cooperados.length + 1).padStart(4, '0')}`,
         nome: '',
         cpf: '',
-        rg: '12.345.678-9',
-        dataNascimento: '1990-01-01',
+        rg: '',
+        dataNascimento: '',
         sexo: 'M',
         estadoCivil: 'CASADO',
-        profissao: 'Agricultor(a) Rural',
+        profissao: '',
         nacionalidade: 'Brasileira',
         situacao: 'ATIVO',
         categoria: 'SUDOESTE_AGRO',
         dataFiliacao: new Date().toISOString().split('T')[0],
-        logradouro: 'Comunidade Rural S/N',
-        numero: 'S/N',
+        logradouro: '',
+        numero: '',
         complemento: '',
-        bairro: 'Zona Rural',
-        cidade: 'Trairi',
-        estado: 'CE',
-        cep: '62690-000',
+        bairro: '',
+        cidade: '',
+        estado: '',
+        cep: '',
         pais: 'Brasil',
-        latitude: -3.3768,
-        longitude: -39.2689,
+        latitude: undefined as number | undefined,
+        longitude: undefined as number | undefined,
         pontoReferencia: '',
-        telefone: '(85) 3351-0000',
-        celular: '(85) 99999-0000',
-        whatsapp: '5585999990000',
-        email: 'cooperado@email.com',
+        telefone: '',
+        celular: '',
+        whatsapp: '',
+        email: '',
         contatoEmergencia: '',
-        banco: 'Sicoob',
-        agencia: '3001-2',
-        conta: '12345-6',
-        chavePix: 'cooperado@email.com',
-        observacoes: 'Cadastrado no Módulo de Cadastros Unificados',
+        banco: '',
+        agencia: '',
+        conta: '',
+        chavePix: '',
+        observacoes: '',
         documentos: []
       });
     }
@@ -594,8 +594,8 @@ export const CadastrosView: React.FC = () => {
         certificacaoOrganica: p.certificacaoOrganica || false,
         telefone: p.telefone || '',
         situacao: p.situacao || 'ATIVO',
-        latitude: p.latitude ?? -3.3768,
-        longitude: p.longitude ?? -39.2689,
+        latitude: p.latitude,
+        longitude: p.longitude,
         pontoReferencia: p.pontoReferencia || ''
       });
     } else {
@@ -605,18 +605,18 @@ export const CadastrosView: React.FC = () => {
         nome: '',
         cpfCnpj: '',
         cafDapNum: '',
-        cafDapValidade: '2028-12-31',
+        cafDapValidade: '',
         nomePropriedade: '',
-        municipio: 'Trairi',
-        uf: 'CE',
+        municipio: '',
+        uf: '',
         comunidade: '',
-        polo: 'Sede',
-        areaHectares: 15,
+        polo: '',
+        areaHectares: 0,
         certificacaoOrganica: false,
         telefone: '',
         situacao: 'ATIVO',
-        latitude: -3.3768,
-        longitude: -39.2689,
+        latitude: undefined as number | undefined,
+        longitude: undefined as number | undefined,
         pontoReferencia: ''
       });
     }
@@ -663,8 +663,8 @@ export const CadastrosView: React.FC = () => {
         nome: '',
         categoria: 'HORTIFRUTI',
         unidadeMedida: 'KG',
-        precoReferencia: 4.5,
-        sazonalidade: 'Ano todo',
+        precoReferencia: 0,
+        sazonalidade: '',
         pesoUnitario: 0,
         tipoProcessamento: 'IN_NATURA',
         ...codigoInicial
@@ -720,10 +720,10 @@ export const CadastrosView: React.FC = () => {
         codigo: `PROG-${Date.now().toString().slice(-4)}`,
         nome: '',
         tipo: 'PAA',
-        orgaoExecutor: 'MDS / FNDE',
+        orgaoExecutor: '',
         descricao: '',
-        limiteAnualPorProdutor: 15000,
-        orcamentoTotal: 100000,
+        limiteAnualPorProdutor: 0,
+        orcamentoTotal: 0,
         status: 'EM_ANDAMENTO'
       });
     }
@@ -777,8 +777,8 @@ export const CadastrosView: React.FC = () => {
         celular: eItem.celular || '',
         diretorResponsavel: eItem.diretorResponsavel || '',
         endereco: eItem.endereco || '',
-        latitude: eItem.latitude ?? -3.3768,
-        longitude: eItem.longitude ?? -39.2689,
+        latitude: eItem.latitude,
+        longitude: eItem.longitude,
         pontoReferencia: eItem.pontoReferencia || '',
         cep: eItem.cep || '62690-000',
         bairro: eItem.bairro || 'Centro',
@@ -789,31 +789,31 @@ export const CadastrosView: React.FC = () => {
       setEditingEscola(null);
       setEscolaForm({
         nomeEscola: '',
-        inepCodigo: `${Math.floor(10000000 + Math.random() * 90000000)}`,
+        inepCodigo: '',
         localDeEntrega: '',
-        cnae: '8512-1/00',
+        cnae: '',
         razaoSocial: '',
         cnpj: '',
         logradouroNum: '',
-        localidade: 'Trairi/CE',
-        alunosAtendidos: 250,
-        polo: 'Sede',
+        localidade: '',
+        alunosAtendidos: 0,
+        polo: '',
         representante: '',
         tipo: 'Municipal',
         cpf: '',
         rg: '',
-        email: 'escola@trairi.ce.gov.br',
-        telefone: '(85) 3351-8800',
-        celular: '(85) 99888-1234',
+        email: '',
+        telefone: '',
+        celular: '',
         diretorResponsavel: '',
         endereco: '',
-        latitude: -3.3768,
-        longitude: -39.2689,
+        latitude: undefined as number | undefined,
+        longitude: undefined as number | undefined,
         pontoReferencia: '',
-        cep: '62690-000',
-        bairro: 'Centro',
-        municipio: 'Trairi',
-        uf: 'CE'
+        cep: '',
+        bairro: '',
+        municipio: '',
+        uf: ''
       });
     }
     setShowEscolaModal(true);
@@ -1581,7 +1581,7 @@ export const CadastrosView: React.FC = () => {
                   <label className="block text-slate-700 font-bold mb-1">Área (Hectares)</label>
                   <input
                     type="number"
-                    value={produtorForm.areaHectares}
+                    value={produtorForm.areaHectares || ''}
                     onChange={e => setProdutorForm({ ...produtorForm, areaHectares: parseFloat(e.target.value) || 0 })}
                     className="w-full p-2 border border-slate-200 rounded-xl"
                   />
@@ -1745,7 +1745,7 @@ export const CadastrosView: React.FC = () => {
                   <input
                     type="number"
                     step="0.1"
-                    value={produtoForm.precoReferencia}
+                    value={produtoForm.precoReferencia || ''}
                     onChange={e => setProdutoForm({ ...produtoForm, precoReferencia: parseFloat(e.target.value) || 0 })}
                     className="w-full p-2.5 border border-slate-200 rounded-xl"
                   />
@@ -1872,7 +1872,7 @@ export const CadastrosView: React.FC = () => {
                 <label className="block text-slate-700 font-bold mb-1">Teto Anual por Produtor (R$)</label>
                 <input
                   type="number"
-                  value={programaForm.limiteAnualPorProdutor}
+                  value={programaForm.limiteAnualPorProdutor || ''}
                   onChange={e => setProgramaForm({ ...programaForm, limiteAnualPorProdutor: parseFloat(e.target.value) || 0 })}
                   className="w-full p-2.5 border border-slate-200 rounded-xl"
                 />
@@ -2109,7 +2109,7 @@ export const CadastrosView: React.FC = () => {
                 </div>
                 <input
                   type="number"
-                  value={escolaForm.alunosAtendidos}
+                  value={escolaForm.alunosAtendidos || ''}
                   onChange={e => setEscolaForm({ ...escolaForm, alunosAtendidos: parseInt(e.target.value) || 0 })}
                   className="flex-1 bg-white border border-slate-300 rounded-lg p-2 text-xs text-slate-900 shadow-inner font-bold"
                 />

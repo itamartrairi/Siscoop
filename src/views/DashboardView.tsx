@@ -94,11 +94,20 @@ export const DashboardView: React.FC<Props> = ({ setActiveView, onNavigateModule
   // Quick New Contribution Modal
   const [showAporteModal, setShowAporteModal] = useState(false);
   const [modalCooperadoId, setModalCooperadoId] = useState('');
-  const [modalValor, setModalValor] = useState<number>(500);
+  const [modalValor, setModalValor] = useState<number>(0);
   const [modalForma, setModalForma] = useState<FormaPagamento>('PIX');
   const [modalData, setModalData] = useState<string>(new Date().toISOString().substring(0, 10));
-  const [modalObs, setModalObs] = useState<string>('Aporte mensal de cota-parte');
+  const [modalObs, setModalObs] = useState<string>('');
   const [modalLoading, setModalLoading] = useState(false);
+
+  const abrirNovoAporte = () => {
+    setModalCooperadoId('');
+    setModalValor(0);
+    setModalForma('PIX');
+    setModalData(new Date().toISOString().substring(0, 10));
+    setModalObs('');
+    setShowAporteModal(true);
+  };
 
   // Connect to Firestore and subscribe to real-time collections
   useEffect(() => {
@@ -484,7 +493,7 @@ export const DashboardView: React.FC<Props> = ({ setActiveView, onNavigateModule
 
           <div className="flex items-center gap-2.5 flex-wrap">
             <button
-              onClick={() => setShowAporteModal(true)}
+              onClick={abrirNovoAporte}
               className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
             >
               <Plus className="w-4 h-4" /> Novo Aporte de Capital
@@ -1115,7 +1124,7 @@ export const DashboardView: React.FC<Props> = ({ setActiveView, onNavigateModule
                     type="number"
                     step="0.01"
                     min="1"
-                    value={modalValor}
+                    value={modalValor || ''}
                     onChange={(e) => setModalValor(Number(e.target.value))}
                     required
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-mono font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"

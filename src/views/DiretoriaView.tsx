@@ -31,12 +31,19 @@ export const DiretoriaView: React.FC = () => {
   const [isNewMandatoOpen, setIsNewMandatoOpen] = useState(false);
   const [modalSearchCoop, setModalSearchCoop] = useState('');
 
-  const [newMandatoForm, setNewMandatoForm] = useState({
-    gestaoTitulo: `Gestão Executiva ${new Date().getFullYear()}-${new Date().getFullYear() + 2}`,
-    periodoInicio: `${new Date().getFullYear()}-01-01`,
-    periodoFim: `${new Date().getFullYear() + 2}-12-31`,
+  const mandatoVazio = () => ({
+    gestaoTitulo: '',
+    periodoInicio: '',
+    periodoFim: '',
     status: 'VIGENTE' as 'VIGENTE' | 'ENCERRADO' | 'ELEICAO_EM_ANDAMENTO'
   });
+
+  const [newMandatoForm, setNewMandatoForm] = useState(mandatoVazio);
+
+  const abrirNovoMandato = () => {
+    setNewMandatoForm(mandatoVazio());
+    setIsNewMandatoOpen(true);
+  };
 
   const handleCreateMandato = (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,8 +61,8 @@ export const DiretoriaView: React.FC = () => {
   // New Board Member Form State
   const [selectedCoopId, setSelectedCoopId] = useState('');
   const [selectedCargo, setSelectedCargo] = useState<CargoDiretoria>('CONSELHEIRO_ADMIN');
-  const [posseDate, setPosseDate] = useState('2024-04-01');
-  const [fimMandatoDate, setFimMandatoDate] = useState('2026-09-30');
+  const [posseDate, setPosseDate] = useState('');
+  const [fimMandatoDate, setFimMandatoDate] = useState('');
 
   // Check if mandate is expiring soon
   const today = new Date();
@@ -110,7 +117,7 @@ export const DiretoriaView: React.FC = () => {
         {currentUser.role !== 'CONSULTA' && (
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setIsNewMandatoOpen(true)}
+              onClick={abrirNovoMandato}
               className="px-3.5 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100 rounded-xl text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer"
             >
               <Plus className="w-4 h-4" /> Cadastrar Novo Mandato
@@ -118,9 +125,10 @@ export const DiretoriaView: React.FC = () => {
             <button
               onClick={() => {
                 setModalSearchCoop('');
-                if (cooperados.length > 0) {
-                  setSelectedCoopId(selectedCoopId && cooperados.some(c => c.id === selectedCoopId) ? selectedCoopId : cooperados[0].id);
-                }
+                setSelectedCoopId('');
+                setSelectedCargo('CONSELHEIRO_ADMIN');
+                setPosseDate('');
+                setFimMandatoDate('');
                 setIsNewMemberOpen(true);
               }}
               className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"

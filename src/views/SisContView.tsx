@@ -60,7 +60,7 @@ export const SisContView: React.FC = () => {
   const [editingLancamentoId, setEditingLancamentoId] = useState<string | null>(null);
 
   // Forms
-  const [planoForm, setPlanoForm] = useState({
+  const planoVazio = {
     codigo: '',
     nome: '',
     tipo: 'ATIVO' as 'ATIVO' | 'PASSIVO' | 'PATRIMONIO_LIQUIDO' | 'RECEITA' | 'CUSTO' | 'DESPESA',
@@ -68,28 +68,36 @@ export const SisContView: React.FC = () => {
     nivel: 4,
     tipoConta: 'ANALITICA' as 'SINTETICA' | 'ANALITICA',
     atoCooperativo: 'AMBOS' as 'COOPERATIVO' | 'NAO_COOPERATIVO' | 'AMBOS'
-  });
-  const [novoLancamento, setNovoLancamento] = useState({
+  };
+  const [planoForm, setPlanoForm] = useState(planoVazio);
+  const lancamentoVazio = () => ({
     numeroLancamento: `L-${Date.now().toString().slice(-4)}`,
     data: new Date().toISOString().split('T')[0],
-    contaDebitoCodigo: '11101.0001',
-    contaCreditoCodigo: '11201.9999',
-    valor: 5000.00,
-    historico: 'Integralização de Cota-Parte / Recebimento de Contrato PAA',
-    documentoRef: 'NF-1029',
+    contaDebitoCodigo: '',
+    contaCreditoCodigo: '',
+    valor: 0,
+    historico: '',
+    documentoRef: '',
     usuario: 'Contador SICOOP'
   });
+
+  const [novoLancamento, setNovoLancamento] = useState(lancamentoVazio);
 
   const [patrimonioForm, setPatrimonioForm] = useState({
     descricao: '',
     tombamentoNum: `PAT-${Math.floor(1000 + Math.random() * 9000)}`,
     categoria: 'MAQUINARIO' as 'VEICULO' | 'MAQUINARIO' | 'IMOVEL' | 'EQUIPAMENTO' | 'MOVEIS',
     dataAquisicao: new Date().toISOString().split('T')[0],
-    valorAquisicao: 15000,
-    depreciacaoAcumulada: 1200,
+    valorAquisicao: 0,
+    depreciacaoAcumulada: 0,
     vidaUtilAnos: 10,
-    localizacao: 'Sede Administrativa'
+    localizacao: ''
   });
+
+  const abrirNovaContaContabil = () => {
+    setPlanoForm(planoVazio);
+    setShowPlanoModal(true);
+  };
 
   const handleAddLancamento = (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,12 +145,7 @@ export const SisContView: React.FC = () => {
       });
     } else {
       setEditingLancamentoId(null);
-      setNovoLancamento(prev => ({
-        ...prev,
-        numeroLancamento: `L-${Date.now().toString().slice(-4)}`,
-        data: new Date().toISOString().split('T')[0],
-        documentoRef: ''
-      }));
+      setNovoLancamento(lancamentoVazio());
     }
     setShowLancModal(true);
   };
@@ -174,10 +177,10 @@ if (p) {
         tombamentoNum: `PAT-${Math.floor(1000 + Math.random() * 9000)}`,
         categoria: 'MAQUINARIO',
         dataAquisicao: new Date().toISOString().split('T')[0],
-        valorAquisicao: 15000,
+        valorAquisicao: 0,
         depreciacaoAcumulada: 0,
         vidaUtilAnos: 10,
-        localizacao: 'Sede / Galpão'
+        localizacao: ''
       });
     }
     setShowPatrimonioModal(true);
@@ -278,7 +281,7 @@ if (p) {
 
           {activeTab === 'plano' && (
             <button
-              onClick={() => setShowPlanoModal(true)}
+              onClick={abrirNovaContaContabil}
               className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2 cursor-pointer"
             >
               <Plus className="w-4 h-4" /> Cadastrar Conta Contábil
@@ -602,7 +605,7 @@ if (p) {
                 <input
                   type="number"
                   step="0.01"
-                  value={novoLancamento.valor}
+                  value={novoLancamento.valor || ''}
                   onChange={e => setNovoLancamento({ ...novoLancamento, valor: parseFloat(e.target.value) || 0 })}
                   className="w-full p-2.5 border border-slate-200 rounded-xl"
                 />
@@ -698,7 +701,7 @@ if (p) {
                   <label className="block text-slate-700 font-bold mb-1">Valor Aquisição (R$)</label>
                   <input
                     type="number"
-                    value={patrimonioForm.valorAquisicao}
+                    value={patrimonioForm.valorAquisicao || ''}
                     onChange={e => setPatrimonioForm({ ...patrimonioForm, valorAquisicao: parseFloat(e.target.value) || 0 })}
                     className="w-full p-2.5 border border-slate-200 rounded-xl font-bold"
                   />

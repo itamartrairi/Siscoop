@@ -57,18 +57,24 @@ export const BiView: React.FC = () => {
     { id: '3', nome: 'Giro de Estoque Médio Mensal', valorMeta: 1.2, atingido: 0.98, unidade: 'Taxa' }
   ]);
 
-  const [formMeta, setFormMeta] = useState({
-    nome: 'Meta de Cobertura de Estoque PAA 2026',
-    valorMeta: 100000,
-    atingido: 35000,
+  const metaVazia = {
+    nome: '',
+    valorMeta: 0,
+    atingido: 0,
     unidade: 'R$'
-  });
+  };
+  const [formMeta, setFormMeta] = useState(metaVazia);
 
   // Vendas vs. Estoque Filters
   const [metricUnit, setMetricUnit] = useState<'volume' | 'valor'>('volume'); // volume (Kg) vs valor (R$)
   const [chartType, setChartType] = useState<'composed' | 'bar' | 'area'>('composed');
   const [selectedYear, setSelectedYear] = useState<string>('2026');
   const [selectedCategoria, setSelectedCategoria] = useState<string>('TODAS');
+
+  const abrirNovaMeta = () => {
+    setFormMeta(metaVazia);
+    setShowModal(true);
+  };
 
   const handleAddMeta = (e: React.FormEvent) => {
     e.preventDefault();
@@ -254,7 +260,7 @@ export const BiView: React.FC = () => {
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
           <button
-            onClick={() => setShowModal(true)}
+            onClick={abrirNovaMeta}
             className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl text-xs shadow-lg transition-all flex items-center gap-2 cursor-pointer"
           >
             <Plus className="w-4 h-4" /> Cadastrar Meta BI
@@ -668,7 +674,7 @@ export const BiView: React.FC = () => {
               <Target className="w-5 h-5 text-emerald-600" /> Metas Estratégicas Registradas no SisBI
             </div>
             <button
-              onClick={() => setShowModal(true)}
+              onClick={abrirNovaMeta}
               className="px-3 py-1.5 bg-emerald-600 text-white font-bold rounded-xl text-xs flex items-center gap-1"
             >
               <Plus className="w-4 h-4" /> Nova Meta
@@ -903,7 +909,7 @@ export const BiView: React.FC = () => {
                   <input
                     type="number"
                     required
-                    value={formMeta.valorMeta}
+                    value={formMeta.valorMeta || ''}
                     onChange={e => setFormMeta({ ...formMeta, valorMeta: parseFloat(e.target.value) || 0 })}
                     className="w-full p-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white"
                   />
@@ -913,7 +919,7 @@ export const BiView: React.FC = () => {
                   <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">Valor Atual Atingido</label>
                   <input
                     type="number"
-                    value={formMeta.atingido}
+                    value={formMeta.atingido || ''}
                     onChange={e => setFormMeta({ ...formMeta, atingido: parseFloat(e.target.value) || 0 })}
                     className="w-full p-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white"
                   />
