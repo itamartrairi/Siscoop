@@ -1560,7 +1560,10 @@ export interface ItemVendaRevenda {
   tributacaoIcms?: TributacaoIcmsItem;
 }
 
+export type TipoOperacaoRevenda = 'VENDA' | 'TRANSFERENCIA' | 'PERDA' | 'DOACAO';
+
 export interface VendaRevenda {
+  tipoOperacao?: TipoOperacaoRevenda;
   id: string;
   tenantId: string;
   numeroVenda: string;
