@@ -189,8 +189,8 @@ if (item) {
         categoria: 'HORTIFRUTI',
         unidadeMedida: 'KG',
         quantidadeAtual: 0,
-        estoqueMinimo: 20,
-        localizacaoGalpao: 'Galpão Principal'
+        estoqueMinimo: 0,
+        localizacaoGalpao: ''
       });
     }
     setShowItemModal(true);
@@ -241,7 +241,7 @@ if (item) {
           )}
           {activeTab === 'movimentacoes' && (
             <button
-              onClick={() => { if (!canWrite) { blockWriteAction(); return; } setNovaMov({ itemEstoqueId: estoque[0]?.id || '', tipoMovimento: 'ENTRADA', quantidade: 0, motivo: '', responsavel: 'Operador do Galpão' }); setShowMovModal(true); }}
+              onClick={() => { if (!canWrite) { blockWriteAction(); return; } setNovaMov({ itemEstoqueId: '', tipoMovimento: 'ENTRADA', quantidade: 0, motivo: '', responsavel: '' }); setShowMovModal(true); }}
               className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2"
             >
               <Plus className="w-4 h-4" /> Lançar Movimentação
@@ -636,6 +636,7 @@ if (item) {
                   onChange={e => setNovaMov({ ...novaMov, itemEstoqueId: e.target.value })}
                   className="w-full p-2.5 border border-slate-200 rounded-xl"
                 >
+                  <option value="">Selecione um item do estoque</option>
                   {estoque.map(i => (
                     <option key={i.id} value={i.id}>{i.nomeItem} ({i.quantidadeAtual} {i.unidadeMedida})</option>
                   ))}
@@ -659,7 +660,7 @@ if (item) {
                 <input
                   type="number"
                   required
-                  value={novaMov.quantidade}
+                  value={novaMov.quantidade || ''}
                   onChange={e => setNovaMov({ ...novaMov, quantidade: parseFloat(e.target.value) || 0 })}
                   className="w-full p-2.5 border border-slate-200 rounded-xl"
                 />
