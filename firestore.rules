@@ -155,6 +155,7 @@ service cloud.firestore {
       }
       allow read: if escolaAutorizada() || isAdmin() ||
         belongsToTenant(get(/databases/$(database)/documents/portalEscolas/$(portalId)).data.tenantId);
+      allow update: if escolaAutorizada() && request.resource.data == resource.data;
       allow create: if escolaAutorizada() &&
         request.resource.data.keys().hasOnly(['nome', 'titulo', 'enviadoEm']) &&
         request.resource.data.nome is string && request.resource.data.nome.size() <= 512 &&
@@ -193,6 +194,12 @@ service cloud.firestore {
         (isCurrentUser(userId) && request.resource.data.tenantId == resource.data.tenantId) ||
         (isCurrentUser(userId) && semTenant(resource.data) && tenantLiberado(request.resource.data));
       allow delete: if isAdmin();
+    }
+
+    match /users/{userId}/notificacoesLidas/{notificacaoId} {
+      allow read: if isCurrentUser(userId);
+      allow create, update: if isCurrentUser(userId) &&
+        request.resource.data.keys().hasOnly(['lida']) && request.resource.data.lida == true;
     }
 
     // Equipe da cooperativa (Configurações → Usuários)
@@ -282,6 +289,16 @@ service cloud.firestore {
       allow read: if isAdmin() || belongsToTenant(resource.data.tenantId);
       allow create: if isAdmin() || belongsToTenant(request.resource.data.tenantId);
       allow update, delete: if isAdmin();
+    }
+
+    match /backups/{backupId}/arquivos/{parteId} {
+      allow read: if isAdmin() ||
+        belongsToTenant(get(/databases/$(database)/documents/backups/$(backupId)).data.tenantId);
+      allow create: if (isAdmin() ||
+        belongsToTenant(getAfter(/databases/$(database)/documents/backups/$(backupId)).data.tenantId)) &&
+        request.resource.data.keys().hasOnly(['arquivo', 'parte', 'conteudo']) &&
+        request.resource.data.arquivo is int && request.resource.data.parte is int &&
+        request.resource.data.conteudo is string;
     }
 
     // Cadastro da cooperativa

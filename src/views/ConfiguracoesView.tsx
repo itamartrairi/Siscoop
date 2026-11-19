@@ -12,6 +12,7 @@ import {
   generateCooperadosCSV,
   generateSisFinTransacoesCSV,
   BackupHistoryItem,
+  baixarArquivosBackup,
   fetchFirestoreBackupHistory
 } from '../services/firebaseBackupService';
 import {
@@ -472,8 +473,24 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
   // Firebase Backup State
   const [isBackupRunning, setIsBackupRunning] = useState(false);
   const [autoBackupEnabled, setAutoBackupEnabled] = useState(isWeeklyBackupEnabled());
-  const [backupHistory, setBackupHistory] = useState<BackupHistoryItem[]>(getBackupHistory());
-  const [lastBackupTime, setLastBackupTime] = useState<string | null>(getLastBackupTimestamp());
+  const tenantBackupId = currentTenant?.id;
+  const [backupHistory, setBackupHistory] = useState<BackupHistoryItem[]>([]);
+  const [lastBackupTime, setLastBackupTime] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (activeTab !== 'backup' || !tenantBackupId) return;
+    let ativo = true;
+    setBackupHistory(getBackupHistory(tenantBackupId));
+    setLastBackupTime(getLastBackupTimestamp(tenantBackupId));
+    void fetchFirestoreBackupHistory(tenantBackupId).then(historico => {
+      if (!ativo) return;
+      setBackupHistory(historico);
+      setLastBackupTime(historico.find(item => item.status === 'SUCESSO')?.timestamp ?? null);
+    }).catch(() => {
+      if (ativo) setBackupStatusMessage({ type: 'error', text: 'Não foi possível consultar o histórico na nuvem.' });
+    });
+    return () => { ativo = false; };
+  }, [activeTab, tenantBackupId]);
 
   // Kiwify Webhook State & Handler
   const [kiwifyLogs, setKiwifyLogs] = useState<any[]>([]);
@@ -544,15 +561,20 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
   };
 
   const handleExecuteFirebaseBackupNow = async () => {
+    if (!tenantBackupId) return;
     setIsBackupRunning(true);
     const result = await executeFirebaseBackup({
+      tenantId: tenantBackupId,
       cooperados,
       contasPagarReceber,
       tipo: 'MANUAL'
     });
     setIsBackupRunning(false);
-    setBackupHistory(getBackupHistory());
-    setLastBackupTime(getLastBackupTimestamp());
+    if (result.item) {
+      const item = result.item;
+      setBackupHistory(historico => [item, ...historico.filter(anterior => anterior.id !== item.id)].slice(0, 30));
+      setLastBackupTime(item.timestamp);
+    }
 
     if (result.success) {
       setBackupStatusMessage({ type: 'success', text: result.message });
@@ -2896,7 +2918,7 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
                       <th className="p-3">Status</th>
                       <th className="p-3">Arquivos / Tamanho</th>
                       <th className="p-3">Detalhes / Mensagem</th>
-                      <th className="p-3 text-right">Links Storage</th>
+                      <th className="p-3 text-right">Arquivos na nuvem</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
@@ -2931,20 +2953,17 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
                         </td>
                         <td className="p-3 text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            {item.files.map((file, idx) => (
-                              file.publicUrl ? (
-                                <a
-                                  key={idx}
-                                  href={file.publicUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="px-2 py-1 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:underline font-mono text-[10px] font-bold rounded flex items-center gap-1"
-                                  title={`Baixar ${file.name} do Armazenamento em Nuvem`}
-                                >
-                                  <FileText className="w-3 h-3" /> {file.name.split('_')[1] || 'CSV'}
-                                </a>
-                              ) : null
-                            ))}
+                            {item.files.every(file => file.partes) && item.files.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => void baixarArquivosBackup(item).catch(error => {
+                                  setBackupStatusMessage({ type: 'error', text: error.message || 'Falha ao baixar o backup.' });
+                                })}
+                                className="px-2 py-1 text-indigo-600 hover:underline font-bold"
+                              >
+                                Baixar CSVs
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>

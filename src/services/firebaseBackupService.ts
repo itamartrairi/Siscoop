@@ -1,9 +1,10 @@
-import { doc, setDoc, getDocs, collection, query, orderBy, limit } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from './firebase';
+import { doc, getDocsFromServer, collection, query, where, writeBatch } from 'firebase/firestore';
+import { db, auth } from './firebase';
 import { Cooperado, ContaPagarReceber } from '../types';
 
 export interface BackupHistoryItem {
   id: string;
+  tenantId: string;
   timestamp: string;
   tipo: 'AUTOMATICO_SEMANAL' | 'MANUAL';
   status: 'SUCESSO' | 'FALHA';
@@ -14,12 +15,13 @@ export interface BackupHistoryItem {
     name: string;
     bucket: string;
     sizeBytes: number;
-    publicUrl?: string;
+    partes?: number;
   }[];
 }
 
 const HISTORY_STORAGE_KEY = 'SISCOOPE_FIREBASE_BACKUP_HISTORY';
 const LAST_BACKUP_KEY = 'SISCOOPE_LAST_FIREBASE_BACKUP_TIMESTAMP';
+const backupsEmAndamento = new Set<string>();
 const ENABLED_STORAGE_KEY = 'SISCOOPE_WEEKLY_FIREBASE_BACKUP_ENABLED';
 
 /**
@@ -121,62 +123,46 @@ export function downloadCSVLocally(content: string, filename: string) {
 /**
  * Saves a backup record to Firestore collection 'backups' and localStorage fallback
  */
-export async function saveBackupHistoryRecord(item: BackupHistoryItem): Promise<void> {
-  // 1. Local storage cache
-  try {
-    const history = getBackupHistory();
-    const updated = [item, ...history.filter(h => h.id !== item.id)].slice(0, 30);
-    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(updated));
-  } catch (e) {
-    console.warn('Erro ao salvar histórico local:', e);
-  }
+const dividirCsv = (csv: string) => csv.match(/[\s\S]{1,140000}/gu) || [];
 
-  // 2. Persist in Firebase Firestore
-  try {
-    const backupDocRef = doc(db, 'backups', item.id);
-    await setDoc(backupDocRef, {
-      ...item,
-      savedAt: new Date().toISOString()
-    }, { merge: true });
-    console.log(`Backup salvo no Firebase Firestore com ID: ${item.id}`);
-  } catch (err) {
-    console.warn('Erro ao persistir backup no Firestore:', err);
-  }
+export async function saveBackupHistoryRecord(item: BackupHistoryItem, conteudos: string[]): Promise<void> {
+  const backup = doc(db, 'backups', item.id);
+  const lote = writeBatch(db);
+  lote.set(backup, { ...item, savedAt: new Date().toISOString() });
+  conteudos.forEach((csv, arquivo) => {
+    dividirCsv(csv).forEach((conteudo, parte) => {
+      lote.set(doc(backup, 'arquivos', `${arquivo}-${parte}`), { arquivo, parte, conteudo });
+    });
+  });
+  await lote.commit();
 }
 
-/**
- * Retrieves local/cached backup history
- */
-export function getBackupHistory(): BackupHistoryItem[] {
+export function getBackupHistory(tenantId?: string): BackupHistoryItem[] {
   try {
-    const stored = localStorage.getItem(HISTORY_STORAGE_KEY);
-    if (!stored) return [];
-    return JSON.parse(stored);
+    return tenantId ? JSON.parse(localStorage.getItem(`${HISTORY_STORAGE_KEY}:${tenantId}`) || '[]') : [];
   } catch {
     return [];
   }
 }
 
-/**
- * Fetches backup history directly from Firebase Firestore
- */
-export async function fetchFirestoreBackupHistory(): Promise<BackupHistoryItem[]> {
-  try {
-    const backupsRef = collection(db, 'backups');
-    const q = query(backupsRef, orderBy('timestamp', 'desc'), limit(30));
-    const snapshot = await getDocs(q);
-    const items: BackupHistoryItem[] = [];
-    snapshot.forEach(docSnap => {
-      items.push(docSnap.data() as BackupHistoryItem);
-    });
-    if (items.length > 0) {
-      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(items));
+export async function fetchFirestoreBackupHistory(tenantId: string): Promise<BackupHistoryItem[]> {
+  const q = query(collection(db, 'backups'), where('tenantId', '==', tenantId));
+  const snapshot = await getDocsFromServer(q);
+  return snapshot.docs.map(item => item.data() as BackupHistoryItem)
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 30);
+}
+
+export async function baixarArquivosBackup(item: BackupHistoryItem): Promise<void> {
+  const snapshot = await getDocsFromServer(collection(db, 'backups', item.id, 'arquivos'));
+  const partes = snapshot.docs.map(parte => parte.data());
+  const arquivos = item.files.map((arquivo, indice) => {
+    const blocos = partes.filter(parte => parte.arquivo === indice).sort((a, b) => a.parte - b.parte);
+    if (!arquivo.partes || blocos.length !== arquivo.partes || blocos.some((parte, ordem) => parte.parte !== ordem)) {
+      throw new Error('O conteúdo deste backup está incompleto.');
     }
-    return items;
-  } catch (error) {
-    console.warn('Falha ao buscar histórico do Firestore:', error);
-    return getBackupHistory();
-  }
+    return blocos.map(parte => parte.conteudo).join('');
+  });
+  arquivos.forEach((csv, indice) => downloadCSVLocally(csv, item.files[indice].name));
 }
 
 /**
@@ -197,18 +183,20 @@ export function setWeeklyBackupEnabled(enabled: boolean) {
 /**
  * Returns timestamp string of last executed backup
  */
-export function getLastBackupTimestamp(): string | null {
-  return localStorage.getItem(LAST_BACKUP_KEY);
+export function getLastBackupTimestamp(tenantId?: string): string | null {
+  return tenantId ? localStorage.getItem(`${LAST_BACKUP_KEY}:${tenantId}`) : null;
 }
 
 /**
  * Executes backup of Cooperados and SisFin data and saves to Firebase Firestore
  */
 export async function executeFirebaseBackup({
+  tenantId,
   cooperados,
   contasPagarReceber,
   tipo = 'MANUAL'
 }: {
+  tenantId: string;
   cooperados: Cooperado[];
   contasPagarReceber: ContaPagarReceber[];
   tipo?: 'AUTOMATICO_SEMANAL' | 'MANUAL';
@@ -222,8 +210,10 @@ export async function executeFirebaseBackup({
   const dateStr = now.toISOString().slice(0, 10);
   const timeSuffix = Date.now().toString().slice(-4);
 
-  const cooperadosCsv = generateCooperadosCSV(cooperados);
-  const sisfinCsv = generateSisFinTransacoesCSV(contasPagarReceber);
+  const cooperadosDaCooperativa = cooperados.filter(item => item.tenantId === tenantId);
+  const contasDaCooperativa = contasPagarReceber.filter(item => item.tenantId === tenantId);
+  const cooperadosCsv = generateCooperadosCSV(cooperadosDaCooperativa);
+  const sisfinCsv = generateSisFinTransacoesCSV(contasDaCooperativa);
 
   const cooperadosFileName = `weekly_cooperados_${dateStr}_${timeSuffix}.csv`;
   const sisfinFileName = `weekly_sisfin_transacoes_${dateStr}_${timeSuffix}.csv`;
@@ -234,19 +224,23 @@ export async function executeFirebaseBackup({
     {
       name: cooperadosFileName,
       bucket: 'firebase-firestore',
-      sizeBytes: new Blob([cooperadosCsv]).size
+      sizeBytes: new Blob([cooperadosCsv]).size,
+      partes: dividirCsv(cooperadosCsv).length
     },
     {
       name: sisfinFileName,
       bucket: 'firebase-firestore',
-      sizeBytes: new Blob([sisfinCsv]).size
+      sizeBytes: new Blob([sisfinCsv]).size,
+      partes: dividirCsv(sisfinCsv).length
     }
   ];
 
   try {
-    // Save backup summary and data to Firestore
+    if (!tenantId || !auth.currentUser) throw new Error('Entre na cooperativa para salvar o backup.');
+    if (totalBytes > 8_000_000) throw new Error('Os CSVs excedem o limite de 8 MB por backup.');
     const historyItem: BackupHistoryItem = {
-      id: `bkp-firebase-${Date.now()}`,
+      id: `bkp-firebase-${crypto.randomUUID()}`,
+      tenantId,
       timestamp,
       tipo,
       status: 'SUCESSO',
@@ -256,28 +250,23 @@ export async function executeFirebaseBackup({
       files: filesRecorded
     };
 
-    await saveBackupHistoryRecord(historyItem);
-    localStorage.setItem(LAST_BACKUP_KEY, timestamp);
+    await saveBackupHistoryRecord(historyItem, [cooperadosCsv, sisfinCsv]);
+    try {
+      localStorage.setItem(`${LAST_BACKUP_KEY}:${tenantId}`, timestamp);
+      const historico = [historyItem, ...getBackupHistory(tenantId)].slice(0, 30);
+      localStorage.setItem(`${HISTORY_STORAGE_KEY}:${tenantId}`, JSON.stringify(historico));
+    } catch (error) {
+      console.warn('Falha ao atualizar o cache do backup confirmado.', error);
+    }
 
     return {
       success: true,
-      message: `Backup salvo com sucesso no Firebase Firestore (${cooperados.length} cooperados e ${contasPagarReceber.length} transações financeiras).`,
+      message: `Backup salvo com sucesso no Firebase Firestore (${cooperadosDaCooperativa.length} cooperados e ${contasDaCooperativa.length} transações financeiras).`,
       item: historyItem
     };
   } catch (err: any) {
     const errorMsg = `Erro ao salvar backup no Firebase: ${err?.message || 'Falha na conexão'}`;
-    const failedItem: BackupHistoryItem = {
-      id: `bkp-fail-${Date.now()}`,
-      timestamp,
-      tipo,
-      status: 'FALHA',
-      arquivosCount: 0,
-      tamanhoTotalBytes: 0,
-      menssagem: errorMsg,
-      files: []
-    };
-    saveBackupHistoryRecord(failedItem);
-    return { success: false, message: errorMsg, item: failedItem };
+    return { success: false, message: errorMsg };
   }
 }
 
@@ -285,15 +274,17 @@ export async function executeFirebaseBackup({
  * Routine to check and run weekly backup if due
  */
 export async function checkAndRunWeeklyBackupIfNeeded({
+  tenantId,
   cooperados,
   contasPagarReceber
 }: {
+  tenantId: string;
   cooperados: Cooperado[];
   contasPagarReceber: ContaPagarReceber[];
 }) {
-  if (!isWeeklyBackupEnabled()) return;
+  if (!tenantId || !auth.currentUser || !isWeeklyBackupEnabled() || backupsEmAndamento.has(tenantId)) return;
 
-  const lastBackupStr = getLastBackupTimestamp();
+  const lastBackupStr = getLastBackupTimestamp(tenantId);
   const now = new Date();
   const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -305,14 +296,23 @@ export async function checkAndRunWeeklyBackupIfNeeded({
     }
   }
 
-  console.log('Iniciando rotina de backup semanal automático no Firebase Firestore...');
+  backupsEmAndamento.add(tenantId);
   try {
+    const historico = await fetchFirestoreBackupHistory(tenantId);
+    const ultimo = historico.find(item => item.status === 'SUCESSO' && item.files.some(file => file.partes));
+    if (ultimo && now.getTime() - new Date(ultimo.timestamp).getTime() < ONE_WEEK_MS) {
+      try { localStorage.setItem(`${LAST_BACKUP_KEY}:${tenantId}`, ultimo.timestamp); } catch {}
+      return;
+    }
     await executeFirebaseBackup({
+      tenantId,
       cooperados,
       contasPagarReceber,
       tipo: 'AUTOMATICO_SEMANAL'
     });
   } catch (e) {
     console.error('Erro na rotina de backup semanal no Firebase:', e);
+  } finally {
+    backupsEmAndamento.delete(tenantId);
   }
 }

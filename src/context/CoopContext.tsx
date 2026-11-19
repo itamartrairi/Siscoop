@@ -1,3 +1,4 @@
+import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { encontrarVinculos, mensagemExclusaoBloqueada, type EntidadeVinculavel, type ReferenciaPorValor } from '../services/integridadeReferencial';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
@@ -106,6 +107,7 @@ import { consultarAssinatura, validarLicencaNoServidor } from '../services/licen
 import { sanitizeCooperado } from '../utils/cooperadoSanitizer';
 import {
   auth,
+  db,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
@@ -1705,13 +1707,14 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Automatic Weekly Firebase CSV Backup Check
   useEffect(() => {
-    if (cooperados.length > 0) {
+    if (isAuthenticated && currentTenant?.id && (cooperados.length || contasPagarReceber.length)) {
       checkAndRunWeeklyBackupIfNeeded({
+        tenantId: currentTenant.id,
         cooperados,
         contasPagarReceber
       });
     }
-  }, [cooperados, contasPagarReceber]);
+  }, [isAuthenticated, currentTenant?.id, cooperados, contasPagarReceber]);
 
   // Sincroniza o status da assinatura com o servidor.
   //
@@ -2477,7 +2480,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return level === 'WRITE' || level === 'ADMIN';
   };
 
-  const [notifications, setNotifications] = useState<SystemNotification[]>([
+  const [notificacoesBase] = useState<SystemNotification[]>([
     {
       id: 'not-1',
       titulo: 'Aviso de Mandato Próximo ao Vencimento',
@@ -2520,8 +2523,24 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setThemeMode(prev => prev === 'light' ? 'dark' : 'light');
   };
 
+  const [notificacoesLidas, setNotificacoesLidas] = useState<Set<string>>(new Set());
+  const uidNotificacoes = isAuthenticated ? auth.currentUser?.uid : undefined;
+  const tenantNotificacoes = currentTenant?.id;
+  useEffect(() => {
+    setNotificacoesLidas(new Set());
+    if (!uidNotificacoes || !tenantNotificacoes) return;
+    return onSnapshot(collection(db, 'users', uidNotificacoes, 'notificacoesLidas'), snap => {
+      const prefixo = tenantNotificacoes + '__';
+      setNotificacoesLidas(new Set(snap.docs.filter(item => item.id.startsWith(prefixo))
+        .map(item => item.id.slice(prefixo.length))));
+    }, error => console.warn('Falha ao carregar notificações lidas:', error));
+  }, [uidNotificacoes, tenantNotificacoes]);
+
+  const notifications = notificacoesBase.map(item => ({ ...item, lida: notificacoesLidas.has(item.id) }));
   const markNotificationAsRead = (id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, lida: true } : n));
+    if (!uidNotificacoes || !tenantNotificacoes) return;
+    const ref = doc(db, 'users', uidNotificacoes, 'notificacoesLidas', tenantNotificacoes + '__' + id);
+    void setDoc(ref, { lida: true }).catch(error => console.warn('Falha ao salvar leitura da notificação:', error));
   };
 
   // Helper for audit logging

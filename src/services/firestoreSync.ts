@@ -28,6 +28,7 @@ import { auth, db } from './firebase';
 
 export const COLECAO_FIRESTORE = 'dadosCooperativa';
 const UNICO = '__unico';
+const FRAGMENTOS = 'fragmentosRegistro';
 
 /** Listas do snapshot do sistema que são gravadas no Firestore (um documento por registro). */
 export const LISTAS_SINCRONIZADAS = [
@@ -94,6 +95,30 @@ const docIdDe = (tenantId: string, colecao: string, chave: string) => `${tenantI
 
 const pertence = (r: Registro, tenantId: string) => !r || !r.tenantId || r.tenantId === tenantId;
 
+type Documento = { colecao: string; registroId: string; json: string; partes?: number };
+type LeituraDocumento = Partial<Documento>;
+
+const chaveFragmento = (id: string, parte: number) => `${hash(id)}-${parte}`;
+
+function dividirDocumento(dados: Documento): string[] {
+  return codificadorUtf8.encode(dados.json).byteLength > TAMANHO_MAXIMO
+    ? dados.json.match(/[\s\S]{1,140000}/gu) || []
+    : [];
+}
+
+function lerDocumento(tenantId: string, id: string, dados: LeituraDocumento, docs: Map<string, LeituraDocumento>) {
+  if (!dados.partes) return dados.json;
+  if (!Number.isSafeInteger(dados.partes) || dados.partes < 1 || dados.partes > LOTE) return;
+  const partes = [];
+  for (let parte = 0; parte < dados.partes; parte++) {
+    const fragmento = docs.get(docIdDe(tenantId, FRAGMENTOS, chaveFragmento(id, parte)));
+    if (typeof fragmento?.json !== 'string') return;
+    partes.push(fragmento.json);
+  }
+  const json = partes.join('');
+  return 'fragmentos:' + hash(json) === dados.json ? json : undefined;
+}
+
 // ---------------------------------------------------------------------------
 // Estado do módulo (uma sessão de sincronização por vez)
 // ---------------------------------------------------------------------------
@@ -103,6 +128,7 @@ interface Sessao {
   carregado: boolean;
   /** docId → hash do json gravado/lido do Firestore */
   conhecidos: Map<string, string>;
+  fragmentos: Map<string, number>;
   cancelar: Unsubscribe | null;
   tentativas: number;
   timerReabrir: ReturnType<typeof setTimeout> | null;
@@ -173,7 +199,7 @@ export const iniciarSincronizacaoFirestore = (
   aplicar: (colecao: string, mudanca: MudancaRemota) => void
 ): (() => void) => {
   pararSincronizacaoFirestore();
-  const atual: Sessao = { tenantId, carregado: false, conhecidos: new Map(), cancelar: null, tentativas: 0, timerReabrir: null };
+  const atual: Sessao = { tenantId, carregado: false, conhecidos: new Map(), fragmentos: new Map(), cancelar: null, tentativas: 0, timerReabrir: null };
   sessao = atual;
   const aplicarRemoto = (colecao: string, mudanca: MudancaRemota) => {
     remotaSeq = ++sequencia;
@@ -187,17 +213,29 @@ export const iniciarSincronizacaoFirestore = (
     atual.cancelar = onSnapshot(q, { includeMetadataChanges: true }, snap => {
       if (sessao !== atual) return;
       atual.tentativas = 0;
+      let docs: Map<string, LeituraDocumento> | undefined;
+      const ler = (id: string, dados: LeituraDocumento) => {
+        if (dados.partes && !docs) docs = new Map(snap.docs.map(item => [item.id, item.data() as LeituraDocumento]));
+        const json = dados.partes && docs ? lerDocumento(tenantId, id, dados, docs) : dados.json;
+        if (typeof json === 'string') {
+          if (dados.partes) atual.fragmentos.set(id, dados.partes);
+          else atual.fragmentos.delete(id);
+        }
+        return json;
+      };
 
       if (!atual.carregado) {
         // O cache pode estar incompleto. Só reconcilie e libere gravações após ler o servidor.
         if (snap.metadata.fromCache || snap.metadata.hasPendingWrites) return;
         const listas = new Map<string, Registro[]>();
         snap.docs.forEach(d => {
-          const dados = d.data() as { colecao?: string; registroId?: string; json?: string };
-          if (!dados.colecao || !TODAS.has(dados.colecao) || typeof dados.json !== 'string') return;
-          atual.conhecidos.set(d.id, hash(dados.json));
+          const dados = d.data() as LeituraDocumento;
+          if (!dados.colecao || !TODAS.has(dados.colecao)) return;
+          const json = ler(d.id, dados);
+          if (typeof json !== 'string') return;
+          atual.conhecidos.set(d.id, hash(json));
           try {
-            const valor = JSON.parse(dados.json);
+            const valor = JSON.parse(json);
             if (OBJETOS.has(dados.colecao)) aplicarRemoto(dados.colecao, { tipo: 'objeto', valor });
             else listas.set(dados.colecao, [...(listas.get(dados.colecao) || []), valor]);
           } catch (e) {
@@ -214,25 +252,27 @@ export const iniciarSincronizacaoFirestore = (
       }
 
       const porColecao = new Map<string, { upserts: Registro[]; removidos: string[] }>();
-      snap.docChanges().forEach(ch => {
+      snap.docChanges({ includeMetadataChanges: true }).forEach(ch => {
         if (ch.doc.metadata.hasPendingWrites) return; // eco das gravações deste navegador
-        const dados = ch.doc.data() as { colecao?: string; registroId?: string; json?: string };
+        const dados = ch.doc.data() as LeituraDocumento;
         if (!dados.colecao || !TODAS.has(dados.colecao)) return;
         if (ch.type === 'removed') {
           if (!atual.conhecidos.has(ch.doc.id)) return;
           atual.conhecidos.delete(ch.doc.id);
+          atual.fragmentos.delete(ch.doc.id);
           if (OBJETOS.has(dados.colecao)) return;
           const g = porColecao.get(dados.colecao) || { upserts: [], removidos: [] };
           g.removidos.push(String(dados.registroId || ''));
           porColecao.set(dados.colecao, g);
           return;
         }
-        if (typeof dados.json !== 'string') return;
-        const h = hash(dados.json);
+        const json = ler(ch.doc.id, dados);
+        if (typeof json !== 'string') return;
+        const h = hash(json);
         if (atual.conhecidos.get(ch.doc.id) === h) return;
         atual.conhecidos.set(ch.doc.id, h);
         try {
-          const valor = JSON.parse(dados.json);
+          const valor = JSON.parse(json);
           if (OBJETOS.has(dados.colecao)) { aplicarRemoto(dados.colecao, { tipo: 'objeto', valor }); return; }
           const g = porColecao.get(dados.colecao) || { upserts: [], removidos: [] };
           g.upserts.push(valor);
@@ -318,13 +358,17 @@ const gravarPendente = async () => {
   pendente = null;
   try {
     const desejados = montarDesejados(payload, s.tenantId);
-    const gravar: [string, { colecao: string; registroId: string; json: string }, string][] = [];
+    const gravar: [string, Documento, string, string[]][] = [];
     const grandes: string[] = [];
     desejados.forEach((d, id) => {
       const h = hash(d.json);
       if (s.conhecidos.get(id) === h) return;
-      if (codificadorUtf8.encode(d.json).byteLength > TAMANHO_MAXIMO) { grandes.push(`${d.colecao}/${d.registroId}`); return; }
-      gravar.push([id, d, h]);
+      const partes = dividirDocumento(d);
+      if (partes.length && codificadorUtf8.encode(d.json).byteLength + (partes.length + 1) * 4096 > MAX_BYTES_LOTE) {
+        grandes.push(`${d.colecao}/${d.registroId}`);
+        return;
+      }
+      gravar.push([id, d, h, partes]);
     });
 
     // Exclusões: só de documentos que este navegador conhece. Proteção contra
@@ -348,7 +392,7 @@ const gravarPendente = async () => {
     });
 
     if (!gravar.length && !apagar.length) {
-      if (grandes.length) definirStatus({ fase: 'erro', mensagem: `Registro(s) grande(s) demais para o Firestore (acima de ~900 KB): ${grandes.slice(0, 5).join(', ')}` });
+      if (grandes.length) definirStatus({ fase: 'erro', mensagem: `Registro(s) grande(s) demais para o Firestore (acima do limite de ~8 MB por registro): ${grandes.slice(0, 5).join(', ')}` });
       return;
     }
 
@@ -368,25 +412,46 @@ const gravarPendente = async () => {
       bytesNoLote = 0;
     };
 
-    for (const [id, d, h] of gravar) {
-      const bytes = codificadorUtf8.encode(d.json).byteLength + 4096;
-      if (bytesNoLote + bytes > MAX_BYTES_LOTE) fecharLote();
-      bytesNoLote += bytes;
+    const gravarDocumento = (id: string, dados: Documento) => {
       batch.set(doc(db, COLECAO_FIRESTORE, id), {
-        tenantId: s.tenantId,
-        colecao: d.colecao,
-        registroId: d.registroId,
-        json: d.json,
-        atualizadoEm: agora,
-        atualizadoPor: quem,
+        tenantId: s.tenantId, ...dados, atualizadoEm: agora, atualizadoPor: quem,
       });
-      operacoes.push(() => s.conhecidos.set(id, h));
-      if (++noLote >= LOTE) fecharLote();
+    };
+    const removerFragmentos = (id: string, inicio: number, total: number) => {
+      for (let parte = inicio; parte < total; parte++) {
+        batch.delete(doc(db, COLECAO_FIRESTORE, docIdDe(s.tenantId, FRAGMENTOS, chaveFragmento(id, parte))));
+      }
+    };
+
+    for (const [id, d, h, partes] of gravar) {
+      const anteriores = s.fragmentos.get(id) || 0;
+      const quantidade = 1 + Math.max(partes.length, anteriores);
+      const bytes = codificadorUtf8.encode(d.json).byteLength + quantidade * 4096;
+      if (bytesNoLote + bytes > MAX_BYTES_LOTE || noLote + quantidade > LOTE) fecharLote();
+      bytesNoLote += bytes;
+      noLote += quantidade;
+      partes.forEach((json, i) => {
+        const registroId = chaveFragmento(id, i);
+        gravarDocumento(docIdDe(s.tenantId, FRAGMENTOS, registroId), { colecao: FRAGMENTOS, registroId, json });
+      });
+      gravarDocumento(id, partes.length ? { ...d, json: 'fragmentos:' + h, partes: partes.length } : d);
+      removerFragmentos(id, partes.length, anteriores);
+      operacoes.push(() => {
+        s.conhecidos.set(id, h);
+        if (partes.length) s.fragmentos.set(id, partes.length);
+        else s.fragmentos.delete(id);
+      });
     }
     for (const id of apagar) {
+      const anteriores = s.fragmentos.get(id) || 0;
+      if (noLote + 1 + anteriores > LOTE) fecharLote();
       batch.delete(doc(db, COLECAO_FIRESTORE, id));
-      operacoes.push(() => s.conhecidos.delete(id));
-      if (++noLote >= LOTE) fecharLote();
+      removerFragmentos(id, 0, anteriores);
+      noLote += 1 + anteriores;
+      operacoes.push(() => {
+        s.conhecidos.delete(id);
+        s.fragmentos.delete(id);
+      });
     }
     fecharLote();
     for (const lote of commits) {
@@ -399,7 +464,7 @@ const gravarPendente = async () => {
       pendentes: 0,
       ultimaGravacao: agora,
       mensagem: grandes.length
-        ? `Registro(s) grande(s) demais para o Firestore (acima de ~900 KB): ${grandes.slice(0, 5).join(', ')}`
+        ? `Registro(s) grande(s) demais para o Firestore (acima do limite de ~8 MB por registro): ${grandes.slice(0, 5).join(', ')}`
         : `Salvo no Firestore (${gravar.length} gravado(s), ${apagar.length} excluído(s)).`,
     });
   } catch (err: any) {
