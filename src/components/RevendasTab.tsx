@@ -12,7 +12,7 @@ import {
 import { OPCOES_TRIBUTACAO_ICMS, calcularImpostosVenda, configTributaria, sugerirTributacaoIcms } from '../utils/impostosRevenda';
 import { ConfigTributariaModal, ApuracaoImpostosModal } from './ImpostosRevendaModais';
 
-const inputCls = 'w-full p-2.5 border border-slate-200 rounded-xl';
+const inputCls = 'w-full px-2.5 py-1.5 border border-slate-200 rounded-xl';
 const labelCls = 'block text-slate-700 font-bold mb-1';
 
 const TIPOS_OPERACAO: Record<TipoOperacaoRevenda, string> = {
@@ -308,14 +308,14 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
       {showApuracao && <ApuracaoImpostosModal canWrite={canWrite} onBlocked={onBlocked} onClose={() => setShowApuracao(false)} />}
 
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-[96.6rem] w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-slate-100 my-8">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-              <h2 className="text-xl font-black text-slate-900 flex items-center gap-2"><Store className="w-5 h-5 text-emerald-600" /> Nova Operação (Revenda)</h2>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-start justify-center p-3 z-50 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-[96.6rem] w-full p-3 sm:p-4 shadow-2xl space-y-2 border border-slate-100 my-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+              <h2 className="text-lg font-black text-slate-900 flex items-center gap-2"><Store className="w-5 h-5 text-emerald-600" /> Nova Operação (Revenda)</h2>
               <button onClick={() => setShowModal(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl"><X className="w-5 h-5" /></button>
             </div>
-            <form onSubmit={e => { e.preventDefault(); salvar(); }} className="space-y-4 text-xs">
-              <div className="grid grid-cols-1 md:grid-cols-[170px_140px_150px_1fr] gap-3">
+            <form onSubmit={e => { e.preventDefault(); salvar(); }} className="space-y-2 text-xs">
+              <div className="grid grid-cols-1 md:grid-cols-[170px_140px_150px_1fr] gap-2">
                 <label className="font-bold text-slate-700">Tipo de venda
                   <select value={form.tipoOperacao} onChange={e => {
                     setForm({ ...form, tipoOperacao: e.target.value as TipoOperacaoRevenda });
@@ -336,7 +336,7 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
                 </div>
               </div>
 
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-3">
+              <div className="bg-slate-50 p-2 rounded-xl border border-slate-200/80 space-y-1.5">
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-xs font-extrabold text-slate-800">Produtos da operação</div>
@@ -344,17 +344,17 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
                   </div>
                   <button type="button" onClick={() => setItens([...itens, itemVazio()])} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold">+ Adicionar produto</button>
                 </div>
-                <div className="max-h-64 overflow-auto rounded-xl border border-slate-200 bg-white">
+                <div className="max-h-44 overflow-auto rounded-xl border border-slate-200 bg-white">
                   <table className="w-full min-w-[760px] text-xs">
                     <thead className="sticky top-0 z-10 bg-slate-100 text-[10px] uppercase tracking-wide text-slate-500">
                       <tr>
-                        <th className="px-2 py-2 text-left font-bold w-8">#</th>
-                        <th className="px-2 py-2 text-left font-bold">Produto / insumo</th>
-                        {venda && <th className="px-2 py-2 text-left font-bold w-36">ICMS</th>}
-                        <th className="px-2 py-2 text-right font-bold w-28">Qtd.</th>
-                        {venda && <><th className="px-2 py-2 text-right font-bold w-36">Preço unit.</th>
-                        <th className="px-2 py-2 text-right font-bold w-36">Subtotal</th></>}
-                        <th className="px-2 py-2 w-8"></th>
+                        <th className="px-2 py-1.5 text-left font-bold w-8">#</th>
+                        <th className="px-2 py-1.5 text-left font-bold">Produto / insumo</th>
+                        {venda && <th className="px-2 py-1.5 text-left font-bold w-36">ICMS</th>}
+                        <th className="px-2 py-1.5 text-right font-bold w-28">Qtd.</th>
+                        {venda && <><th className="px-2 py-1.5 text-right font-bold w-36">Preço unit.</th>
+                        <th className="px-2 py-1.5 text-right font-bold w-36">Subtotal</th></>}
+                        <th className="px-2 py-1.5 w-8"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -364,25 +364,25 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
                         return (
                           <tr key={idx} className={semSaldo ? 'bg-rose-50/60 align-top' : 'align-top'}>
                             <td className="px-2 py-1.5 font-bold text-slate-400">{idx + 1}</td>
-                            <td className="px-2 py-1.5">
+                            <td className="px-2 py-1">
                               <select required value={item.estoqueItemId} onChange={e => escolherProduto(idx, e.target.value)} className="w-full p-1.5 border border-slate-200 rounded-lg bg-white">
                                 <option value="">Selecione</option>
                                 {produtosVenda.map(p => <option key={p.id} value={p.id}>{p.nomeItem} — saldo {p.quantidadeAtual} {p.unidadeMedida}{p.precoVenda ? ` — ${formatarMoeda(p.precoVenda)}` : ''}</option>)}
                               </select>
                               {semSaldo && <div className="mt-0.5 text-[10px] font-bold text-rose-600">Saldo insuficiente: disponível {est?.quantidadeAtual} {est?.unidadeMedida}.</div>}
                             </td>
-                            {venda && <td className="px-2 py-1.5">
+                            {venda && <td className="px-2 py-1">
                               <select value={item.tributacaoIcms || 'TRIBUTADO'} onChange={e => atualizarItem(idx, { tributacaoIcms: e.target.value as TributacaoIcmsItem })} className="w-full p-1.5 border border-slate-200 rounded-lg bg-white">
                                 {OPCOES_TRIBUTACAO_ICMS.map(o => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
                               </select>
                             </td>}
-                            <td className="px-2 py-1.5">
+                            <td className="px-2 py-1">
                               <input type="number" min="0.01" step="any" required value={item.quantidade} onChange={e => atualizarItem(idx, { quantidade: Number(e.target.value) || 0 })} className={`w-full p-1.5 border rounded-lg text-right ${semSaldo ? 'border-rose-400 bg-rose-50' : 'border-slate-200'}`} />
                             </td>
-                            {venda && <><td className="px-2 py-1.5">
+                            {venda && <><td className="px-2 py-1">
                               <input type="number" min="0" step="0.01" required value={item.precoUnitario} onChange={e => atualizarItem(idx, { precoUnitario: Number(e.target.value) || 0 })} className="w-full p-1.5 border border-slate-200 rounded-lg text-right" />
                             </td>
-                            <td className="px-2 py-1.5 pt-3 text-right font-bold text-slate-700 whitespace-nowrap">{formatarMoeda((Number(item.quantidade) || 0) * (Number(item.precoUnitario) || 0))}</td></>}
+                            <td className="px-2 py-1 text-right font-bold text-slate-700 whitespace-nowrap">{formatarMoeda((Number(item.quantidade) || 0) * (Number(item.precoUnitario) || 0))}</td></>}
                             <td className="px-1 py-1.5 text-center">
                               <button type="button" title="Remover produto" onClick={() => setItens(itens.filter((_, i) => i !== idx))} className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50">×</button>
                             </td>
@@ -402,7 +402,7 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
               </div>
 
               {venda && <>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
                 <div><label className={labelCls}>Desconto (R$)</label><input type="number" min="0" step="0.01" value={form.desconto} onChange={e => setForm({ ...form, desconto: Number(e.target.value) || 0 })} className={inputCls} /></div>
                 <div>
                   <label className={labelCls}>Forma de pagamento *</label>
@@ -422,7 +422,7 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
 
               </>}
 
-              <div className={venda ? 'grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(12rem,0.65fr)_minmax(0,1.3fr)]' : ''}>
+              <div className={venda ? 'grid items-start gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(12rem,0.65fr)_minmax(0,1.3fr)]' : ''}>
                 {venda && <>
                   <label className="block min-w-0 font-bold text-slate-700">
                     Conta bancária para recebimento
@@ -436,7 +436,7 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
                     {!contasAtivas.length && <span className="mt-1 block font-normal text-amber-700">Para lançar no financeiro, cadastre uma conta ativa em Financeiro → Contas Bancárias.</span>}
                   </label>
 
-                  <label className="flex min-h-10 items-center gap-2 font-bold text-slate-700 lg:mt-5">
+                  <label className="flex min-h-8 items-center gap-2 font-bold text-slate-700 lg:mt-4">
                     <input className="shrink-0" type="checkbox" checked={form.quitarPrimeiraParcela} onChange={e => setForm({ ...form, quitarPrimeiraParcela: e.target.checked })} />
                     {form.numeroParcelas === 1 ? 'Valor já recebido (lança como pago)' : '1ª parcela já recebida (entrada)'}
                   </label>
@@ -447,22 +447,25 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
                 </label>
               </div>
 
-              {venda && <div className="bg-emerald-50 p-3.5 rounded-xl border border-emerald-200 text-[11px] text-emerald-800 space-y-1">
-                <div className="flex justify-between font-black text-sm"><span>Total da venda</span><span>{formatarMoeda(totalVenda)}</span></div>
-                {previa.map(p => (
-                  <div key={p.numero} className="flex justify-between">
-                    <span>{previa.length > 1 ? `Parcela ${p.numero}/${previa.length}` : 'Parcela única'} — venc. {dataBR(p.vencimento)}</span>
-                    <span>{formatarMoeda(p.valor)}{p.numero === 1 && form.quitarPrimeiraParcela ? ' (recebida)' : ''}</span>
+              {venda && <div className="grid items-start gap-2 lg:grid-cols-2">
+                <div className="space-y-1 rounded-xl border border-emerald-200 bg-emerald-50 p-2 text-[11px] text-emerald-800">
+                  <div className="flex justify-between font-black text-sm"><span>Total da venda</span><span>{formatarMoeda(totalVenda)}</span></div>
+                  <div className="max-h-24 space-y-0.5 overflow-y-auto">
+                    {previa.map(p => (
+                      <div key={p.numero} className="flex justify-between">
+                        <span>{previa.length > 1 ? `Parcela ${p.numero}/${previa.length}` : 'Parcela única'} — venc. {dataBR(p.vencimento)}</span>
+                        <span>{formatarMoeda(p.valor)}{p.numero === 1 && form.quitarPrimeiraParcela ? ' (recebida)' : ''}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-                <div className="text-emerald-700 pt-1">Ao salvar, o sistema pede confirmação para lançar no Contas a Receber e no Caixa.</div>
+                  <div className="text-emerald-700">Ao salvar, o sistema pede confirmação para lançar no Contas a Receber e no Caixa.</div>
+                </div>
+                {impostosPrevia && <QuadroImpostos compacto impostos={impostosPrevia} titulo={`Impostos estimados (${ufCliente === 'CE' ? 'venda dentro do Ceará' : `CE → ${ufCliente}`})`} />}
               </div>}
-
-              {impostosPrevia && <QuadroImpostos impostos={impostosPrevia} titulo={`Impostos estimados (${ufCliente === 'CE' ? 'venda dentro do Ceará' : `CE → ${ufCliente}`})`} />}
 
               {!venda && <p className="text-slate-600">Esta operação baixa os itens do estoque. Contas a Receber e Caixa ficam sem lançamento.</p>}
               {confirmarFinanceiro && venda && (
-                <div role="group" aria-label="Confirmar lançamento financeiro" className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <div role="group" aria-label="Confirmar lançamento financeiro" className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-2.5">
                   <p className="font-bold">Registrar esta venda no Contas a Receber e no Caixa?</p>
                   <p>{form.quitarPrimeiraParcela
                     ? 'O valor marcado como recebido entra no Caixa. Qualquer parcela restante fica em aberto.'
@@ -477,7 +480,7 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
               )}
               {erro && <p role="alert" className="text-rose-600 font-bold">{erro}</p>}
 
-              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+              <div className="flex flex-wrap justify-end gap-2 pt-2 border-t border-slate-100">
                 <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl font-bold">Cancelar</button>
                 {!confirmarFinanceiro && <button type="submit" className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700">Registrar operação</button>}
               </div>
@@ -490,13 +493,13 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
 };
 
 /** Quadro com o detalhamento dos impostos de uma venda. */
-export const QuadroImpostos: React.FC<{ impostos: ImpostosVenda; titulo?: string }> = ({ impostos, titulo = 'Impostos da venda' }) => {
+export const QuadroImpostos: React.FC<{ impostos: ImpostosVenda; titulo?: string; compacto?: boolean }> = ({ impostos, titulo = 'Impostos da venda', compacto = false }) => {
   const linhas: [string, number][] = ([
     ['ICMS', impostos.icms], ['FECOP', impostos.fecop], ['PIS', impostos.pis], ['COFINS', impostos.cofins],
     ['IRPJ', impostos.irpj], ['CSLL', impostos.csll], ['Simples Nacional (DAS)', impostos.das],
   ] as [string, number][]).filter(([, v]) => v > 0);
   return (
-    <div className="bg-amber-50/60 p-3.5 rounded-xl border border-amber-200 text-[11px] text-slate-700 space-y-1">
+    <div className={`bg-amber-50/60 rounded-xl border border-amber-200 text-[11px] text-slate-700 space-y-1 ${compacto ? 'p-2' : 'p-3.5'}`}>
       <div className="font-extrabold text-slate-800">{titulo}</div>
       {linhas.length === 0 && <div className="text-slate-500">Sem impostos a recolher nesta venda.</div>}
       {linhas.map(([n, v]) => (
