@@ -27,6 +27,7 @@ export interface DataGridColumn<T> {
   width?: number | string;
   align?: 'left' | 'right' | 'center';
   filterable?: boolean;
+  matchesFilter?: (row: T, term: string) => boolean;
 }
 
 export interface DataGridAction<T> {
@@ -94,6 +95,9 @@ export function GridStatus({
   );
 }
 
+export const normalizeFilterText = (value: unknown) =>
+  String(value ?? '').normalize('NFD').replace(/\p{M}/gu, '').trim().toLowerCase();
+
 export function DataGrid<T>({
   rows,
   columns,
@@ -121,8 +125,8 @@ export function DataGrid<T>({
         active.every(([key, term]) => {
           const col = columns.find(c => c.key === key);
           if (!col) return true;
-          const v = readValue(row, col);
-          return String(v ?? '').toLowerCase().includes(term.toLowerCase());
+          if (col.matchesFilter) return col.matchesFilter(row, term);
+          return normalizeFilterText(readValue(row, col)).includes(normalizeFilterText(term));
         }),
       );
     }
