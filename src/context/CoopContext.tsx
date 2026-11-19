@@ -624,8 +624,8 @@ interface CoopContextType {
   deletePedidoProdutorPAA: (id: string) => void;
 
   ordensCompra: OrdemCompra[];
-  addOrdemCompra: (o: Omit<OrdemCompra, 'id' | 'tenantId'>) => void;
-  updateOrdemCompra: (id: string, o: Partial<OrdemCompra>) => void;
+  addOrdemCompra: (o: Omit<OrdemCompra, 'id' | 'tenantId'>) => boolean;
+  updateOrdemCompra: (id: string, o: Partial<OrdemCompra>) => boolean;
   deleteOrdemCompra: (id: string) => void;
 
   planoContas: PlanoContaContabil[];
@@ -4020,7 +4020,14 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addAuditLog('SISGEPA', 'EXCLUSAO', resumo + avisoNotas);
   };
 
+  const contaDesembolsoAtiva = (id?: string) =>
+    contasBancarias.some(conta => conta.id === id && conta.ativa !== false && pertenceAoTenant(conta, currentTenant.id));
+
   const addOrdemCompra = (oData: Omit<OrdemCompra, 'id' | 'tenantId'>) => {
+    if (!contaDesembolsoAtiva(oData.contaBancariaId)) {
+      alert('Selecione uma conta bancária de desembolso ativa desta cooperativa.');
+      return false;
+    }
     const newOc: OrdemCompra = {
       ...oData,
       id: `oc-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
@@ -4040,6 +4047,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       primeiroVencimento: newOc.primeiroVencimento || newOc.dataPrevisaoEntrega || newOc.dataEmissao,
       intervaloDias: newOc.intervaloDias || 30,
       formaPagamento: newOc.formaPagamento,
+      contaBancariaId: newOc.contaBancariaId,
       dataEmissao: newOc.dataEmissao,
       centroCusto: 'Mód. Compras'
     });
@@ -4114,6 +4122,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (novasMovsOc.length) setMovimentacoesEstoque(prevMov => [...novasMovsOc, ...prevMov]);
 
     addAuditLog('CONFIGURACOES', 'INCLUSAO', `Criou Ordem de Compra #${newOc.numeroOrdem} para ${newOc.fornecedorNome} e creditou no SisEstoque`);
+    return true;
   };
 
   // Desfaz os efeitos automáticos gerados ao criar uma Ordem de Compra
@@ -4158,8 +4167,20 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateOrdemCompra = (id: string, oData: Partial<OrdemCompra>) => {
-    const alvo = ordensCompra.find(x => x.id === id);
-    if (bloqueadoPorStatusFinal(alvo, 'ordem de compra')) return;
+    const alvo = ordensCompra.find(x => x.id === id && pertenceAoTenant(x, currentTenant.id));
+    if (!alvo || bloqueadoPorStatusFinal(alvo, 'ordem de compra')) return false;
+    if (oData.contaBancariaId !== undefined && oData.contaBancariaId !== (alvo.contaBancariaId || '')) {
+      const idsParcelas = new Set(alvo.contasPagarIds || []);
+      const emAberto = (conta: ContaPagarReceber) =>
+        idsParcelas.has(conta.id) && conta.tipo === 'PAGAR' &&
+        conta.status !== 'PAGO' && conta.status !== 'CANCELADO' && pertenceAoTenant(conta, currentTenant.id);
+      if (!contaDesembolsoAtiva(oData.contaBancariaId) || !contasPagarReceber.some(emAberto)) {
+        alert('Para trocar a conta de desembolso, selecione uma conta ativa e confira se a ordem tem parcelas em aberto.');
+        return false;
+      }
+      setContasPagarReceber(prev => prev.map(conta => emAberto(conta)
+        ? { ...conta, contaBancariaId: oData.contaBancariaId } : conta));
+    }
     // Cancelamento: reverte Estoque/Financeiro/Contábil gerados na criação
     // — só uma vez, na transição para CANCELADA.
     if (oData.status === 'CANCELADA' && alvo && alvo.status !== 'CANCELADA') {
@@ -4199,7 +4220,8 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     }
     setOrdensCompra(prev => prev.map(o => o.id === id ? { ...o, ...oData } : o));
-    addAuditLog('COMPRAS', 'ALTERACAO', `Atualizou ordem de compra ${alvo?.numeroOrdem || id}`);
+    addAuditLog('COMPRAS', 'ALTERACAO', `Atualizou ordem de compra ${alvo.numeroOrdem}`);
+    return true;
   };
 
   const deleteOrdemCompra = (id: string) => {

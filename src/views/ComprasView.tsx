@@ -23,6 +23,7 @@ import { SolicitacaoCompra, Fornecedor, ItemEstoque } from '../types';
 import { DataGrid, GridStatus } from '../components/ui/DataGrid';
 import { ClientesTab } from '../components/ClientesTab';
 import { RevendasTab } from '../components/RevendasTab';
+import { SelectContaBancaria } from '../components/ContasBancariasTab';
 import { RelatoriosPdfTab } from '../components/RelatoriosPdfTab';
 import { ProdutosTab } from '../components/ProdutosTab';
 import { abrirLinkExterno, montarLinkWhatsApp, montarLinkWhatsAppGenerico, getTelefoneContato } from '../utils/whatsappHelpers';
@@ -74,6 +75,7 @@ type TipoCompraOC = 'INSUMOS' | 'REVENDA';
 const OC_PAGTO_PADRAO = () => ({
   tipoCompra: 'INSUMOS' as TipoCompraOC,
   formaPagamento: 'PIX' as FormaPagamentoComercial,
+  contaBancariaId: '',
   numeroParcelas: 1,
   intervaloDias: 30,
   primeiroVencimento: somarDias(hojeISO(), 30)
@@ -99,11 +101,15 @@ export const ComprasView: React.FC = () => {
     updateFornecedor,
     deleteFornecedor,
     estoque,
+    contasBancarias,
+    contasPagarReceber,
     currentTenant,
     canWriteModule
   } = useCoop();
 
   const canWrite = canWriteModule('compras');
+  const contasAtivas = contasBancarias.filter(conta => conta.ativa !== false);
+  const contaPadraoId = contasAtivas.find(conta => conta.padrao)?.id || (contasAtivas.length === 1 ? contasAtivas[0].id : '');
   const blockWriteAction = () => {
     alert('Seu perfil de acesso tem permissão apenas de leitura neste módulo. Fale com um administrador para solicitar permissão de edição.');
   };
@@ -113,6 +119,9 @@ export const ComprasView: React.FC = () => {
   // Editing state
   const [editingSolicitacao, setEditingSolicitacao] = useState<SolicitacaoCompra | null>(null);
   const [editingOrdem, setEditingOrdem] = useState<any | null>(null);
+  const editarContaDesembolso = !editingOrdem || contasPagarReceber.some(conta =>
+    (editingOrdem.contasPagarIds || []).includes(conta.id) && conta.tipo === 'PAGAR' &&
+    conta.status !== 'PAGO' && conta.status !== 'CANCELADO');
   const [editingFornecedor, setEditingFornecedor] = useState<Fornecedor | null>(null);
 
   // Modals
@@ -342,6 +351,7 @@ if (o) {
         numeroOrdem: o.numeroOrdem,
         tipoCompra: o.tipoCompra || 'INSUMOS',
         formaPagamento: o.formaPagamento || 'PIX',
+        contaBancariaId: o.contaBancariaId || '',
         numeroParcelas: o.numeroParcelas || 1,
         intervaloDias: o.intervaloDias || 30,
         primeiroVencimento: o.primeiroVencimento || o.dataPrevisaoEntrega || o.dataEmissao,
@@ -362,6 +372,7 @@ if (o) {
       setEditingOrdem(null);
       setOrdemForm({
         ...OC_PAGTO_PADRAO(),
+        contaBancariaId: contaPadraoId,
         numeroOrdem: `OC-${Date.now().toString().slice(-5)}`,
         solicitacaoId: '',
         fornecedorId: '',
@@ -386,6 +397,7 @@ const fPadrao = fornecedores[0];
     setEditingOrdem(null);
     setOrdemForm({
       ...OC_PAGTO_PADRAO(),
+      contaBancariaId: contaPadraoId,
       numeroOrdem: `OC-${Date.now().toString().slice(-5)}`,
       solicitacaoId: s.id,
       fornecedorId: fPadrao?.id || 'f-1',
@@ -441,21 +453,16 @@ const fPadrao = fornecedores[0];
     const itens = ordemItens.filter(i => i.descricao.trim() && i.quantidade > 0).map(i => ({ ...i, subtotal: i.quantidade * i.precoUnitario }));
     if (!ordemForm.fornecedorNome || !itens.length) return;
     const valorTotal = itens.reduce((sum, i) => sum + i.subtotal, 0);
-    if (editingOrdem) {
-      updateOrdemCompra(editingOrdem.id, {
-        ...ordemForm,
-        valorTotal,
-        itens
-      });
-    } else {
-      addOrdemCompra({
+    const salvo = editingOrdem
+      ? updateOrdemCompra(editingOrdem.id, { ...ordemForm, valorTotal, itens })
+      : addOrdemCompra({
         ...ordemForm,
         valorTotal,
         condicaoPagamento: descricaoPagamentoOC(ordemForm),
         status: 'APROVADA',
         itens
       });
-    }
+    if (!salvo) return;
     if (enviarWhatsAposSalvar.current) enviarOrdemWhatsApp({ ...ordemForm, valorTotal, itens });
     enviarWhatsAposSalvar.current = false;
     setShowOrdemModal(false);
@@ -703,9 +710,9 @@ if (f) {
 
       {/* Modal Ordem de Compra */}
       {showOrdemModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-[80.5rem] w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-slate-100 my-8">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-start justify-center p-3 z-50 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-[96.6rem] w-full p-4 sm:p-5 shadow-2xl space-y-3 border border-slate-100 my-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
               <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
                 <ShoppingCart className="w-5 h-5 text-emerald-600" />
                 {editingOrdem ? 'Editar Ordem de Compra' : 'Emissão de Ordem de Compra (OC)'}
@@ -714,8 +721,8 @@ if (f) {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <form onSubmit={handleSaveOrdem} className="space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleSaveOrdem} className="space-y-3 text-xs">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(8rem,1fr)_minmax(13rem,2fr)_minmax(10rem,1fr)_minmax(10rem,1fr)]">
                 <div>
                   <label className="block text-slate-700 font-bold mb-1">Nº da Ordem (OC) *</label>
                   <input
@@ -723,32 +730,51 @@ if (f) {
                     required
                     value={ordemForm.numeroOrdem}
                     onChange={e => setOrdemForm({ ...ordemForm, numeroOrdem: e.target.value })}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl font-mono font-bold"
+                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-xl font-mono font-bold"
                   />
                 </div>
 
                 <div>
                   <label className="block text-slate-700 font-bold mb-1">Fornecedor *</label>
                   <select
+                    required
                     value={ordemForm.fornecedorNome}
                     onChange={e => { const fSel = fornecedores.find(x => x.razaoSocial === e.target.value); setOrdemForm({ ...ordemForm, fornecedorNome: e.target.value, fornecedorId: fSel?.id || ordemForm.fornecedorId }); }}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl font-bold"
+                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-xl font-bold"
                   >
+                    <option value="">Selecione o fornecedor</option>
                     {fornecedores.map(f => (
                       <option key={f.id} value={f.razaoSocial}>
                         {f.razaoSocial} ({f.categoria})
                       </option>
                     ))}
-                    {fornecedores.length === 0 && (
-                      <option value="Fornecedor Agro Insumos LTDA">Fornecedor Agro Insumos LTDA</option>
-                    )}
                   </select>
+                </div>
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">Data de Emissão *</label>
+                  <input
+                    type="date"
+                    required
+                    value={ordemForm.dataEmissao}
+                    onChange={e => setOrdemForm({ ...ordemForm, dataEmissao: e.target.value })}
+                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">Previsão de Entrega *</label>
+                  <input
+                    type="date"
+                    required
+                    value={ordemForm.dataPrevisaoEntrega}
+                    onChange={e => setOrdemForm({ ...ordemForm, dataPrevisaoEntrega: e.target.value })}
+                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-xl"
+                  />
                 </div>
               </div>
 
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-3">
+              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 space-y-2">
                 <div className="flex items-center justify-between"><div><div className="text-xs font-extrabold text-slate-800">Itens da ordem de compra</div><div className="text-[10px] text-slate-500">Os produtos são sempre selecionados do SisEstoque.</div></div><button type="button" onClick={() => setOrdemItens([...ordemItens, { descricao: '', quantidade: 1, unidade: 'UN', precoUnitario: 0, subtotal: 0 }])} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold">+ Adicionar item</button></div>
-                <div className="max-h-64 overflow-auto rounded-xl border border-slate-200 bg-white">
+                <div className="max-h-44 overflow-auto rounded-xl border border-slate-200 bg-white">
                   <table className="w-full min-w-[720px] text-xs">
                     <thead className="sticky top-0 z-10 bg-slate-100 text-[10px] uppercase tracking-wide text-slate-500">
                       <tr>
@@ -793,89 +819,49 @@ if (f) {
                 <div className="text-right font-black text-emerald-700">Total calculado: R$ {totalOrdemItens.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-700 font-bold mb-1">Data de Emissão *</label>
-                  <input
-                    type="date"
-                    required
-                    value={ordemForm.dataEmissao}
-                    onChange={e => setOrdemForm({ ...ordemForm, dataEmissao: e.target.value })}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-700 font-bold mb-1">Previsão de Entrega *</label>
-                  <input
-                    type="date"
-                    required
-                    value={ordemForm.dataPrevisaoEntrega}
-                    onChange={e => setOrdemForm({ ...ordemForm, dataPrevisaoEntrega: e.target.value })}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-700 font-bold mb-1">Valor Total (R$) — calculado pelos itens</label>
-                  <input
-                    type="text"
-                    readOnly
-                    value={formatarMoeda(totalOrdemItens)}
-                    title="Calculado automaticamente: quantidade × preço unitário de cada item"
-                    className="w-full p-2.5 border border-emerald-300 rounded-xl font-bold text-emerald-900 bg-emerald-50/50"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-700 font-bold mb-1">Condições de Pagamento</label>
-                  <input
-                    type="text"
-                    value={ordemForm.condicoesPagamento}
-                    onChange={e => setOrdemForm({ ...ordemForm, condicoesPagamento: e.target.value })}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl"
-                    placeholder="Ex: 30 Dias Fatura Boleto"
-                  />
-                </div>
-              </div>
-
-              <div className="bg-white p-4 rounded-2xl border border-slate-200/80 space-y-3">
-                <div className="text-xs font-extrabold text-slate-800">Tipo de compra e pagamento</div>
-                <div className="flex gap-2">
-                  {([['INSUMOS', 'Insumos / uso próprio'], ['REVENDA', 'Produtos para revenda']] as const).map(([valor, rotulo]) => (
-                    <button
-                      key={valor}
-                      type="button"
-                      onClick={() => setOrdemForm({ ...ordemForm, tipoCompra: valor })}
-                      className={`flex-1 p-2.5 rounded-xl border font-bold transition-all ${ordemForm.tipoCompra === valor ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
-                    >
-                      {rotulo}
-                    </button>
-                  ))}
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="space-y-2 rounded-xl border border-slate-200 p-2.5">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 xl:grid-cols-[1fr_1fr_1fr_1fr_0.8fr_1.5fr]">
+                  <label className="min-w-0 font-bold text-slate-700">
+                    Tipo de compra
+                    <select value={ordemForm.tipoCompra} onChange={e => setOrdemForm({ ...ordemForm, tipoCompra: e.target.value as TipoCompraOC })}
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 font-normal">
+                      <option value="INSUMOS">Insumos / uso próprio</option>
+                      <option value="REVENDA">Produtos para revenda</option>
+                    </select>
+                  </label>
                   <div>
                     <label className="block text-slate-700 font-bold mb-1">Forma de pagamento *</label>
-                    <select value={ordemForm.formaPagamento} onChange={e => setOrdemForm({ ...ordemForm, formaPagamento: e.target.value as FormaPagamentoComercial })} className="w-full p-2.5 border border-slate-200 rounded-xl bg-white font-bold">
+                    <select value={ordemForm.formaPagamento} onChange={e => setOrdemForm({ ...ordemForm, formaPagamento: e.target.value as FormaPagamentoComercial })} className="w-full px-2.5 py-1.5 border border-slate-200 rounded-xl bg-white font-bold">
                       {FORMAS_PAGAMENTO_COMERCIAL.map(f => <option key={f.valor} value={f.valor}>{f.rotulo}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="block text-slate-700 font-bold mb-1">Parcelamento</label>
-                    <select value={ordemForm.numeroParcelas} onChange={e => setOrdemForm({ ...ordemForm, numeroParcelas: Number(e.target.value) || 1 })} className="w-full p-2.5 border border-slate-200 rounded-xl bg-white">
+                    <select value={ordemForm.numeroParcelas} onChange={e => setOrdemForm({ ...ordemForm, numeroParcelas: Number(e.target.value) || 1 })} className="w-full px-2.5 py-1.5 border border-slate-200 rounded-xl bg-white">
                       {Array.from({ length: 12 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n === 1 ? 'À vista (1x)' : `${n}x`}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="block text-slate-700 font-bold mb-1">{ordemForm.numeroParcelas > 1 ? '1º vencimento' : 'Vencimento'}</label>
-                    <input type="date" value={ordemForm.primeiroVencimento} onChange={e => setOrdemForm({ ...ordemForm, primeiroVencimento: e.target.value })} className="w-full p-2.5 border border-slate-200 rounded-xl" />
+                    <input type="date" value={ordemForm.primeiroVencimento} onChange={e => setOrdemForm({ ...ordemForm, primeiroVencimento: e.target.value })} className="w-full px-2.5 py-1.5 border border-slate-200 rounded-xl" />
                   </div>
                   <div>
                     <label className="block text-slate-700 font-bold mb-1">Intervalo (dias)</label>
-                    <input type="number" min="0" disabled={ordemForm.numeroParcelas === 1} value={ordemForm.intervaloDias} onChange={e => setOrdemForm({ ...ordemForm, intervaloDias: Number(e.target.value) || 0 })} className="w-full p-2.5 border border-slate-200 rounded-xl disabled:bg-slate-100" />
+                    <input type="number" min="0" disabled={ordemForm.numeroParcelas === 1} value={ordemForm.intervaloDias} onChange={e => setOrdemForm({ ...ordemForm, intervaloDias: Number(e.target.value) || 0 })} className="w-full px-2.5 py-1.5 border border-slate-200 rounded-xl disabled:bg-slate-100" />
                   </div>
+                  <fieldset disabled={!editarContaDesembolso} className="min-w-0">
+                    <label className="block font-bold text-slate-700">
+                      Conta bancária de desembolso
+                      <SelectContaBancaria value={ordemForm.contaBancariaId}
+                        onChange={contaBancariaId => setOrdemForm(prev => ({ ...prev, contaBancariaId }))}
+                        contas={contasBancarias} vazioLabel="Selecione a conta"
+                        className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 font-normal disabled:bg-slate-100" />
+                    </label>
+                  </fieldset>
                 </div>
-                <div className="text-[11px] text-slate-600 space-y-0.5">
+                {!contasAtivas.length && editarContaDesembolso &&
+                  <p className="text-[11px] text-amber-700">Cadastre uma conta ativa em Financeiro → Contas Bancárias para emitir a compra.</p>}
+                <div className="max-h-20 overflow-y-auto text-[11px] text-slate-600 space-y-0.5">
                   {gerarParcelas(totalOrdemItens, ordemForm.numeroParcelas, ordemForm.primeiroVencimento, ordemForm.intervaloDias).map((p, _i, todas) => (
                     <div key={p.numero} className="flex justify-between border-t border-slate-100 pt-0.5">
                       <span>{todas.length > 1 ? `Parcela ${p.numero}/${todas.length}` : 'Parcela única'} — venc. {dataBR(p.vencimento)}</span>
@@ -884,31 +870,31 @@ if (f) {
                   ))}
                 </div>
                 {editingOrdem && (
-                  <div className="text-[11px] text-amber-700">As parcelas do Contas a Pagar são geradas na emissão da ordem; alterar o pagamento aqui não refaz as parcelas já lançadas.</div>
+                  <div className="text-[11px] text-amber-700">{editarContaDesembolso ? 'A troca da conta de desembolso atualiza as parcelas em aberto. Os valores e vencimentos já emitidos são mantidos.' : 'A conta de desembolso fica disponível para alteração quando há parcelas vinculadas em aberto.'}</div>
                 )}
               </div>
 
               
-<div>
-                <label className="block text-slate-700 font-bold mb-1">Observações de Logística / Destino</label>
-                <input
-                  type="text"
-                  value={ordemForm.observacoes}
-                  onChange={e => setOrdemForm({ ...ordemForm, observacoes: e.target.value })}
-                  className="w-full p-2.5 border border-slate-200 rounded-xl"
-                  placeholder="Instruções de entrega e local de descarregamento"
-                />
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">Condições de Pagamento</label>
+                  <input
+                    type="text"
+                    value={ordemForm.condicoesPagamento}
+                    onChange={e => setOrdemForm({ ...ordemForm, condicoesPagamento: e.target.value })}
+                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-xl"
+                    placeholder="Ex: 30 Dias Fatura Boleto"
+                  />
+                </div>
+                <label className="block min-w-0 font-bold text-slate-700">
+                  Observações de Logística / Destino
+                  <input value={ordemForm.observacoes} onChange={e => setOrdemForm({ ...ordemForm, observacoes: e.target.value })}
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-2.5 py-1.5 font-normal"
+                    placeholder="Instruções de entrega e local de descarregamento" />
+                </label>
               </div>
 
-              <div className="bg-emerald-50 p-3.5 rounded-xl border border-emerald-200 text-[11px] text-emerald-800 space-y-1">
-                <div>✨ <strong>Integração Automática SisEstoque & SisFin:</strong></div>
-                <ul className="list-disc list-inside text-emerald-700 space-y-0.5">
-                  <li><strong>SisEstoque:</strong> Credita automaticamente <strong>{ordemItens.filter(i => i.estoqueItemId && i.quantidade > 0).map(i => `${i.quantidade} ${i.unidade} de ${i.descricao}`).join(', ') || 'os itens selecionados'}</strong> com registro de movimentação de entrada{editingOrdem ? ' (na edição, só a diferença de quantidade é ajustada)' : ''}.</li>
-                  <li><strong>SisFin (Financeiro):</strong> Gera {ordemForm.numeroParcelas > 1 ? `${ordemForm.numeroParcelas} parcelas` : 'uma conta'} a pagar de <strong>{formatarMoeda(totalOrdemItens)}</strong> ({rotuloFormaPagamento(ordemForm.formaPagamento)}{ordemForm.tipoCompra === 'REVENDA' ? ', mercadorias para revenda' : ''}) para o fornecedor <i>{ordemForm.fornecedorNome}</i>.</li>
-                </ul>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+              <div className="flex flex-wrap justify-end gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setShowOrdemModal(false)}
