@@ -70,7 +70,7 @@ export const RhView: React.FC = () => {
     cpf: '',
     cargo: 'Técnico Agrícola',
     departamento: 'TECNICO',
-    salarioBase: 3800.00,
+    salarioBase: 0,
     dataAdmissao: new Date().toISOString().split('T')[0],
     status: 'ATIVO' as any
   });
@@ -88,7 +88,7 @@ export const RhView: React.FC = () => {
     status: 'FECHADA' as any
   });
 
-  const [folhaMensalCompetencia, setFolhaMensalCompetencia] = useState('08/2026');
+  const [folhaMensalCompetencia, setFolhaMensalCompetencia] = useState('');
   // Ajustes por funcionário antes de gerar a folha do mês — chave é o
   // funcionarioId, valor é {proventos, descontos}. Começa vazio; se o
   // usuário não editar uma linha, usa o salário base do cadastro como
@@ -116,7 +116,7 @@ export const RhView: React.FC = () => {
       cpf: '',
       cargo: '',
       departamento: '',
-        salarioBase: 3800.00,
+        salarioBase: 0,
         dataAdmissao: new Date().toISOString().split('T')[0],
         status: 'ATIVO'
       });
@@ -154,18 +154,16 @@ export const RhView: React.FC = () => {
       });
     } else {
       setEditingFolha(null);
-      const proventosPadrao = funcionariosRH[0]?.salarioBase || 3000;
-      const { inss, irpf, fgts } = calcularDescontosFolha(proventosPadrao);
       setFolhaForm({
-        funcionarioId: funcionariosRH[0]?.id || '',
-        funcionarioNome: funcionariosRH[0]?.nome || '',
-        competencia: '08/2026',
-        totalProventos: proventosPadrao,
-        inss,
-        irpf,
+        funcionarioId: '',
+        funcionarioNome: '',
+        competencia: '',
+        totalProventos: 0,
+        inss: 0,
+        irpf: 0,
         outrosDescontos: 0,
-        fgts,
-        totalDescontos: inss + irpf,
+        fgts: 0,
+        totalDescontos: 0,
         status: 'FECHADA'
       });
     }
@@ -208,6 +206,7 @@ export const RhView: React.FC = () => {
 
   const handleOpenFolhaMensal = () => {
     if (!canWrite) { blockWriteAction(); return; }
+    setFolhaMensalCompetencia('');
     setFolhaMensalAjustes({});
     setShowFolhaMensalModal(true);
   };
@@ -893,7 +892,7 @@ export const RhView: React.FC = () => {
                   <label className="block text-slate-700 font-bold mb-1">Salário Base (R$)</label>
                   <input
                     type="number"
-                    value={funcForm.salarioBase}
+                    value={funcForm.salarioBase || ''}
                     onChange={e => setFuncForm({ ...funcForm, salarioBase: parseFloat(e.target.value) || 0 })}
                     className="w-full p-2.5 border border-slate-200 rounded-xl"
                   />
@@ -981,7 +980,7 @@ export const RhView: React.FC = () => {
                 <div className="flex gap-2">
                   <input
                     type="number"
-                    value={folhaForm.totalProventos}
+                    value={folhaForm.totalProventos || ''}
                     onChange={e => setFolhaForm({ ...folhaForm, totalProventos: parseFloat(e.target.value) || 0 })}
                     className="flex-1 p-2.5 border border-slate-200 rounded-xl"
                   />
