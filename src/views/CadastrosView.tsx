@@ -898,20 +898,12 @@ export const CadastrosView: React.FC = () => {
 
         <div className="flex items-center gap-3">
           {activeTab === 'produtores' && (
-            <>
-              <button
-                onClick={handleDeleteAllProdutores}
-                className="px-4 py-2.5 bg-white border border-rose-300 hover:bg-rose-50 text-rose-700 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2"
-              >
-                <Trash2 className="w-4 h-4" /> Excluir Tudo
-              </button>
-              <button
-                onClick={() => handleOpenProdutor()}
-                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" /> Novo Produtor / Programa
-              </button>
-            </>
+            <button
+              onClick={handleDeleteAllProdutores}
+              className="px-4 py-2.5 bg-white border border-rose-300 hover:bg-rose-50 text-rose-700 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2"
+            >
+              <Trash2 className="w-4 h-4" /> Excluir Tudo
+            </button>
           )}
           {activeTab === 'produtos' && (
             <>
