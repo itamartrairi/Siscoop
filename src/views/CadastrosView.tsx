@@ -44,6 +44,7 @@ import {
   Cooperado,
   ProdutorRural,
   ProdutoAgro,
+  OpcaoCatalogoProduto,
   ProgramaGovernamental,
   EscolaPnae,
   Motorista
@@ -52,7 +53,7 @@ import { GeoLocationPicker } from '../components/GeoLocationPicker';
 import { buscarCodigosFiscais } from '../utils/produtoCodigosFiscais';
 import { POLOS_PADRAO } from '../utils/poloHelpers';
 import { PortalShareBanner } from '../components/PortalShareBanner';
-import { DataGrid, GridStatus } from '../components/ui/DataGrid';
+import { DataGrid, GridStatus, normalizeFilterText } from '../components/ui/DataGrid';
 import {
   baixarModeloPlanilhaProdutos,
   parsePlanilhaProdutos,
@@ -61,6 +62,133 @@ import {
   parsePlanilhaEscolas,
   LinhaEscolaImportada
 } from '../utils/produtosEscolasExcel';
+
+const CATEGORIAS_PRODUTO: OpcaoCatalogoProduto[] = [
+  { codigo: 'HORTIFRUTI', nome: 'Hortifrúti' },
+  { codigo: 'GRAOS', nome: 'Grãos' },
+  { codigo: 'LATICINIOS', nome: 'Laticínios' },
+  { codigo: 'PROCESSADOS', nome: 'Processados' },
+  { codigo: 'CARNES', nome: 'Carnes' },
+  { codigo: 'OUTROS', nome: 'Outros' }
+];
+
+const UNIDADES_PRODUTO: OpcaoCatalogoProduto[] = [
+  { codigo: 'KG', nome: 'Quilograma (KG)' },
+  { codigo: 'UN', nome: 'Unidade' },
+  { codigo: 'DUZIA', nome: 'Dúzia' },
+  { codigo: 'MACO', nome: 'Maço' },
+  { codigo: 'CAIXA', nome: 'Caixa' },
+  { codigo: 'LITRO', nome: 'Litro' },
+  { codigo: 'SACAS', nome: 'Saca' }
+];
+
+const nomeOpcaoProduto = (opcoes: OpcaoCatalogoProduto[], codigo: string) =>
+  opcoes.find(opcao => opcao.codigo === codigo)?.nome || codigo;
+
+const primeiraOpcao = (opcoes: OpcaoCatalogoProduto[]) => opcoes.find(opcao => !opcao.inativa)?.codigo || '';
+
+function CampoOpcaoProduto({ rotulo, opcoes, valor, valorSalvo, codigosEmUso, podeEditar, selecionar, atualizar }: {
+  rotulo: string;
+  opcoes: OpcaoCatalogoProduto[];
+  valor: string;
+  valorSalvo?: string;
+  codigosEmUso: string[];
+  podeEditar: boolean;
+  selecionar: (codigo: string) => void;
+  atualizar: (opcoes: OpcaoCatalogoProduto[]) => void;
+}) {
+  const campoId = React.useId();
+  const [aberto, setAberto] = useState(false);
+  const [editando, setEditando] = useState<string | null>(null);
+  const [nome, setNome] = useState('');
+  const [erro, setErro] = useState('');
+  const ativas = opcoes.filter(opcao => !opcao.inativa);
+  const valorLegado = valor === valorSalvo && valor && !ativas.some(opcao => opcao.codigo === valor);
+  const limpar = () => {
+    setEditando(null);
+    setNome('');
+    setErro('');
+  };
+
+  const salvar = () => {
+    const novoNome = nome.trim();
+    if (!novoNome) { setErro('Informe o nome da opção.'); return; }
+    const existente = opcoes.find(opcao =>
+      opcao.codigo !== editando && normalizeFilterText(opcao.nome) === normalizeFilterText(novoNome));
+    if (existente && (editando || !existente.inativa)) { setErro('Já existe uma opção com este nome.'); return; }
+
+    const codigo = editando || existente?.codigo;
+    if (codigo) {
+      atualizar(opcoes.map(opcao => opcao.codigo === codigo ? { codigo, nome: novoNome } : opcao));
+      if (!editando) selecionar(codigo);
+    } else {
+      const base = normalizeFilterText(novoNome).toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'OPCAO';
+      const ocupados = new Set([...opcoes.map(opcao => opcao.codigo), ...codigosEmUso]);
+      let novoCodigo = base;
+      for (let sufixo = 2; ocupados.has(novoCodigo); sufixo++) novoCodigo = `${base}_${sufixo}`;
+      atualizar([...opcoes, { codigo: novoCodigo, nome: novoNome }]);
+      selecionar(novoCodigo);
+    }
+    limpar();
+  };
+
+  const excluir = (opcao: OpcaoCatalogoProduto) => {
+    atualizar(opcoes.map(item => item.codigo === opcao.codigo ? { ...item, inativa: true } : item));
+    if (opcao.codigo === valor && valor !== valorSalvo) selecionar('');
+    if (opcao.codigo === editando) limpar();
+  };
+
+  return (
+    <div className="min-w-0">
+      <label htmlFor={campoId} className="block text-slate-700 font-bold mb-1">{rotulo}</label>
+      <div className="flex items-center gap-2">
+        <select id={campoId} required value={valor} onChange={e => selecionar(e.target.value)}
+          className="min-w-0 flex-1 p-2.5 border border-slate-200 rounded-xl">
+          <option value="">Selecione</option>
+          {valorLegado && <option value={valor}>{nomeOpcaoProduto(opcoes, valor)} (opção anterior)</option>}
+          {ativas.map(opcao => <option key={opcao.codigo} value={opcao.codigo}>{opcao.nome}</option>)}
+        </select>
+        {podeEditar && (
+          <button type="button" aria-label={`Gerenciar ${rotulo.toLowerCase()}`} aria-expanded={aberto}
+            aria-controls={`${campoId}-opcoes`} onClick={() => { setAberto(!aberto); limpar(); }}
+            className="shrink-0 rounded-lg border border-slate-300 px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50">
+            Gerenciar
+          </button>
+        )}
+      </div>
+      {aberto && podeEditar && (
+        <div id={`${campoId}-opcoes`} className="mt-2 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <ul className="max-h-36 divide-y divide-slate-200 overflow-y-auto">
+            {ativas.map(opcao => (
+              <li key={opcao.codigo} className="flex items-center justify-between gap-2 py-1">
+                <span className="break-all">{opcao.nome}</span>
+                <div className="flex shrink-0 gap-1">
+                  <button type="button" aria-label={`Renomear ${opcao.nome}`} title="Renomear"
+                    onClick={() => { setEditando(opcao.codigo); setNome(opcao.nome); setErro(''); }}
+                    className="rounded p-1.5 text-slate-600 hover:bg-white"><Pencil className="h-4 w-4" /></button>
+                  <button type="button" aria-label={`Excluir ${opcao.nome}`} title="Excluir"
+                    onClick={() => excluir(opcao)}
+                    className="rounded p-1.5 text-rose-700 hover:bg-white"><Trash2 className="h-4 w-4" /></button>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <label className="block font-semibold" htmlFor={`${campoId}-nome`}>{editando ? 'Novo nome' : 'Adicionar opção'}</label>
+          <div className="flex gap-2">
+            <input id={`${campoId}-nome`} value={nome} maxLength={50} onChange={e => { setNome(e.target.value); setErro(''); }}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); salvar(); } }}
+              className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-2 py-1.5" />
+            <button type="button" onClick={salvar} className="rounded-lg bg-emerald-700 px-2 py-1.5 font-semibold text-white">
+              {editando ? 'Renomear' : 'Adicionar'}
+            </button>
+          </div>
+          {editando && <button type="button" onClick={limpar} className="text-slate-600 underline">Cancelar edição</button>}
+          {erro && <p role="alert" className="text-rose-700">{erro}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export const CadastrosView: React.FC = () => {
   const {
@@ -92,7 +220,9 @@ export const CadastrosView: React.FC = () => {
     deleteMotorista,
     romaneiosMotorista,
     canWriteModule,
-    addAuditLog
+    addAuditLog,
+    config,
+    updateConfig
   } = useCoop();
 
   // Nível de permissão do usuário logado para este módulo (Cadastros:
@@ -370,11 +500,19 @@ export const CadastrosView: React.FC = () => {
     pontoReferencia: ''
   });
 
+  const catalogoProduto = config.opcoesCatalogoProduto;
+  const categoriasProduto = catalogoProduto?.categorias ?? CATEGORIAS_PRODUTO;
+  const unidadesProduto = catalogoProduto?.unidades ?? UNIDADES_PRODUTO;
+  const atualizarOpcoesProduto = (campo: 'categorias' | 'unidades', opcoes: OpcaoCatalogoProduto[]) => {
+    if (!canWrite) { blockWriteAction(); return; }
+    updateConfig({ opcoesCatalogoProduto: { ...catalogoProduto, [campo]: opcoes } });
+  };
+
   const [produtoForm, setProdutoForm] = useState({
     codigo: '',
     nome: '',
-    categoria: 'HORTIFRUTI' as any,
-    unidadeMedida: 'KG' as any,
+    categoria: primeiraOpcao(categoriasProduto),
+    unidadeMedida: primeiraOpcao(unidadesProduto),
     precoReferencia: 0,
     sazonalidade: '',
     codigoNcm: '',
@@ -661,8 +799,8 @@ export const CadastrosView: React.FC = () => {
       setProdutoForm({
         codigo: `PDT-${Date.now().toString().slice(-4)}`,
         nome: '',
-        categoria: 'HORTIFRUTI',
-        unidadeMedida: 'KG',
+        categoria: primeiraOpcao(categoriasProduto),
+        unidadeMedida: primeiraOpcao(unidadesProduto),
         precoReferencia: 0,
         sazonalidade: '',
         pesoUnitario: 0,
@@ -677,7 +815,7 @@ export const CadastrosView: React.FC = () => {
   const handleSaveProduto = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canWrite) { blockWriteAction(); return; }
-    if (!produtoForm.nome) return;
+    if (!produtoForm.nome || !produtoForm.categoria || !produtoForm.unidadeMedida) return;
     // Garante que o produto nunca seja salvo sem código fiscal: se o campo
     // ainda estiver vazio no momento de salvar (usuário não editou e nenhum
     // termo bateu antes), tenta preencher pela categoria como último recurso.
@@ -1179,9 +1317,9 @@ export const CadastrosView: React.FC = () => {
               key: 'categoria',
               header: 'Categoria',
               width: 130,
-              value: p => ({ HORTIFRUTI: 'Hortifrúti', GRAOS: 'Grãos', LATICINIOS: 'Laticínios', PROCESSADOS: 'Processados', CARNES: 'Carnes', OUTROS: 'Outros' } as Record<string, string>)[p.categoria] ?? p.categoria,
+              value: p => nomeOpcaoProduto(categoriasProduto, p.categoria),
             },
-            { key: 'unidadeMedida', header: 'Unidade', width: 90, align: 'center' },
+            { key: 'unidadeMedida', header: 'Unidade', width: 110, align: 'center', value: p => nomeOpcaoProduto(unidadesProduto, p.unidadeMedida) },
             { key: 'codigoNcm', header: 'Código NCM', width: 120, align: 'center' },
             { key: 'codigoConab', header: 'Código CONAB', width: 120, align: 'center' },
             {
@@ -1660,39 +1798,22 @@ export const CadastrosView: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-700 font-bold mb-1">Categoria</label>
-                  <select
-                    value={produtoForm.categoria}
-                    onChange={e => {
-                      const novaCategoria = e.target.value;
-                      setProdutoForm(prev => ({ ...prev, categoria: novaCategoria as any }));
-                      atualizarCodigosFiscaisAuto(produtoForm.nome, novaCategoria);
-                    }}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl"
-                  >
-                    <option value="HORTIFRUTI">Hortifruti</option>
-                    <option value="GRAOS">Grãos</option>
-                    <option value="LATICINIOS">Laticínios</option>
-                    <option value="PROCESSADOS">Processados</option>
-                    <option value="OUTROS">Outros</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-slate-700 font-bold mb-1">Unidade</label>
-                  <select
-                    value={produtoForm.unidadeMedida}
-                    onChange={e => setProdutoForm({ ...produtoForm, unidadeMedida: e.target.value as any })}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl"
-                  >
-                    <option value="KG">Quilograma (KG)</option>
-                    <option value="DUZIA">Dúzia</option>
-                    <option value="MACO">Maço</option>
-                    <option value="CAIXA">Caixa</option>
-                    <option value="LITRO">Litro</option>
-                  </select>
-                </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <CampoOpcaoProduto
+                  rotulo="Categoria" opcoes={categoriasProduto} valor={produtoForm.categoria}
+                  valorSalvo={editingProduto?.categoria} codigosEmUso={produtos.map(p => p.categoria)}
+                  podeEditar={canWrite} atualizar={opcoes => atualizarOpcoesProduto('categorias', opcoes)}
+                  selecionar={categoria => {
+                    setProdutoForm(prev => ({ ...prev, categoria }));
+                    if (categoria) atualizarCodigosFiscaisAuto(produtoForm.nome, categoria);
+                  }}
+                />
+                <CampoOpcaoProduto
+                  rotulo="Unidade" opcoes={unidadesProduto} valor={produtoForm.unidadeMedida}
+                  valorSalvo={editingProduto?.unidadeMedida} codigosEmUso={produtos.map(p => p.unidadeMedida)}
+                  podeEditar={canWrite} atualizar={opcoes => atualizarOpcoesProduto('unidades', opcoes)}
+                  selecionar={unidadeMedida => setProdutoForm(prev => ({ ...prev, unidadeMedida }))}
+                />
               </div>
 
               <div>
