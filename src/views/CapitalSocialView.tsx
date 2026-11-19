@@ -74,10 +74,10 @@ export const CapitalSocialView: React.FC = () => {
   });
 
   // New Transaction Form State
-  const [formData, setFormData] = useState({
+  const transacaoVazia = () => ({
     cooperadoId: '',
     tipo: 'INTEGRALIZACAO' as TipoTransacaoCapital,
-    valor: 1000.00,
+    valor: 0,
     data: new Date().toISOString().substring(0, 10),
     formaPagamento: 'PIX' as FormaPagamento,
     numeroDocumento: `REC-${Date.now().toString().substring(6)}`,
@@ -87,6 +87,8 @@ export const CapitalSocialView: React.FC = () => {
     cooperadoDestinoId: '',
     contaBancariaId: contaPadraoId as string
   });
+
+  const [formData, setFormData] = useState(transacaoVazia);
 
   // Calculate Totals
   const totalSubscrito = (cooperados || []).reduce((acc, c) => acc + (Number(c?.capitalSubscrito) || 0), 0);
@@ -120,21 +122,14 @@ export const CapitalSocialView: React.FC = () => {
   const handleOpenNewTx = () => {
     if (!canWrite) { blockWriteAction(); return; }
     setModalCoopSearch('');
-    if (cooperados && cooperados.length > 0) {
-      setFormData(prev => ({
-        ...prev,
-        cooperadoId: prev.cooperadoId && cooperados.some(c => c.id === prev.cooperadoId) ? prev.cooperadoId : cooperados[0].id,
-        cooperadoDestinoId: prev.cooperadoDestinoId || (cooperados[1] ? cooperados[1].id : ''),
-        numeroDocumento: `REC-${Date.now().toString().substring(6)}`
-      }));
-    }
+    setFormData(transacaoVazia());
     setIsNewTxOpen(true);
   };
 
   const handleSaveTx = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canWrite) { blockWriteAction(); return; }
-    const coop = cooperados.find(c => c.id === formData.cooperadoId) || cooperados[0];
+    const coop = cooperados.find(c => c.id === formData.cooperadoId);
     if (!coop) {
       alert('Selecione um cooperado válido para realizar a movimentação.');
       return;
