@@ -15,15 +15,15 @@ export const CadastroCooperativaView: React.FC<Props> = ({ onComplete }) => {
   const [successBanner, setSuccessBanner] = useState(false);
 
   // Admin Profile Fields
-  const [adminName, setAdminName] = useState(currentUser?.name || 'Administrador Responsável');
-  const [adminEmail, setAdminEmail] = useState(currentUser?.email || 'admin@cooperativa.com.br');
+  const [adminName, setAdminName] = useState(currentUser?.name || '');
+  const [adminEmail, setAdminEmail] = useState(currentUser?.email || '');
 
   // Form Fields initialized from currentTenant
-  const [name, setName] = useState(currentTenant?.name || 'Cooperai');
-  const [razaoSocial, setRazaoSocial] = useState(currentTenant?.razaoSocial || 'Cooperativa Interativa Agro & Soluções Cooperai Ltda.');
-  const [cnpj, setCnpj] = useState(currentTenant?.cnpj || '06.591.085/0001-06');
-  const [email, setEmail] = useState(currentTenant?.email || 'contato@cooperai.coop.br');
-  const [telefone, setTelefone] = useState(currentTenant?.telefone || '(11) 3456-7890');
+  const [name, setName] = useState(currentTenant?.name || '');
+  const [razaoSocial, setRazaoSocial] = useState(currentTenant?.razaoSocial || '');
+  const [cnpj, setCnpj] = useState(currentTenant?.cnpj || '');
+  const [email, setEmail] = useState(currentTenant?.email || '');
+  const [telefone, setTelefone] = useState(currentTenant?.telefone || '');
   const [inscricaoEstadual, setInscricaoEstadual] = useState(currentTenant?.inscricaoEstadual || '');
   const [inscricaoMunicipal, setInscricaoMunicipal] = useState(currentTenant?.inscricaoMunicipal || '');
 
@@ -44,18 +44,18 @@ export const CadastroCooperativaView: React.FC<Props> = ({ onComplete }) => {
   const [cotaParteMinima, setCotaParteMinima] = useState<number>(currentTenant?.cotaParteMinima ?? 10);
   
   // Logotipo Upload & Presets
-  const [logoUrl, setLogoUrl] = useState(currentTenant?.logoUrl || 'https://images.unsplash.com/photo-1595273670150-bd0c3c392e46?w=120&auto=format&fit=crop&q=80');
+  const [logoUrl, setLogoUrl] = useState(currentTenant?.logoUrl || '');
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Sync state if currentTenant changes
   useEffect(() => {
     if (currentTenant) {
-      setName(currentTenant.name || 'Cooperai');
-      setRazaoSocial(currentTenant.razaoSocial || 'Cooperativa Interativa Agro & Soluções Cooperai Ltda.');
-      setCnpj(currentTenant.cnpj || '06.591.085/0001-06');
-      setEmail(currentTenant.email || 'contato@cooperai.coop.br');
-      setTelefone(currentTenant.telefone || '(11) 3456-7890');
+      setName(currentTenant.name || '');
+      setRazaoSocial(currentTenant.razaoSocial || '');
+      setCnpj(currentTenant.cnpj || '');
+      setEmail(currentTenant.email || '');
+      setTelefone(currentTenant.telefone || '');
       setInscricaoEstadual(currentTenant.inscricaoEstadual || '');
       setInscricaoMunicipal(currentTenant.inscricaoMunicipal || '');
       setCep(currentTenant.cep ?? '');
@@ -66,7 +66,7 @@ export const CadastroCooperativaView: React.FC<Props> = ({ onComplete }) => {
       setEstado(currentTenant.estado ?? '');
       setCotaParteValor(currentTenant.cotaParteValor ?? 100.00);
       setCotaParteMinima(currentTenant.cotaParteMinima ?? 10);
-      setLogoUrl(currentTenant.logoUrl || 'https://images.unsplash.com/photo-1595273670150-bd0c3c392e46?w=120&auto=format&fit=crop&q=80');
+      setLogoUrl(currentTenant.logoUrl || '');
     }
   }, [currentTenant]);
 
@@ -209,8 +209,8 @@ export const CadastroCooperativaView: React.FC<Props> = ({ onComplete }) => {
         name,
         razaoSocial: razaoSocial || name,
         cnpj,
-        email: email || 'contato@cooperai.coop.br',
-        telefone: telefone || '(11) 3456-7890',
+        email: email || '',
+        telefone: telefone || '',
         inscricaoEstadual: inscricaoEstadual.trim(),
         inscricaoMunicipal: inscricaoMunicipal.trim(),
         cep,
@@ -221,7 +221,7 @@ export const CadastroCooperativaView: React.FC<Props> = ({ onComplete }) => {
         estado,
         cotaParteValor: Number(cotaParteValor) || 100,
         cotaParteMinima: Number(cotaParteMinima) || 10,
-        logoUrl: logoUrl || 'https://images.unsplash.com/photo-1595273670150-bd0c3c392e46?w=120&auto=format&fit=crop&q=80'
+        logoUrl: logoUrl || ''
       };
 
       if (currentTenant?.id) {
