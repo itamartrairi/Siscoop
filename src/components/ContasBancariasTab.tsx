@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Landmark, Plus, Pencil, Trash2, Star, X, CheckCircle2 } from 'lucide-react';
 import { useCoop } from '../context/CoopContext';
-import { ContaBancaria } from '../types';
+import { ContaBancaria, ContaPagarReceber } from '../types';
 
 /**
  * Financeiro → Contas Bancárias.
@@ -74,6 +74,7 @@ export const ContasBancariasTab: React.FC<{ canWrite?: boolean; onBlocked?: () =
   const resumo = useMemo(() => {
     const mapa: Record<string, { recebido: number; pago: number; aReceber: number; aPagar: number; creditos: number; debitos: number; titulos: number; capitalEntrada: number; capitalSaida: number }> = {};
     const item = (id: string) => (mapa[id] ||= { recebido: 0, pago: 0, aReceber: 0, aPagar: 0, creditos: 0, debitos: 0, titulos: 0, capitalEntrada: 0, capitalSaida: 0 });
+    const quitadasPorId = new Map<string, ContaPagarReceber>(contasPagarReceber.filter(c => c.status === 'PAGO').map(c => [c.id, c]));
     for (const c of contasPagarReceber) {
       if (!c.contaBancariaId || c.status === 'CANCELADO') continue;
       const r = item(c.contaBancariaId);
@@ -85,8 +86,13 @@ export const ContasBancariasTab: React.FC<{ canWrite?: boolean; onBlocked?: () =
       } else if (c.tipo === 'RECEBER') r.aReceber += valor;
       else r.aPagar += valor;
     }
-    for (const l of (extratoBancario?.lancamentos || []) as any[]) {
+    for (const l of extratoBancario?.lancamentos || []) {
       if (!l.contaBancariaId) continue;
+      const quitada = quitadasPorId.get(l.documento);
+      if (quitada?.contaBancariaId === l.contaBancariaId &&
+        l.historico?.startsWith('Baixa Financeira (') &&
+        l.tipo === (quitada.tipo === 'RECEBER' ? 'CREDITO' : 'DEBITO') &&
+        Number(l.valor) === Number(quitada.valor)) continue;
       const r = item(l.contaBancariaId);
       if (l.tipo === 'CREDITO') r.creditos += Number(l.valor) || 0;
       else r.debitos += Number(l.valor) || 0;
@@ -259,7 +265,7 @@ export const ContasBancariasTab: React.FC<{ canWrite?: boolean; onBlocked?: () =
       )}
 
       <p className="text-[11px] text-slate-500">
-        Saldo calculado = saldo inicial + títulos recebidos − títulos pagos + créditos − débitos do extrato + integralizações − devoluções de capital vinculadas à conta.
+        Saldo calculado = saldo inicial + títulos recebidos − títulos pagos + outros créditos − outros débitos do extrato + integralizações − devoluções de capital vinculadas à conta.
         Confira com o extrato do banco.
       </p>
 
