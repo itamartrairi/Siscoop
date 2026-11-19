@@ -294,21 +294,65 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    function indiceCpf(tenantId, cpf) {
+      return /databases/$(database)/documents/tenants/$(tenantId)/cpfsCooperados/$(cpf);
+    }
+
+    function cpfReservado(dados, docId) {
+      let cpf = dados.get('cpf', '');
+      return cpf is string && cpf.matches('^[0-9]{11}$') &&
+        getAfter(indiceCpf(dados.tenantId, cpf)).data.cadastroId == docId;
+    }
+
+    function liberarCpfAnterior(novoCpf) {
+      let cpf = resource.data.get('cpf', '');
+      return cpf == '' || cpf == novoCpf || !existsAfter(indiceCpf(resource.data.tenantId, cpf));
+    }
+
+    match /tenants/{tenantId}/cpfsCooperados/{cpf} {
+      allow get: if isAdmin() || belongsToTenant(tenantId);
+      allow create: if (isAdmin() || belongsToTenant(tenantId)) &&
+        cpf.matches('^[0-9]{11}$') &&
+        request.resource.data.keys().hasOnly(['cadastroId']) &&
+        request.resource.data.cadastroId is string &&
+        cooperadoConfirmaReserva(tenantId, cpf, request.resource.data.cadastroId);
+      allow delete: if (isAdmin() || belongsToTenant(tenantId)) &&
+        !cooperadoConfirmaReserva(tenantId, cpf, resource.data.cadastroId);
+    }
+
+    function cooperadoConfirmaReserva(tenantId, cpf, cadastroId) {
+      let caminho = /databases/$(database)/documents/dadosCooperativa/$(cadastroId);
+      return existsAfter(caminho) && getAfter(caminho).data.tenantId == tenantId &&
+        getAfter(caminho).data.colecao == 'cooperados' &&
+        getAfter(caminho).data.get('cpf', '') == cpf;
+    }
+
     // NOVO — Todos os dados da cooperativa (cadastros, financeiro, contábil,
     // estoque, compras, vendas, PAA/PNAE, RH...), um documento por registro,
     // gravados automaticamente pelo app. id = <tenantId>__<colecao>__<registroId>
     match /dadosCooperativa/{docId} {
-      allow read, delete: if isAdmin() || belongsToTenant(resource.data.tenantId);
+      allow read: if isAdmin() || belongsToTenant(resource.data.tenantId);
+      // Uma transação de criação também precisa ler a ausência do documento.
+      allow get: if isSignedIn() && resource == null && myTenantId() is string &&
+        myTenantId().matches('^[a-zA-Z0-9_-]+$') && belongsToTenant(myTenantId()) &&
+        docId.matches('^' + myTenantId() + '__cooperados__[^/]+$');
+      allow delete: if (isAdmin() || belongsToTenant(resource.data.tenantId)) &&
+        (resource.data.colecao != 'cooperados' || liberarCpfAnterior(''));
       allow create: if (isAdmin() || belongsToTenant(request.resource.data.tenantId)) &&
         request.resource.data.colecao is string &&
         request.resource.data.registroId is string &&
         request.resource.data.json is string &&
-        docId == request.resource.data.tenantId + '__' + request.resource.data.colecao + '__' + request.resource.data.registroId;
+        docId == request.resource.data.tenantId + '__' + request.resource.data.colecao + '__' + request.resource.data.registroId &&
+        (request.resource.data.colecao != 'cooperados' || cpfReservado(request.resource.data, docId));
       allow update: if (isAdmin() || belongsToTenant(resource.data.tenantId)) &&
         request.resource.data.tenantId == resource.data.tenantId &&
         request.resource.data.colecao == resource.data.colecao &&
         request.resource.data.registroId == resource.data.registroId &&
-        request.resource.data.json is string;
+        request.resource.data.json is string &&
+        (resource.data.colecao != 'cooperados' ||
+          (liberarCpfAnterior(request.resource.data.get('cpf', '')) &&
+            (cpfReservado(request.resource.data, docId) ||
+              (resource.data.get('cpf', '') == '' && request.resource.data.get('cpf', '') == ''))));
     }
 
     // Assinaturas e logs de webhook: só o backend (credencial de serviço)
