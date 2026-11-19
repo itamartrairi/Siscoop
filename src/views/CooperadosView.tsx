@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useCoop } from '../context/CoopContext';
 import { ImportarCsvModal } from '../components/ImportarCsvModal';
 import { PortalShareBanner } from '../components/PortalShareBanner';
-import { DataGrid, GridStatus } from '../components/ui/DataGrid';
+import { DataGrid, GridStatus, normalizeFilterText } from '../components/ui/DataGrid';
 import { sanitizeCooperado } from '../utils/cooperadoSanitizer';
 import {
   Cooperado,
@@ -404,6 +404,40 @@ const CadastroProducao: React.FC = () => {
   );
 };
 
+const situacaoDoCooperado = (c: Cooperado) => String(c.situacao || 'ATIVO').trim().toUpperCase();
+
+function situacaoCaf(validade?: string): 'VALIDA' | 'VENCIDA' | 'SEM_VALIDADE' {
+  const texto = validade?.trim() || '';
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(texto);
+  const br = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(texto);
+  if (!iso && !br) return 'SEM_VALIDADE';
+
+  const dia = Number(iso?.[3] ?? br?.[1]);
+  const mes = Number(iso?.[2] ?? br?.[2]);
+  const ano = Number(iso?.[1] ?? br?.[3]);
+  const data = new Date(ano, mes - 1, dia);
+  if (data.getFullYear() !== ano || data.getMonth() !== mes - 1 || data.getDate() !== dia) return 'SEM_VALIDADE';
+
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  return data < hoje ? 'VENCIDA' : 'VALIDA';
+}
+
+function filtroCpf(cpf: Cooperado['cpf'], termo: string) {
+  const digitos = termo.replace(/\D/g, '');
+  return /^[\d.\s-]+$/.test(termo) && digitos.length > 0 &&
+    String(cpf ?? '').replace(/\D/g, '').includes(digitos);
+}
+
+function classificacaoPaa(c: Cooperado) {
+  const caf = situacaoCaf(c.cafDapValidade);
+  const apto = c.aptoPaa !== false && caf === 'VALIDA' && situacaoDoCooperado(c) === 'ATIVO';
+  const rotulo = caf === 'VENCIDA' ? 'CAF vencida' :
+    caf === 'SEM_VALIDADE' ? 'CAF sem validade informada' :
+    apto ? 'Apto PAA' : 'Inapto PAA';
+  return { caf, apto, rotulo };
+}
+
 export const CooperadosView: React.FC = () => {
   const {
     cooperados,
@@ -458,21 +492,6 @@ export const CooperadosView: React.FC = () => {
     observacao: ''
   });
 
-  const checkCafValida = (validadeStr?: string) => {
-    if (!validadeStr) return true;
-    let d: Date;
-    if (validadeStr.includes('/')) {
-      const parts = validadeStr.split('/');
-      d = new Date(`${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`);
-    } else {
-      d = new Date(validadeStr);
-    }
-    if (isNaN(d.getTime())) return true;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return d >= today;
-  };
-
   // Form State
   const initialFormState: Omit<Cooperado, 'id' | 'tenantId' | 'historico' | 'capitalSubscrito' | 'capitalIntegralizado'> = {
     matricula: `COOP-${String((cooperados?.length || 0) + 1).padStart(4, '0')}`,
@@ -523,40 +542,23 @@ export const CooperadosView: React.FC = () => {
   // Filter logic - completely defensive against undefined/null
   const filteredCooperados = React.useMemo(() => {
     if (!Array.isArray(cooperados)) return [];
+    const termo = normalizeFilterText(searchTerm);
     return cooperados.filter(c => {
       if (!c) return false;
-      const cleanNome = (c.nome || '').toString().toLowerCase();
-      const cleanCpf = (c.cpf || '').toString();
-      const cleanCpfDigits = cleanCpf.replace(/\D/g, '');
-      const cleanMatricula = (c.matricula || '').toString().toLowerCase();
-      const cleanCidade = (c.cidade || '').toString().toLowerCase();
-      const cleanBairro = (c.bairro || c.localidadeComunidade || '').toString().toLowerCase();
-      const term = (searchTerm || '').trim().toLowerCase();
-      const termDigits = term.replace(/\D/g, '');
+      const matchesSearch = !termo ||
+        [c.nome, c.matricula, c.cidade, c.bairro, c.localidadeComunidade].some(value =>
+          normalizeFilterText(value).includes(termo)) ||
+        filtroCpf(c.cpf, termo);
 
-      const matchesSearch =
-        !term ||
-        cleanNome.includes(term) ||
-        cleanCpf.toLowerCase().includes(term) ||
-        (termDigits.length >= 3 && cleanCpfDigits.includes(termDigits)) ||
-        cleanMatricula.includes(term) ||
-        cleanCidade.includes(term) ||
-        cleanBairro.includes(term);
-
-      const situacao = (c.situacao || 'ATIVO').toString().toUpperCase();
-      const matchesSituacao = filterSituacao === 'TODOS' || situacao === filterSituacao;
-
-      const categoria = (c.categoria || 'EFETIVO').toString().toUpperCase();
-      const matchesCategoria = filterCategoria === 'TODOS' || categoria === filterCategoria;
-
-      const isAptoPaa = c.aptoPaa !== false;
-      const isCafOk = checkCafValida(c.cafDapValidade);
-
-      const matchesPaa =
-        filterPaa === 'TODOS' ? true :
-        filterPaa === 'APTO_PAA' ? (isAptoPaa && isCafOk && situacao === 'ATIVO') :
-        filterPaa === 'INAPTO_PAA' ? (!isAptoPaa || situacao !== 'ATIVO') :
-        filterPaa === 'CAF_EXPIRADA' ? (!isCafOk) : true;
+      const matchesSituacao = filterSituacao === 'TODOS' || situacaoDoCooperado(c) === filterSituacao;
+      const matchesCategoria = filterCategoria === 'TODOS' ||
+        String(c.categoria || 'EFETIVO').trim().toUpperCase() === filterCategoria;
+      const { apto, caf } = classificacaoPaa(c);
+      const matchesPaa = filterPaa === 'TODOS' ||
+        (filterPaa === 'APTO_PAA' && apto) ||
+        (filterPaa === 'INAPTO_PAA' && !apto) ||
+        (filterPaa === 'CAF_EXPIRADA' && caf === 'VENCIDA') ||
+        (filterPaa === 'CAF_SEM_VALIDADE' && caf === 'SEM_VALIDADE');
 
       return matchesSearch && matchesSituacao && matchesCategoria && matchesPaa;
     });
@@ -840,6 +842,7 @@ export const CooperadosView: React.FC = () => {
               <option value="APTO_PAA">✓ Aptos PAA (CAF Válida)</option>
               <option value="INAPTO_PAA">✕ Inaptos PAA</option>
               <option value="CAF_EXPIRADA">⚠ CAF Vencida / Expirada</option>
+              <option value="CAF_SEM_VALIDADE">CAF sem validade informada</option>
             </select>
           </div>
 
@@ -868,9 +871,10 @@ export const CooperadosView: React.FC = () => {
             key: 'situacao',
             header: 'Situação',
             width: 120,
-            value: c => c.situacao || 'ATIVO',
+            value: situacaoDoCooperado,
+            matchesFilter: (c, termo) => normalizeFilterText(situacaoDoCooperado(c)).startsWith(normalizeFilterText(termo)),
             render: c => {
-              const s = c.situacao || 'ATIVO';
+              const s = situacaoDoCooperado(c);
               return (
                 <GridStatus
                   tone={s === 'ATIVO' ? 'success' : s === 'INATIVO' ? 'warning' : 'danger'}
@@ -881,26 +885,18 @@ export const CooperadosView: React.FC = () => {
           },
           { key: 'nome', header: 'Nome', width: 240 },
           { key: 'matricula', header: 'Matrícula', width: 110 },
-          { key: 'cpf', header: 'CPF', width: 140 },
+          { key: 'cpf', header: 'CPF', width: 140, matchesFilter: (c, termo) => filtroCpf(c.cpf, termo) },
           { key: 'localidade', header: 'Cidade / UF', width: 150, value: c => [c.cidade, c.estado].filter(Boolean).join(' - ') },
           { key: 'contato', header: 'Celular', width: 140, value: c => c.celular || c.telefone },
           {
             key: 'paa',
             header: 'Apto PAA / CAF',
             width: 150,
-            value: c => {
-              const cafOk = checkCafValida(c.cafDapValidade);
-              return c.aptoPaa !== false && cafOk && c.situacao === 'ATIVO' ? 'Apto PAA' : !cafOk ? 'CAF vencida' : 'Inapto PAA';
-            },
+            value: c => classificacaoPaa(c).rotulo,
+            matchesFilter: (c, termo) => normalizeFilterText(classificacaoPaa(c).rotulo).startsWith(normalizeFilterText(termo)),
             render: c => {
-              const cafOk = checkCafValida(c.cafDapValidade);
-              const apto = c.aptoPaa !== false && cafOk && c.situacao === 'ATIVO';
-              return (
-                <GridStatus
-                  tone={apto ? 'success' : !cafOk ? 'danger' : 'neutral'}
-                  label={apto ? 'Apto PAA' : !cafOk ? 'CAF vencida' : 'Inapto PAA'}
-                />
-              );
+              const { caf, apto, rotulo } = classificacaoPaa(c);
+              return <GridStatus tone={apto ? 'success' : caf === 'VENCIDA' ? 'danger' : 'neutral'} label={rotulo} />;
             },
           },
           {
@@ -1180,15 +1176,15 @@ export const CooperadosView: React.FC = () => {
                         </label>
                         <input
                           type="date"
-                          value={formData.cafDapValidade || '2028-12-31'}
+                          value={formData.cafDapValidade || ''}
                           onChange={e => setFormData({ ...formData, cafDapValidade: e.target.value })}
                           className={`w-full p-2 rounded-lg bg-white dark:bg-slate-900 border text-slate-900 dark:text-white font-mono ${
-                            !checkCafValida(formData.cafDapValidade)
+                            situacaoCaf(formData.cafDapValidade) === 'VENCIDA'
                               ? 'border-rose-500 text-rose-600 font-bold'
                               : 'border-slate-200 dark:border-slate-700'
                           }`}
                         />
-                        {!checkCafValida(formData.cafDapValidade) && (
+                        {situacaoCaf(formData.cafDapValidade) === 'VENCIDA' && (
                           <p className="text-[10px] text-rose-600 font-bold mt-1">
                             ⚠️ A CAF/DAP está vencida. Cooperado não será sincronizado como produtor rural ativo.
                           </p>
