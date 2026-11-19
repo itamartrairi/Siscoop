@@ -750,7 +750,7 @@ interface CoopContextType {
   updateCliente: (id: string, c: Partial<Cliente>) => void;
   deleteCliente: (id: string) => void;
   vendasRevenda: VendaRevenda[];
-  addVendaRevenda: (v: Omit<VendaRevenda, 'id' | 'tenantId' | 'status' | 'contasReceberIds'> & { quitarPrimeiraParcela?: boolean }) => string;
+  addVendaRevenda: (v: Omit<VendaRevenda, 'id' | 'tenantId' | 'status' | 'contasReceberIds'> & { quitarPrimeiraParcela?: boolean; registrarFinanceiro?: boolean }) => string;
   cancelarVendaRevenda: (id: string) => void;
   deleteVendaRevenda: (id: string) => void;
   // Agenda & Atividades
@@ -4706,10 +4706,13 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // contas a receber (parcelas) no Financeiro e lançamento contábil da receita.
   // ---------------------------------------------------------------------------
   const addVendaRevenda = (
-    vData: Omit<VendaRevenda, 'id' | 'tenantId' | 'status' | 'contasReceberIds'> & { quitarPrimeiraParcela?: boolean }
+    vData: Omit<VendaRevenda, 'id' | 'tenantId' | 'status' | 'contasReceberIds'> & { quitarPrimeiraParcela?: boolean; registrarFinanceiro?: boolean }
   ): string => {
-    const { quitarPrimeiraParcela, ...dados } = vData;
-    if (!dados.itens.length) return '';
+    const { quitarPrimeiraParcela, registrarFinanceiro, ...dados } = vData;
+    const tipoOperacao = dados.tipoOperacao ?? 'VENDA';
+    const venda = tipoOperacao === 'VENDA';
+    if (venda && (!dados.clienteId || !Number.isFinite(dados.valorTotal) || dados.valorTotal <= 0)) return '';
+    if (!dados.itens.length || dados.itens.some(i => !Number.isFinite(Number(i.quantidade)) || Number(i.quantidade) <= 0)) return '';
     const porItem = new Map<string, number>();
     dados.itens.forEach(i => porItem.set(i.estoqueItemId, (porItem.get(i.estoqueItemId) || 0) + (Number(i.quantidade) || 0)));
     for (const [itemId, qtd] of porItem) {
@@ -4721,22 +4724,22 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
     if (vendasRevenda.some(v => pertenceAoTenant(v, currentTenant.id) && chaveUnica(v.numeroVenda) === chaveUnica(dados.numeroVenda))) {
-      alert('Já existe uma venda com este número.');
+      alert('Já existe uma operação com este número.');
       return '';
     }
 
     const id = `vnd-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const motivo = `Revenda ${dados.numeroVenda} - ${dados.clienteNome}`;
+    const motivo = `Revenda ${dados.numeroVenda} - ${dados.clienteNome || ''}`;
     dados.itens.forEach(i => addMovimentacaoEstoque({
       itemEstoqueId: i.estoqueItemId,
       itemNome: i.descricao,
-      tipoMovimento: 'SAIDA',
+      tipoMovimento: tipoOperacao === 'TRANSFERENCIA' || tipoOperacao === 'PERDA' ? tipoOperacao : 'SAIDA',
       quantidade: Number(i.quantidade),
       motivo,
       usuarioResponsavel: currentUser?.name || 'Sistema'
     }));
 
-    const contasReceberIds = lancarParcelasFinanceiras({
+    const contasReceberIds = venda && registrarFinanceiro === true ? lancarParcelasFinanceiras({
       tipo: 'RECEBER',
       descricaoBase: `Venda ${dados.numeroVenda} - ${dados.clienteNome}`,
       pessoaNome: dados.clienteNome,
@@ -4750,27 +4753,34 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       dataEmissao: dados.dataVenda,
       centroCusto: 'Revenda de Produtos',
       quitarPrimeiraParcela
-    });
+    }) : [];
 
     const nova: VendaRevenda = {
       ...semIndefinidos(dados),
+      tipoOperacao,
+      ...(venda ? {} : {
+        itens: dados.itens.map(({ tributacaoIcms, ...item }) => ({ ...item, precoUnitario: 0, subtotal: 0 })),
+        desconto: 0,
+        valorTotal: 0,
+        impostos: undefined
+      }),
       id,
       tenantId: currentTenant.id,
       status: 'CONCLUIDA',
       contasReceberIds
     };
-    setVendasRevenda(prev => [nova, ...prev]);
-    addAuditLog('COMPRAS', 'INCLUSAO', `Registrou a venda ${dados.numeroVenda} para ${dados.clienteNome} (${dados.itens.length} produto(s))`);
+    setVendasRevenda(prev => [semIndefinidos(nova), ...prev]);
+    addAuditLog('COMPRAS', 'INCLUSAO', `Registrou ${tipoOperacao} ${dados.numeroVenda} (${dados.itens.length} produto(s))`);
     return id;
   };
 
   const cancelarVendaRevenda = (id: string) => {
     const venda = vendasRevenda.find(v => v.id === id);
     if (!venda || venda.status === 'CANCELADA') return;
-    const motivo = `Revenda ${venda.numeroVenda} - ${venda.clienteNome}`;
+    const motivo = `Revenda ${venda.numeroVenda} - ${venda.clienteNome || ''}`;
 
     // 1) Estoque: devolve os produtos e remove a baixa contábil das saídas desta venda.
-    const idsSaidas = new Set(movimentacoesEstoque.filter(m => m.tipoMovimento === 'SAIDA' && m.motivo === motivo).map(m => m.id));
+    const idsSaidas = new Set(movimentacoesEstoque.filter(m => m.tipoMovimento !== 'ENTRADA' && m.motivo === motivo).map(m => m.id));
     if (idsSaidas.size) setLancamentosContabeis(prev => prev.filter(l => !l.documentoRef || !idsSaidas.has(l.documentoRef)));
     venda.itens.forEach(i => addMovimentacaoEstoque({
       itemEstoqueId: i.estoqueItemId,
@@ -4792,7 +4802,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setVendasRevenda(prev => prev.map(v => (v.id === id
       ? { ...v, status: 'CANCELADA' as const, dataCancelamento: new Date().toISOString().split('T')[0] }
       : v)));
-    addAuditLog('COMPRAS', 'ALTERACAO', `Cancelou a venda ${venda.numeroVenda} (estoque devolvido e parcelas em aberto canceladas)`);
+    addAuditLog('COMPRAS', 'ALTERACAO', `Cancelou a operação ${venda.numeroVenda} e devolveu os itens ao estoque`);
     if (recebidas.length) {
       const total = recebidas.reduce((s, c) => s + (Number(c.valor) || 0), 0);
       alert(`Venda cancelada. Atenção: ${recebidas.length} parcela(s) já recebida(s) (${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}) continuam no Financeiro. Faça a devolução ao cliente e o estorno manualmente.`);
@@ -4802,11 +4812,11 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deleteVendaRevenda = (id: string) => {
     const venda = vendasRevenda.find(v => v.id === id);
     if (venda && venda.status !== 'CANCELADA') {
-      alert('Cancele a venda antes de excluir o registro.');
+      alert('Cancele a operação antes de excluir o registro.');
       return;
     }
     setVendasRevenda(prev => prev.filter(v => v.id !== id));
-    addAuditLog('COMPRAS', 'EXCLUSAO', `Excluiu o registro da venda ${venda?.numeroVenda || id}`);
+    addAuditLog('COMPRAS', 'EXCLUSAO', `Excluiu o registro da operação ${venda?.numeroVenda || id}`);
   };
 
 

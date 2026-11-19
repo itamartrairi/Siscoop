@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Plus, X, Store, MessageCircle, BadgeDollarSign, Ban, Trash2, Eye, Landmark, Settings2 } from 'lucide-react';
 import { useCoop } from '../context/CoopContext';
-import { VendaRevenda, ItemVendaRevenda, FormaPagamentoComercial, TributacaoIcmsItem, ImpostosVenda } from '../types';
+import { VendaRevenda, ItemVendaRevenda, FormaPagamentoComercial, TributacaoIcmsItem, ImpostosVenda, TipoOperacaoRevenda } from '../types';
 import { DataGrid, GridStatus } from './ui/DataGrid';
 import { abrirLinkExterno, montarLinkWhatsApp, getTelefoneContato } from '../utils/whatsappHelpers';
 import { mensagemCobranca, mensagemComprovanteVenda } from '../utils/mensagensWhatsApp';
@@ -14,7 +14,15 @@ import { ConfigTributariaModal, ApuracaoImpostosModal } from './ImpostosRevendaM
 const inputCls = 'w-full p-2.5 border border-slate-200 rounded-xl';
 const labelCls = 'block text-slate-700 font-bold mb-1';
 
+const TIPOS_OPERACAO: Record<TipoOperacaoRevenda, string> = {
+  VENDA: 'Venda', TRANSFERENCIA: 'Transferência', PERDA: 'Perda', DOACAO: 'Doação',
+};
+
+const rotuloOperacao = (v: VendaRevenda) => TIPOS_OPERACAO[v.tipoOperacao ?? 'VENDA'];
+const ehVenda = (v: VendaRevenda) => (v.tipoOperacao ?? 'VENDA') === 'VENDA';
+
 interface FormVenda {
+  tipoOperacao: TipoOperacaoRevenda;
   numeroVenda: string;
   dataVenda: string;
   clienteId: string;
@@ -28,6 +36,7 @@ interface FormVenda {
 }
 
 const novoForm = (): FormVenda => ({
+  tipoOperacao: 'VENDA',
   numeroVenda: `VD-${Date.now().toString().slice(-6)}`,
   dataVenda: hojeISO(),
   clienteId: '',
@@ -36,7 +45,7 @@ const novoForm = (): FormVenda => ({
   numeroParcelas: 1,
   intervaloDias: 30,
   primeiroVencimento: hojeISO(),
-  quitarPrimeiraParcela: true,
+  quitarPrimeiraParcela: false,
   observacoes: '',
 });
 
@@ -57,6 +66,8 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
   const [form, setForm] = useState<FormVenda>(novoForm());
   const [itens, setItens] = useState<ItemVendaRevenda[]>([itemVazio()]);
   const [erro, setErro] = useState('');
+  const [confirmarFinanceiro, setConfirmarFinanceiro] = useState(false);
+  const venda = form.tipoOperacao === 'VENDA';
 
   const cooperativa = currentTenant?.name || currentTenant?.razaoSocial || 'Cooperativa';
   const clientesAtivos = clientes.filter(c => c.ativo !== false);
@@ -72,8 +83,16 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
 
   const parcelasDaVenda = (v: VendaRevenda) => contasPagarReceber.filter(c => (v.contasReceberIds || []).includes(c.id));
   const emAberto = (v: VendaRevenda) => parcelasDaVenda(v).filter(c => c.status !== 'PAGO' && c.status !== 'CANCELADO');
+  const situacaoOperacao = (v: VendaRevenda) => {
+    if (v.status === 'CANCELADA') return { label: 'Cancelada', tone: 'danger' as const };
+    if (!ehVenda(v)) return { label: 'Concluída', tone: 'success' as const };
+    if (!parcelasDaVenda(v).length) return { label: 'Sem financeiro', tone: 'neutral' as const };
+    if (emAberto(v).length) return { label: 'Em aberto', tone: 'warning' as const };
+    return parcelasDaVenda(v).some(c => c.status === 'PAGO')
+      ? { label: 'Recebida', tone: 'success' as const } : { label: 'Sem recebimento', tone: 'neutral' as const };
+  };
 
-  const totalBruto = itens.reduce((s, i) => s + (Number(i.quantidade) || 0) * (Number(i.precoUnitario) || 0), 0);
+  const totalBruto = venda ? itens.reduce((s, i) => s + (Number(i.quantidade) || 0) * (Number(i.precoUnitario) || 0), 0) : 0;
   const totalVenda = Math.max(0, totalBruto - (Number(form.desconto) || 0));
   const previa = gerarParcelas(totalVenda, form.numeroParcelas, form.primeiroVencimento, form.intervaloDias);
 
@@ -81,14 +100,14 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
   const clienteForm = clientes.find(c => c.id === form.clienteId);
   const ufCliente = (clienteForm?.uf || 'CE').toUpperCase();
   const clienteContribuinte = !!clienteForm?.inscricaoEstadual && !/isento/i.test(clienteForm.inscricaoEstadual);
-  const impostosPrevia: ImpostosVenda = calcularImpostosVenda(
+  const impostosPrevia = venda ? calcularImpostosVenda(
     itens.filter(i => i.estoqueItemId), Number(form.desconto) || 0, ufCliente, clienteContribuinte, cfgTrib
-  );
+  ) : undefined;
 
   const abrirNova = () => {
     if (!canWrite) { onBlocked(); return; }
-    if (!clientesAtivos.length) { alert('Cadastre um cliente na aba Clientes antes de lançar uma venda.'); return; }
-    setForm({ ...novoForm(), clienteId: clientesAtivos[0].id });
+    setForm(novoForm());
+    setConfirmarFinanceiro(false);
     setItens([itemVazio()]);
     setErro('');
     setShowModal(true);
@@ -110,12 +129,11 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
     });
   };
 
-  const salvar = (e: React.FormEvent) => {
-    e.preventDefault();
+  const salvar = (registrarFinanceiro?: boolean) => {
     if (!canWrite) { onBlocked(); return; }
     setErro('');
     const cliente = clientes.find(c => c.id === form.clienteId);
-    if (!cliente) { setErro('Selecione o cliente.'); return; }
+    if (venda && !cliente) { setErro('Selecione o cliente da venda.'); return; }
     const validos = itens
       .filter(i => i.estoqueItemId && Number(i.quantidade) > 0)
       .map(i => {
@@ -125,31 +143,35 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
           descricao: i.descricao,
           unidade: i.unidade,
           quantidade: Number(i.quantidade),
-          precoUnitario: Number(i.precoUnitario) || 0,
+          precoUnitario: venda ? Number(i.precoUnitario) || 0 : 0,
           custoUnitario: Number(i.custoUnitario) || 0,
-          subtotal: Number(((Number(i.quantidade) || 0) * (Number(i.precoUnitario) || 0)).toFixed(2)),
-          tributacaoIcms: i.tributacaoIcms || 'TRIBUTADO',
+          subtotal: venda ? Number((Number(i.quantidade) * (Number(i.precoUnitario) || 0)).toFixed(2)) : 0,
+          ...(venda ? { tributacaoIcms: i.tributacaoIcms || 'TRIBUTADO' as const } : {}),
         };
         if (forn) { item.fornecedorId = forn.id; item.fornecedorNome = forn.nomeFantasia || forn.razaoSocial; }
         return item;
       });
     if (!validos.length) { setErro('Adicione ao menos um produto com quantidade.'); return; }
-    if (totalVenda <= 0) { setErro('O total da venda deve ser maior que zero.'); return; }
+    if (venda && totalVenda <= 0) { setErro('O total da venda deve ser maior que zero.'); return; }
+    if (venda && registrarFinanceiro === undefined) { setConfirmarFinanceiro(true); return; }
+    setConfirmarFinanceiro(false);
     const id = addVendaRevenda({
       numeroVenda: form.numeroVenda.trim() || `VD-${Date.now().toString().slice(-6)}`,
       dataVenda: form.dataVenda,
-      clienteId: cliente.id,
-      clienteNome: cliente.nome,
+      tipoOperacao: form.tipoOperacao,
+      clienteId: cliente?.id || '',
+      clienteNome: cliente?.nome || '',
       itens: validos,
-      desconto: Number(form.desconto) || 0,
+      desconto: venda ? Number(form.desconto) || 0 : 0,
       valorTotal: Number(totalVenda.toFixed(2)),
       formaPagamento: form.formaPagamento,
       numeroParcelas: Math.max(1, Number(form.numeroParcelas) || 1),
       intervaloDias: Math.max(0, Number(form.intervaloDias) || 0),
       primeiroVencimento: form.primeiroVencimento || form.dataVenda,
       observacoes: form.observacoes,
-      impostos: calcularImpostosVenda(validos, Number(form.desconto) || 0, ufCliente, clienteContribuinte, cfgTrib),
-      quitarPrimeiraParcela: form.quitarPrimeiraParcela,
+      ...(venda ? { impostos: calcularImpostosVenda(validos, Number(form.desconto) || 0, ufCliente, clienteContribuinte, cfgTrib) } : {}),
+      registrarFinanceiro: venda && registrarFinanceiro === true,
+      quitarPrimeiraParcela: venda && registrarFinanceiro === true && form.quitarPrimeiraParcela,
     });
     if (id) setShowModal(false);
   };
@@ -168,7 +190,7 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
           <Store className="w-5 h-5 text-emerald-600" />
           <div>
             <h2 className="text-lg font-black text-slate-900">Revenda de Produtos</h2>
-            <p className="text-xs text-slate-500">Vendas dos itens do estoque: baixa o estoque, gera o contas a receber e o lançamento contábil.</p>
+            <p className="text-xs text-slate-500">Registre vendas, transferências, perdas e doações de produtos do estoque.</p>
           </div>
         </div>
         <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value as typeof filtroStatus)} className="p-2 border border-slate-200 rounded-xl text-xs font-semibold bg-white">
@@ -183,7 +205,7 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
           <Landmark className="w-4 h-4" /> Apurar impostos do mês
         </button>
         <button onClick={abrirNova} className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Nova Venda
+          <Plus className="w-4 h-4" /> Nova Operação
         </button>
       </div>
 
@@ -192,40 +214,39 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
         getRowId={v => v.id}
         pageSize={20}
         onRowDoubleClick={v => setDetalhe(v)}
-        panelTitle={v => `Venda ${v.numeroVenda}`}
+        panelTitle={v => `${rotuloOperacao(v)} ${v.numeroVenda}`}
         panelSubtitle={v => v.clienteNome}
-        emptyMessage="Nenhuma venda registrada."
-        summary={<span className="text-xs font-bold text-slate-600">Total no filtro: {formatarMoeda(linhas.filter(v => v.status !== 'CANCELADA').reduce((s, v) => s + v.valorTotal, 0))}</span>}
+        emptyMessage="Nenhuma operação registrada."
+        summary={<span className="text-xs font-bold text-slate-600">Total no filtro: {formatarMoeda(linhas.filter(v => ehVenda(v) && v.status !== 'CANCELADA').reduce((s, v) => s + v.valorTotal, 0))}</span>}
         columns={[
           {
             key: 'status', header: 'Status', width: 120,
-            value: v => (v.status === 'CANCELADA' ? 'Cancelada' : emAberto(v).length ? 'Em aberto' : 'Recebida'),
-            render: v => v.status === 'CANCELADA'
-              ? <GridStatus tone="danger" label="Cancelada" />
-              : emAberto(v).length ? <GridStatus tone="warning" label="Em aberto" /> : <GridStatus tone="success" label="Recebida" />,
+            value: v => situacaoOperacao(v).label,
+            render: v => <GridStatus {...situacaoOperacao(v)} />,
           },
-          { key: 'numeroVenda', header: 'Nº Venda', width: 110 },
+          { key: 'tipoOperacao', header: 'Tipo de venda', width: 130, value: rotuloOperacao },
+          { key: 'numeroVenda', header: 'Nº Operação', width: 110 },
           { key: 'dataVenda', header: 'Data', width: 100, render: v => dataBR(v.dataVenda) },
           { key: 'clienteNome', header: 'Cliente', width: 220 },
           { key: 'itens', header: 'Produtos', width: 220, value: v => v.itens.map(i => `${i.quantidade} ${i.unidade} ${i.descricao}`).join('; ') },
-          { key: 'formaPagamento', header: 'Pagamento', width: 140, value: v => `${rotuloFormaPagamento(v.formaPagamento)} ${v.numeroParcelas > 1 ? `${v.numeroParcelas}x` : 'à vista'}` },
+          { key: 'formaPagamento', header: 'Pagamento', width: 140, value: v => ehVenda(v) ? `${rotuloFormaPagamento(v.formaPagamento)} ${v.numeroParcelas > 1 ? `${v.numeroParcelas}x` : 'à vista'}` : '—' },
           { key: 'impostos', header: 'Impostos', width: 110, align: 'right', value: v => v.impostos?.totalRecolher ?? 0, render: v => (v.impostos ? formatarMoeda(v.impostos.totalRecolher) : '—') },
           { key: 'valorTotal', header: 'Total', width: 120, align: 'right', value: v => v.valorTotal, render: v => formatarMoeda(v.valorTotal) },
         ]}
         actions={[
           { label: 'Ver detalhes', icon: Eye, onClick: v => setDetalhe(v) },
-          { label: 'Enviar comprovante (WhatsApp)', icon: MessageCircle, onClick: v => enviarParaCliente(v, mensagemComprovanteVenda(cooperativa, v, parcelasDaVenda(v))) },
+          { label: 'Enviar comprovante (WhatsApp)', icon: MessageCircle, hidden: v => !ehVenda(v) || !parcelasDaVenda(v).length, onClick: v => enviarParaCliente(v, mensagemComprovanteVenda(cooperativa, v, parcelasDaVenda(v))) },
           {
             label: 'Cobrar por WhatsApp', icon: BadgeDollarSign,
             hidden: v => v.status === 'CANCELADA' || emAberto(v).length === 0,
             onClick: v => enviarParaCliente(v, mensagemCobranca(cooperativa, v.clienteNome, parcelasDaVenda(v))),
           },
           {
-            label: 'Cancelar venda', icon: Ban, tone: 'danger', divider: true,
+            label: 'Cancelar operação', icon: Ban, tone: 'danger', divider: true,
             hidden: v => v.status === 'CANCELADA',
             onClick: v => {
               if (!canWrite) { onBlocked(); return; }
-              if (confirm(`Cancelar a venda ${v.numeroVenda}? Os produtos voltam ao estoque e as parcelas em aberto são canceladas no Financeiro.`)) cancelarVendaRevenda(v.id);
+              if (confirm(`Cancelar ${rotuloOperacao(v).toLowerCase()} ${v.numeroVenda}? Os produtos voltam ao estoque.${parcelasDaVenda(v).length ? ' As parcelas em aberto serão canceladas no Financeiro.' : ''}`)) cancelarVendaRevenda(v.id);
             },
           },
           {
@@ -233,7 +254,7 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
             hidden: v => v.status !== 'CANCELADA',
             onClick: v => {
               if (!canWrite) { onBlocked(); return; }
-              if (confirm(`Excluir o registro da venda cancelada ${v.numeroVenda}?`)) deleteVendaRevenda(v.id);
+              if (confirm(`Excluir o registro da operação cancelada ${v.numeroVenda}?`)) deleteVendaRevenda(v.id);
             },
           },
         ]}
@@ -243,22 +264,22 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto" onClick={() => setDetalhe(null)}>
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-4 my-8 text-xs" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h2 className="text-lg font-black text-slate-900">Venda {detalhe.numeroVenda} — {detalhe.clienteNome}</h2>
+              <h2 className="text-lg font-black text-slate-900">{rotuloOperacao(detalhe)} {detalhe.numeroVenda}{detalhe.clienteNome ? ` — ${detalhe.clienteNome}` : ''}</h2>
               <button onClick={() => setDetalhe(null)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-xl"><X className="w-5 h-5" /></button>
             </div>
-            <div className="text-slate-600">Data: {dataBR(detalhe.dataVenda)} · {descreverParcelamento(detalhe.formaPagamento, detalhe.valorTotal, detalhe.numeroParcelas, detalhe.intervaloDias)}{detalhe.status === 'CANCELADA' ? ' · CANCELADA' : ''}</div>
+            <div className="text-slate-600">Data: {dataBR(detalhe.dataVenda)}{ehVenda(detalhe) && ` · ${descreverParcelamento(detalhe.formaPagamento, detalhe.valorTotal, detalhe.numeroParcelas, detalhe.intervaloDias)}`}{detalhe.status === 'CANCELADA' ? ' · CANCELADA' : ''}</div>
             <table className="w-full">
-              <thead><tr className="text-left text-slate-500"><th className="py-1">Produto</th><th>Fornecedor</th><th className="text-right">Qtd</th><th className="text-right">Preço</th><th className="text-right">Subtotal</th></tr></thead>
+              <thead><tr className="text-left text-slate-500"><th className="py-1">Produto</th><th>Fornecedor</th><th className="text-right">Qtd</th>{ehVenda(detalhe) && <><th className="text-right">Preço</th><th className="text-right">Subtotal</th></>}</tr></thead>
               <tbody>
                 {detalhe.itens.map((i, idx) => (
-                  <tr key={idx} className="border-t border-slate-100"><td className="py-1">{i.descricao}</td><td>{i.fornecedorNome || '—'}</td><td className="text-right">{i.quantidade} {i.unidade}</td><td className="text-right">{formatarMoeda(i.precoUnitario)}</td><td className="text-right">{formatarMoeda(i.subtotal)}</td></tr>
+                  <tr key={idx} className="border-t border-slate-100"><td className="py-1">{i.descricao}</td><td>{i.fornecedorNome || '—'}</td><td className="text-right">{i.quantidade} {i.unidade}</td>{ehVenda(detalhe) && <><td className="text-right">{formatarMoeda(i.precoUnitario)}</td><td className="text-right">{formatarMoeda(i.subtotal)}</td></>}</tr>
                 ))}
               </tbody>
             </table>
             {!!detalhe.desconto && <div className="text-right">Desconto: {formatarMoeda(detalhe.desconto)}</div>}
-            <div className="text-right font-black text-emerald-700 text-sm">Total: {formatarMoeda(detalhe.valorTotal)}</div>
+            {ehVenda(detalhe) && <div className="text-right font-black text-emerald-700 text-sm">Total: {formatarMoeda(detalhe.valorTotal)}</div>}
             {detalhe.impostos && <QuadroImpostos impostos={detalhe.impostos} />}
-            <div>
+            {ehVenda(detalhe) && <div>
               <div className="font-bold text-slate-700 mb-1">Parcelas no Contas a Receber</div>
               {parcelasDaVenda(detalhe).sort((a, b) => a.dataVencimento.localeCompare(b.dataVencimento)).map(c => (
                 <div key={c.id} className="flex justify-between border-t border-slate-100 py-1">
@@ -266,8 +287,8 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
                   <span>{dataBR(c.dataVencimento)} · {formatarMoeda(c.valor)} · <strong className={c.status === 'PAGO' ? 'text-emerald-700' : c.status === 'CANCELADO' ? 'text-slate-400' : 'text-amber-600'}>{c.status === 'PAGO' ? 'Recebido' : c.status === 'CANCELADO' ? 'Cancelado' : 'Em aberto'}</strong></span>
                 </div>
               ))}
-              {parcelasDaVenda(detalhe).length === 0 && <div className="text-slate-400">Nenhuma parcela encontrada.</div>}
-            </div>
+              {parcelasDaVenda(detalhe).length === 0 && <div className="text-slate-400">Nenhum lançamento financeiro para esta venda.</div>}
+            </div>}
           </div>
         </div>
       )}
@@ -279,16 +300,26 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-[80.5rem] w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-slate-100 my-8">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-              <h2 className="text-xl font-black text-slate-900 flex items-center gap-2"><Store className="w-5 h-5 text-emerald-600" /> Nova Venda (Revenda)</h2>
+              <h2 className="text-xl font-black text-slate-900 flex items-center gap-2"><Store className="w-5 h-5 text-emerald-600" /> Nova Operação (Revenda)</h2>
               <button onClick={() => setShowModal(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl"><X className="w-5 h-5" /></button>
             </div>
-            <form onSubmit={salvar} className="space-y-4 text-xs">
-              <div className="grid grid-cols-1 md:grid-cols-[140px_150px_1fr] gap-3">
-                <div><label className={labelCls}>Nº da Venda</label><input value={form.numeroVenda} onChange={e => setForm({ ...form, numeroVenda: e.target.value })} className={`${inputCls} font-mono font-bold`} /></div>
+            <form onSubmit={e => { e.preventDefault(); salvar(); }} className="space-y-4 text-xs">
+              <div className="grid grid-cols-1 md:grid-cols-[170px_140px_150px_1fr] gap-3">
+                <label className="font-bold text-slate-700">Tipo de venda
+                  <select value={form.tipoOperacao} onChange={e => {
+                    setForm({ ...form, tipoOperacao: e.target.value as TipoOperacaoRevenda });
+                    setConfirmarFinanceiro(false);
+                    setErro('');
+                  }} className={`${inputCls} mt-1 bg-white`}>
+                    {Object.entries(TIPOS_OPERACAO).map(([valor, rotulo]) => <option key={valor} value={valor}>{rotulo}</option>)}
+                  </select>
+                </label>
+                <div><label className={labelCls}>Nº da operação</label><input value={form.numeroVenda} onChange={e => setForm({ ...form, numeroVenda: e.target.value })} className={`${inputCls} font-mono font-bold`} /></div>
                 <div><label className={labelCls}>Data *</label><input type="date" required value={form.dataVenda} onChange={e => setForm({ ...form, dataVenda: e.target.value, primeiroVencimento: form.numeroParcelas === 1 ? e.target.value : form.primeiroVencimento })} className={inputCls} /></div>
                 <div>
-                  <label className={labelCls}>Cliente *</label>
-                  <select required value={form.clienteId} onChange={e => setForm({ ...form, clienteId: e.target.value })} className={`${inputCls} bg-white font-bold`}>
+                  <label className={labelCls}>{venda ? 'Cliente *' : 'Destinatário (opcional)'}</label>
+                  <select required={venda} value={form.clienteId} onChange={e => setForm({ ...form, clienteId: e.target.value })} className={`${inputCls} bg-white font-bold`}>
+                    <option value="">Selecione</option>
                     {clientesAtivos.map(c => <option key={c.id} value={c.id}>{c.nome} ({c.documento})</option>)}
                   </select>
                 </div>
@@ -297,8 +328,8 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-xs font-extrabold text-slate-800">Produtos vendidos</div>
-                    <div className="text-[10px] text-slate-500">Cadastre os produtos em Compras → Produtos & Insumos. A quantidade vendida sai do estoque.</div>
+                    <div className="text-xs font-extrabold text-slate-800">Produtos da operação</div>
+                    <div className="text-[10px] text-slate-500">Cadastre os produtos em Compras → Produtos & Insumos. A quantidade registrada sai do estoque.</div>
                   </div>
                   <button type="button" onClick={() => setItens([...itens, itemVazio()])} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold">+ Adicionar produto</button>
                 </div>
@@ -308,10 +339,10 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
                       <tr>
                         <th className="px-2 py-2 text-left font-bold w-8">#</th>
                         <th className="px-2 py-2 text-left font-bold">Produto / insumo</th>
-                        <th className="px-2 py-2 text-left font-bold w-36">ICMS</th>
+                        {venda && <th className="px-2 py-2 text-left font-bold w-36">ICMS</th>}
                         <th className="px-2 py-2 text-right font-bold w-28">Qtd.</th>
-                        <th className="px-2 py-2 text-right font-bold w-36">Preço unit.</th>
-                        <th className="px-2 py-2 text-right font-bold w-36">Subtotal</th>
+                        {venda && <><th className="px-2 py-2 text-right font-bold w-36">Preço unit.</th>
+                        <th className="px-2 py-2 text-right font-bold w-36">Subtotal</th></>}
                         <th className="px-2 py-2 w-8"></th>
                       </tr>
                     </thead>
@@ -329,18 +360,18 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
                               </select>
                               {semSaldo && <div className="mt-0.5 text-[10px] font-bold text-rose-600">Saldo insuficiente: disponível {est?.quantidadeAtual} {est?.unidadeMedida}.</div>}
                             </td>
-                            <td className="px-2 py-1.5">
+                            {venda && <td className="px-2 py-1.5">
                               <select value={item.tributacaoIcms || 'TRIBUTADO'} onChange={e => atualizarItem(idx, { tributacaoIcms: e.target.value as TributacaoIcmsItem })} className="w-full p-1.5 border border-slate-200 rounded-lg bg-white">
                                 {OPCOES_TRIBUTACAO_ICMS.map(o => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
                               </select>
-                            </td>
+                            </td>}
                             <td className="px-2 py-1.5">
                               <input type="number" min="0.01" step="any" required value={item.quantidade} onChange={e => atualizarItem(idx, { quantidade: Number(e.target.value) || 0 })} className={`w-full p-1.5 border rounded-lg text-right ${semSaldo ? 'border-rose-400 bg-rose-50' : 'border-slate-200'}`} />
                             </td>
-                            <td className="px-2 py-1.5">
+                            {venda && <><td className="px-2 py-1.5">
                               <input type="number" min="0" step="0.01" required value={item.precoUnitario} onChange={e => atualizarItem(idx, { precoUnitario: Number(e.target.value) || 0 })} className="w-full p-1.5 border border-slate-200 rounded-lg text-right" />
                             </td>
-                            <td className="px-2 py-1.5 pt-3 text-right font-bold text-slate-700 whitespace-nowrap">{formatarMoeda((Number(item.quantidade) || 0) * (Number(item.precoUnitario) || 0))}</td>
+                            <td className="px-2 py-1.5 pt-3 text-right font-bold text-slate-700 whitespace-nowrap">{formatarMoeda((Number(item.quantidade) || 0) * (Number(item.precoUnitario) || 0))}</td></>}
                             <td className="px-1 py-1.5 text-center">
                               <button type="button" title="Remover produto" onClick={() => setItens(itens.filter((_, i) => i !== idx))} className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50">×</button>
                             </td>
@@ -348,17 +379,18 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
                         );
                       })}
                       {itens.length === 0 && (
-                        <tr><td colSpan={7} className="px-2 py-4 text-center text-slate-400">Nenhum produto. Clique em “+ Adicionar produto”.</td></tr>
+                        <tr><td colSpan={venda ? 7 : 4} className="px-2 py-4 text-center text-slate-400">Nenhum produto. Clique em “+ Adicionar produto”.</td></tr>
                       )}
                     </tbody>
                   </table>
                 </div>
                 <div className="flex justify-between text-[11px]">
                   <span className="text-slate-500">{itens.length} produto(s)</span>
-                  <span className="font-black text-emerald-700">Total dos produtos: {formatarMoeda(totalBruto)}</span>
+                  {venda && <span className="font-black text-emerald-700">Total dos produtos: {formatarMoeda(totalBruto)}</span>}
                 </div>
               </div>
 
+              {venda && <>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 <div><label className={labelCls}>Desconto (R$)</label><input type="number" min="0" step="0.01" value={form.desconto} onChange={e => setForm({ ...form, desconto: Number(e.target.value) || 0 })} className={inputCls} /></div>
                 <div>
@@ -381,10 +413,11 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
                 <input type="checkbox" checked={form.quitarPrimeiraParcela} onChange={e => setForm({ ...form, quitarPrimeiraParcela: e.target.checked })} />
                 {form.numeroParcelas === 1 ? 'Valor já recebido (lança como pago)' : '1ª parcela já recebida (entrada)'}
               </label>
+              </>}
 
               <div><label className={labelCls}>Observações</label><input value={form.observacoes} onChange={e => setForm({ ...form, observacoes: e.target.value })} className={inputCls} /></div>
 
-              <div className="bg-emerald-50 p-3.5 rounded-xl border border-emerald-200 text-[11px] text-emerald-800 space-y-1">
+              {venda && <div className="bg-emerald-50 p-3.5 rounded-xl border border-emerald-200 text-[11px] text-emerald-800 space-y-1">
                 <div className="flex justify-between font-black text-sm"><span>Total da venda</span><span>{formatarMoeda(totalVenda)}</span></div>
                 {previa.map(p => (
                   <div key={p.numero} className="flex justify-between">
@@ -392,16 +425,30 @@ export const RevendasTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
                     <span>{formatarMoeda(p.valor)}{p.numero === 1 && form.quitarPrimeiraParcela ? ' (recebida)' : ''}</span>
                   </div>
                 ))}
-                <div className="text-emerald-700 pt-1">Ao salvar: baixa no estoque, {previa.length} conta(s) a receber no Financeiro e lançamento contábil automático.</div>
-              </div>
+                <div className="text-emerald-700 pt-1">Ao salvar, o sistema pede confirmação para lançar no Contas a Receber e no Caixa.</div>
+              </div>}
 
-              <QuadroImpostos impostos={impostosPrevia} titulo={`Impostos estimados (${ufCliente === 'CE' ? 'venda dentro do Ceará' : `CE → ${ufCliente}`})`} />
+              {impostosPrevia && <QuadroImpostos impostos={impostosPrevia} titulo={`Impostos estimados (${ufCliente === 'CE' ? 'venda dentro do Ceará' : `CE → ${ufCliente}`})`} />}
 
-              {erro && <p className="text-rose-600 font-bold">{erro}</p>}
+              {!venda && <p className="text-slate-600">Esta operação baixa os itens do estoque. Contas a Receber e Caixa ficam sem lançamento.</p>}
+              {confirmarFinanceiro && venda && (
+                <div role="group" aria-label="Confirmar lançamento financeiro" className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <p className="font-bold">Registrar esta venda no Contas a Receber e no Caixa?</p>
+                  <p>{form.quitarPrimeiraParcela
+                    ? 'O valor marcado como recebido entra no Caixa. Qualquer parcela restante fica em aberto.'
+                    : 'As parcelas ficarão em aberto no Contas a Receber. O Caixa será atualizado quando o pagamento for registrado.'}</p>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <button type="button" onClick={() => setConfirmarFinanceiro(false)} className="rounded-lg border px-3 py-2">Voltar</button>
+                    <button type="button" onClick={e => { if (e.currentTarget.form?.reportValidity()) salvar(false); }} className="rounded-lg border px-3 py-2 font-bold">Salvar sem financeiro</button>
+                    <button type="button" onClick={e => { if (e.currentTarget.form?.reportValidity()) salvar(true); }} className="rounded-lg bg-emerald-700 px-3 py-2 font-bold text-white">Salvar e lançar no financeiro</button>
+                  </div>
+                </div>
+              )}
+              {erro && <p role="alert" className="text-rose-600 font-bold">{erro}</p>}
 
               <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
                 <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl font-bold">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700">Registrar Venda</button>
+                {!confirmarFinanceiro && <button type="submit" className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700">Registrar operação</button>}
               </div>
             </form>
           </div>
