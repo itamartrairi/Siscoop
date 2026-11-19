@@ -663,8 +663,12 @@ export const CooperadosView: React.FC = () => {
     }
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const salvandoCooperadoRef = React.useRef(false);
+  const [salvandoCooperado, setSalvandoCooperado] = useState(false);
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (salvandoCooperadoRef.current) return;
     if (!canWrite) { blockWriteAction(); return; }
     if (!formData.nome || !formData.cpf) {
       setActiveTab('geral');
@@ -672,12 +676,19 @@ export const CooperadosView: React.FC = () => {
       return;
     }
 
-    const salvo = editingId
-      ? updateCooperado(editingId, formData)
-      : addCooperado(formData);
-    if (!salvo) { setActiveTab('geral'); return; }
+    salvandoCooperadoRef.current = true;
+    setSalvandoCooperado(true);
+    try {
+      const salvo = editingId
+        ? await updateCooperado(editingId, formData)
+        : await addCooperado(formData);
+      if (!salvo) { setActiveTab('geral'); return; }
 
-    setIsFormOpen(false);
+      setIsFormOpen(false);
+    } finally {
+      salvandoCooperadoRef.current = false;
+      setSalvandoCooperado(false);
+    }
   };
 
   const handleCepBlur = async () => {
@@ -1872,9 +1883,10 @@ export const CooperadosView: React.FC = () => {
 
                 <button
                   type="submit"
+                  disabled={salvandoCooperado}
                   className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
-                  <CheckCircle className="w-4 h-4" /> {editingId ? 'Salvar Alterações' : 'Salvar Cooperado'}
+                  <CheckCircle className="w-4 h-4" /> {salvandoCooperado ? 'Salvando…' : editingId ? 'Salvar Alterações' : 'Salvar Cooperado'}
                 </button>
               </div>
             </form>
