@@ -1598,6 +1598,7 @@ export interface ParcelamentoLancamento {
   primeiroVencimento: string;
   intervaloDias: number;
   formaPagamento?: FormaPagamento;
+  contaBancariaId?: string;
   dataEmissao?: string;
   centroCusto?: string;
   /** Lança a 1ª parcela já como paga/recebida (venda ou compra à vista). */
