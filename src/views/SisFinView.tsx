@@ -125,21 +125,23 @@ export const SisFinView: React.FC = () => {
   const [showExtratoModal, setShowExtratoModal] = useState(false);
   const [editingConta, setEditingConta] = useState<ContaPagarReceber | null>(null);
 
-  const [extratoForm, setExtratoForm] = useState({
+  const extratoVazio = () => ({
     data: new Date().toISOString().split('T')[0],
-    historico: 'Depósito de Venda PAA / Repasse Banco do Brasil',
-    documento: `PIX-${Date.now().toString().slice(-6)}`,
+    historico: '',
+    documento: '',
     tipo: 'CREDITO' as 'CREDITO' | 'DEBITO',
-    valor: 2500,
+    valor: 0,
     categoria: 'RECEITA_VENDA',
     contaBancariaId: contaPadraoId as string
   });
+
+  const [extratoForm, setExtratoForm] = useState(extratoVazio);
 
   const [contaForm, setContaForm] = useState({
     tipo: 'PAGAR' as 'PAGAR' | 'RECEBER',
     descricao: '',
     pessoaNome: '',
-    valor: 1500,
+    valor: 0,
     dataVencimento: new Date(Date.now() + 86400000 * 5).toISOString().split('T')[0],
     categoria: 'FORNECEDOR' as any,
     subcategoria: '',
@@ -170,7 +172,7 @@ if (c) {
         tipo: 'PAGAR',
         descricao: '',
         pessoaNome: '',
-        valor: 1500,
+        valor: 0,
         dataVencimento: new Date(Date.now() + 86400000 * 5).toISOString().split('T')[0],
         categoria: 'FORNECEDOR',
         subcategoria: '',
@@ -195,20 +197,18 @@ if (c) {
     playActionCompleteSound();
   };
 
+  const abrirNovoExtrato = () => {
+    if (!canWrite) { blockWriteAction(); return; }
+    setExtratoForm(extratoVazio());
+    setShowExtratoModal(true);
+  };
+
   const handleSaveExtrato = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canWrite) { blockWriteAction(); return; }
     if (!extratoForm.historico || !extratoForm.valor) return;
     addLancamentoExtrato(extratoForm);
     setShowExtratoModal(false);
-    setExtratoForm({
-      data: new Date().toISOString().split('T')[0],
-      historico: '',
-      documento: `PIX-${Date.now().toString().slice(-6)}`,
-      tipo: 'CREDITO',
-      valor: 1000,
-      categoria: 'RECEITA_VENDA'
-    });
   };
 
   const dataNoPeriodo = (data?: string) => {
@@ -363,7 +363,7 @@ if (c) {
         <div className="flex items-center gap-2">
           {activeTab === 'extrato' ? (
             <button
-              onClick={() => setShowExtratoModal(true)}
+              onClick={abrirNovoExtrato}
               className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2 cursor-pointer"
             >
               <Plus className="w-4 h-4" /> Lançar Entrada / Saída Extrato
@@ -1008,7 +1008,7 @@ if (c) {
                   <input
                     type="number"
                     required
-                    value={contaForm.valor}
+                    value={contaForm.valor || ''}
                     onChange={e => setContaForm({ ...contaForm, valor: parseFloat(e.target.value) || 0 })}
                     className="w-full p-2.5 border border-slate-200 rounded-xl font-bold"
                   />
@@ -1159,7 +1159,7 @@ if (c) {
                   <input
                     type="number"
                     required
-                    value={extratoForm.valor}
+                    value={extratoForm.valor || ''}
                     onChange={e => setExtratoForm({ ...extratoForm, valor: parseFloat(e.target.value) || 0 })}
                     className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-bold"
                   />
