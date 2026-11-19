@@ -1470,6 +1470,7 @@ export interface OrdemCompra {
   /** INSUMOS (uso próprio) ou REVENDA (mercadorias para revender). */
   tipoCompra?: 'INSUMOS' | 'REVENDA';
   formaPagamento?: FormaPagamentoComercial;
+  contaBancariaId?: string;
   numeroParcelas?: number;
   intervaloDias?: number;
   primeiroVencimento?: string;
