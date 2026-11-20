@@ -5,6 +5,7 @@ import { useCoop } from '../context/CoopContext';
 import { ContasBancariasTab, SelectContaBancaria, nomeContaBancaria } from '../components/ContasBancariasTab';
 import { RelatoriosPdfTab } from '../components/RelatoriosPdfTab';
 import {
+  ChevronRight,
   CircleDollarSign,
   Plus,
   Landmark,
@@ -84,6 +85,47 @@ function linhaFluxo(nome: string, valores: number[], detalhe = false, chave = no
   );
 }
 
+type LinhaDemonstrativo = {
+  id?: string;
+  nome: string;
+  valores: number[];
+  filhos?: LinhaDemonstrativo[];
+};
+
+function LinhaExpansivel({ linha, nivel = 0, basePercentual }: {
+  linha: LinhaDemonstrativo;
+  nivel?: number;
+  basePercentual?: number;
+}) {
+  const [aberta, setAberta] = useState(false);
+  const filhos = linha.filhos ?? [];
+
+  return (
+    <>
+      <tr className={nivel ? 'bg-white' : 'bg-slate-50 font-semibold'}>
+        <th scope="row" className={`sticky left-0 z-10 text-left ${nivel ? 'bg-white font-normal' : 'bg-slate-50'}`}>
+          <div style={{ marginInlineStart: `${nivel * 1.15}rem` }}>
+            {filhos.length > 0 ? (
+              <button type="button" aria-expanded={aberta} onClick={() => setAberta(valor => !valor)}
+                className="inline-flex items-center gap-2 rounded px-1 py-1 text-left font-inherit hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-cyan-700">
+                <ChevronRight className={`h-4 w-4 shrink-0 ${aberta ? 'rotate-90' : ''}`} aria-hidden="true" />
+                {linha.nome}
+              </button>
+            ) : <span className="inline-block py-1 pl-6">{linha.nome}</span>}
+          </div>
+        </th>
+        {basePercentual !== undefined && (
+          <td className="text-right tabular-nums">{(basePercentual > 0 ? Math.abs(linha.valores[0]) / basePercentual * 100 : 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%</td>
+        )}
+        {linha.valores.map((valor, indice) => <td key={indice} className="whitespace-nowrap text-right tabular-nums">{valorFluxo(valor || 0)}</td>)}
+      </tr>
+      {aberta && filhos.map(filho => (
+        <LinhaExpansivel key={filho.id ?? filho.nome} linha={filho} nivel={nivel + 1} basePercentual={basePercentual} />
+      ))}
+    </>
+  );
+}
+
 function montarFluxoCaixa(
   extrato: ExtratoBancario | undefined,
   bancos: ContaBancaria[],
@@ -121,11 +163,16 @@ function montarFluxoCaixa(
     const movimentos = registros.filter(lancamento => !dataBase || lancamento.data.slice(0, 10) >= dataBase).sort((a, b) => a.data.localeCompare(b.data));
     const conta = {
       id, nome: id ? nomeContaBancaria(bancos, id) : 'Sem conta vinculada',
+      mensal: meses.map(() => ({
+        inicial: 0, entradas: 0, saidas: 0, final: 0, operacional: 0,
+        categoriasEntrada: new Map<string, number>(), categoriasSaida: new Map<string, number>(),
+      })),
       inicial: 0, saldosCadastrados: 0, entradas: 0, saidas: 0, operacional: 0, final: 0,
     };
     let saldo = 0;
     let cursor = 0;
     for (const [indice, coluna] of meses.entries()) {
+      const detalhe = conta.mensal[indice];
       const mesBase = dataBase.slice(0, 7);
       if (indice === 0 && (!mesBase || mesBase <= coluna.periodo)) saldo += saldoBase;
       while (cursor < movimentos.length && movimentos[cursor].data.slice(0, 7) < coluna.periodo) {
@@ -133,6 +180,7 @@ function montarFluxoCaixa(
         saldo += (lancamento.tipo === 'CREDITO' ? 1 : -1) * Math.abs(Number(lancamento.valor) || 0);
       }
       coluna.inicial += saldo;
+      detalhe.inicial = saldo;
       if (indice === 0) conta.inicial = saldo;
       if (indice > 0 && mesBase === coluna.periodo) {
         coluna.saldosCadastrados += saldoBase;
@@ -149,23 +197,29 @@ function montarFluxoCaixa(
         const operacional = /^(RECEITA_VENDA|VENDAS?|COMPRA[S]?|SERVICO[S]?|FORNECEDORES|PESSOAL|FOLHA_PAGAMENTO|IMPOSTO|ADMINISTRATIVO|LOGISTICA|TAXA ADMINISTRATIVA)/.test(chave);
         const grupo = entrada ? coluna.categoriasEntrada : coluna.categoriasSaida;
         grupo.set(nome, (grupo.get(nome) ?? 0) + valor);
+        const grupoConta = entrada ? detalhe.categoriasEntrada : detalhe.categoriasSaida;
+        grupoConta.set(nome, (grupoConta.get(nome) ?? 0) + valor);
         if (entrada) {
           categoriasEntrada.add(nome);
           coluna.entradas += valor;
           conta.entradas += valor;
+          detalhe.entradas += valor;
         } else {
           categoriasSaida.add(nome);
           coluna.saidas += valor;
           conta.saidas += valor;
+          detalhe.saidas += valor;
         }
         const variacao = entrada ? valor : -valor;
         saldo += variacao;
         if (operacional) {
           coluna.operacional += variacao;
           conta.operacional += variacao;
+          detalhe.operacional += variacao;
         }
       }
       coluna.final += saldo;
+      detalhe.final = saldo;
       conta.final = saldo;
     }
     return conta;
@@ -184,6 +238,32 @@ function montarFluxoCaixa(
     entradas: [...categoriasEntrada].sort((a, b) => a.localeCompare(b, 'pt-BR')),
     saidas: [...categoriasSaida].sort((a, b) => a.localeCompare(b, 'pt-BR')),
   } };
+}
+
+function linhasDoFluxo(fluxo: ReturnType<typeof montarFluxoCaixa>): LinhaDemonstrativo[] {
+  const porConta = (calcular: (mes: typeof fluxo.contas[number]['mensal'][number]) => number) =>
+    fluxo.contas.map(conta => ({ id: conta.id, nome: conta.nome, valores: conta.mensal.map(calcular) }))
+      .filter(conta => conta.valores.some(valor => valor !== 0));
+  const categorias = (entrada: boolean) => {
+    const campo = entrada ? 'categoriasEntrada' : 'categoriasSaida';
+    const sinal = entrada ? 1 : -1;
+    return fluxo.categorias[entrada ? 'entradas' : 'saidas'].map(nome => ({
+      nome,
+      valores: fluxo.meses.map(mes => sinal * (mes[campo].get(nome) ?? 0)),
+      filhos: porConta(mes => sinal * (mes[campo].get(nome) ?? 0)),
+    }));
+  };
+
+  return [
+    { nome: 'Saldo inicial', valores: fluxo.meses.map(m => m.inicial), filhos: porConta(m => m.inicial) },
+    { nome: 'Entradas', valores: fluxo.meses.map(m => m.entradas), filhos: categorias(true) },
+    { nome: 'Saídas', valores: fluxo.meses.map(m => -m.saidas), filhos: categorias(false) },
+    ...(fluxo.meses.some(m => m.saldosCadastrados !== 0)
+      ? [{ nome: 'Saldos cadastrados no período', valores: fluxo.meses.map(m => m.saldosCadastrados) }] : []),
+    { nome: 'Geração de caixa operacional', valores: fluxo.meses.map(m => m.operacional), filhos: porConta(m => m.operacional) },
+    { nome: 'Geração de caixa total', valores: fluxo.meses.map(m => m.entradas - m.saidas), filhos: porConta(m => m.entradas - m.saidas) },
+    { nome: 'Saldo final', valores: fluxo.meses.map(m => m.final), filhos: porConta(m => m.final) },
+  ];
 }
 
 export const SisFinView: React.FC = () => {
@@ -376,6 +456,37 @@ if (c) {
   const dreLair = dreEbitda + dreResultadoFin;
   const dreProvisaoTributos = dreLair > 0 ? Math.round(dreLair * 0.15 * 100) / 100 : 0;
   const dreResultadoLiquido = dreLair - dreProvisaoTributos;
+  const agruparTitulosDre = (titulos: ContaPagarReceber[], sinal = 1): LinhaDemonstrativo[] => {
+    const grupos = new Map<string, ContaPagarReceber[]>();
+    for (const titulo of titulos) {
+      const categoria = titulo.categoria || 'Sem categoria';
+      const grupo = grupos.get(categoria) ?? [];
+      grupo.push(titulo);
+      grupos.set(categoria, grupo);
+    }
+    return [...grupos].sort(([a], [b]) => a.localeCompare(b, 'pt-BR')).map(([nome, grupo]) => ({
+      nome,
+      valores: [sinal * grupo.reduce((total, titulo) => total + titulo.valor, 0)],
+      filhos: grupo.map(titulo => ({
+        id: titulo.id, nome: titulo.descricao, valores: [sinal * titulo.valor],
+      })),
+    }));
+  };
+  const linhaDre = (nome: string, valor: number, filhos?: LinhaDemonstrativo[]): LinhaDemonstrativo =>
+    ({ nome, valores: [valor], filhos });
+  const linhasDre = activeTab === 'dre' ? [
+    linhaDre('1. Receita operacional bruta', dreReceitaBruta, agruparTitulosDre(contasFiltradas.filter(c => c.tipo === 'RECEBER' && c.status !== 'CANCELADO'))),
+    linhaDre('2. Deduções da receita bruta', -dreDeducoes, [linhaDre('Estimativa de deduções sobre a receita bruta (5,65%)', -dreDeducoes)]),
+    linhaDre('3. Receita operacional líquida', dreReceitaLiquida, [linhaDre('Receita bruta', dreReceitaBruta), linhaDre('Deduções estimadas', -dreDeducoes)]),
+    linhaDre('4. Custos dos produtos e mercadorias (CPV / CMV)', -dreCpv, agruparTitulosDre(contasFiltradas.filter(c => c.tipo === 'PAGAR' && c.classificacaoDespesa !== 'FIXA'), -1)),
+    linhaDre('5. Lucro bruto', dreLucroBruto, [linhaDre('Receita líquida', dreReceitaLiquida), linhaDre('CPV / CMV', -dreCpv)]),
+    linhaDre('6. Despesas operacionais fixas e administrativas', -dreDespesasAdm, agruparTitulosDre(contasFiltradas.filter(c => c.tipo === 'PAGAR' && c.classificacaoDespesa === 'FIXA'), -1)),
+    linhaDre('7. Resultado operacional (EBITDA / LAJIDA)', dreEbitda, [linhaDre('Lucro bruto', dreLucroBruto), linhaDre('Despesas operacionais', -dreDespesasAdm)]),
+    linhaDre('8. Resultado financeiro líquido', dreResultadoFin, [linhaDre('Receitas financeiras', dreReceitasFin), linhaDre('Despesas financeiras', -dreDespesasFin)]),
+    linhaDre('9. Resultado antes dos tributos (LAIR)', dreLair, [linhaDre('Resultado operacional', dreEbitda), linhaDre('Resultado financeiro', dreResultadoFin)]),
+    linhaDre('10. Provisão para tributos e encargos', -dreProvisaoTributos, [linhaDre('Estimativa sobre o resultado positivo antes dos tributos (15%)', -dreProvisaoTributos)]),
+    linhaDre('11. Resultado líquido do exercício', dreResultadoLiquido, [linhaDre('Resultado antes dos tributos', dreLair), linhaDre('Provisão estimada', -dreProvisaoTributos)]),
+  ] : [];
     const receitasDre = contasFiltradas.filter(c => c.tipo === 'RECEBER' && c.status !== 'CANCELADO').reduce((sum, c) => sum + c.valor, 0);
   const despesasDre = contasFiltradas.filter(c => c.tipo === 'PAGAR' && c.status !== 'CANCELADO').reduce((sum, c) => sum + c.valor, 0);
   const custosFixos = contasFiltradas.filter(c => c.tipo === 'PAGAR' && c.classificacaoDespesa === 'FIXA').reduce((sum, c) => sum + c.valor, 0);
@@ -630,7 +741,7 @@ if (c) {
                       DRE — Demonstração do Resultado do Exercício (Empresarial & Contábil)
                     </h2>
                     <p className="text-xs text-slate-500 mt-1">
-                      Demonstração completa em conformidade com as normas contábeis brasileiras (CPC / Lei 6.404/76 e Lei das Cooperativas 5.764/71).
+                      DRE gerencial do período selecionado, com deduções e provisões estimadas.
                     </p>
                   </div>
                   <button
@@ -671,167 +782,15 @@ if (c) {
                   </div>
                 </div>
 
-                {/* Tabela Estruturada do DRE Empresarial */}
-                <div className="overflow-x-auto mt-6">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="bg-slate-100 text-slate-700 uppercase font-black tracking-wider text-[10px] border-b border-slate-200">
-                        <th className="p-3 w-12">Item</th>
-                        <th className="p-3">Descrição da Linha Contábil</th>
-                        <th className="p-3 text-right w-24">% AV</th>
-                        <th className="p-3 text-right w-44">Valor (R$)</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 font-medium">
-                      {/* 1. Receita Bruta */}
-                      <tr className="bg-slate-50/70 font-bold text-slate-900">
-                        <td className="p-3 font-mono">1.0</td>
-                        <td className="p-3">RECEITA OPERACIONAL BRUTA</td>
-                        <td className="p-3 text-right font-mono text-slate-500">100.0%</td>
-                        <td className="p-3 text-right font-mono text-slate-900 font-black">
-                          R$ {dreReceitaBruta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                      <tr className="text-slate-600">
-                        <td className="p-2.5 pl-6 font-mono text-[11px]">1.1</td>
-                        <td className="p-2.5 pl-6">Venda de Produtos e Produção Agropecuária (PAA / PNAE / Privado)</td>
-                        <td className="p-2.5 text-right font-mono text-slate-400 text-[11px]">
-                          {dreReceitaBruta > 0 ? '100.0%' : '0.0%'}
-                        </td>
-                        <td className="p-2.5 text-right font-mono text-slate-700">
-                          R$ {dreReceitaBruta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-
-                      {/* 2. Deduções */}
-                      <tr className="text-rose-700">
-                        <td className="p-2.5 font-mono font-bold">2.0</td>
-                        <td className="p-2.5 font-bold">(−) DEDUÇÕES DA RECEITA BRUTA E IMPOSTOS</td>
-                        <td className="p-2.5 text-right font-mono text-[11px]">
-                          {dreReceitaBruta > 0 ? ((dreDeducoes / dreReceitaBruta) * 100).toFixed(1) : '0.0'}%
-                        </td>
-                        <td className="p-2.5 text-right font-mono font-bold">
-                          - R$ {dreDeducoes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                      <tr className="text-slate-500">
-                        <td className="p-2 pl-6 font-mono text-[11px]">2.1</td>
-                        <td className="p-2 pl-6">Tributos sobre Faturamento (ICMS, PIS, COFINS, ISS e Devoluções)</td>
-                        <td className="p-2 text-right font-mono text-[11px]">
-                          {dreReceitaBruta > 0 ? ((dreDeducoes / dreReceitaBruta) * 100).toFixed(1) : '0.0'}%
-                        </td>
-                        <td className="p-2 text-right font-mono">
-                          - R$ {dreDeducoes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-
-                      {/* 3. Receita Líquida */}
-                      <tr className="bg-blue-50/60 font-black text-blue-950 border-y border-blue-100">
-                        <td className="p-3 font-mono">3.0</td>
-                        <td className="p-3">(=) RECEITA OPERACIONAL LÍQUIDA</td>
-                        <td className="p-3 text-right font-mono text-blue-700">
-                          {dreReceitaBruta > 0 ? ((dreReceitaLiquida / dreReceitaBruta) * 100).toFixed(1) : '0.0'}%
-                        </td>
-                        <td className="p-3 text-right font-mono text-blue-900">
-                          R$ {dreReceitaLiquida.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-
-                      {/* 4. Custos CPV */}
-                      <tr className="text-amber-800">
-                        <td className="p-2.5 font-mono font-bold">4.0</td>
-                        <td className="p-2.5 font-bold">(−) CUSTOS DOS PRODUTOS E MERCADORIAS VENDIDAS (CPV / CMV)</td>
-                        <td className="p-2.5 text-right font-mono text-[11px]">
-                          {dreReceitaBruta > 0 ? ((dreCpv / dreReceitaBruta) * 100).toFixed(1) : '0.0'}%
-                        </td>
-                        <td className="p-2.5 text-right font-mono font-bold">
-                          - R$ {dreCpv.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-
-                      {/* 5. Lucro Bruto */}
-                      <tr className="bg-indigo-50/60 font-black text-indigo-950 border-y border-indigo-100">
-                        <td className="p-3 font-mono">5.0</td>
-                        <td className="p-3">(=) LUCRO BRUTO / MARGEM BRUTA</td>
-                        <td className="p-3 text-right font-mono text-indigo-700">
-                          {dreReceitaBruta > 0 ? ((dreLucroBruto / dreReceitaBruta) * 100).toFixed(1) : '0.0'}%
-                        </td>
-                        <td className={`p-3 text-right font-mono ${dreLucroBruto >= 0 ? 'text-indigo-900' : 'text-rose-700'}`}>
-                          R$ {dreLucroBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-
-                      {/* 6. Despesas Operacionais */}
-                      <tr className="text-slate-700">
-                        <td className="p-2.5 font-mono font-bold">6.0</td>
-                        <td className="p-2.5 font-bold">(−) DESPESAS OPERACIONAIS FIXAS E ADMINISTRATIVAS</td>
-                        <td className="p-2.5 text-right font-mono text-[11px]">
-                          {dreReceitaBruta > 0 ? ((dreDespesasAdm / dreReceitaBruta) * 100).toFixed(1) : '0.0'}%
-                        </td>
-                        <td className="p-2.5 text-right font-mono font-bold text-rose-700">
-                          - R$ {dreDespesasAdm.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-
-                      {/* 7. EBITDA */}
-                      <tr className="bg-slate-100/80 font-black text-slate-900 border-y border-slate-200">
-                        <td className="p-3 font-mono">7.0</td>
-                        <td className="p-3">(=) RESULTADO OPERACIONAL ANTES DO RESULTADO FINANCEIRO (EBITDA / LAJIDA)</td>
-                        <td className="p-3 text-right font-mono text-slate-600">
-                          {dreReceitaBruta > 0 ? ((dreEbitda / dreReceitaBruta) * 100).toFixed(1) : '0.0'}%
-                        </td>
-                        <td className={`p-3 text-right font-mono ${dreEbitda >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                          R$ {dreEbitda.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-
-                      {/* 8. Resultado Financeiro */}
-                      <tr className="text-slate-600">
-                        <td className="p-2.5 font-mono font-bold">8.0</td>
-                        <td className="p-2.5 font-bold">(+/−) RESULTADO FINANCEIRO LÍQUIDO</td>
-                        <td className="p-2.5 text-right font-mono text-[11px]">
-                          {dreReceitaBruta > 0 ? ((dreResultadoFin / dreReceitaBruta) * 100).toFixed(1) : '0.0'}%
-                        </td>
-                        <td className={`p-2.5 text-right font-mono font-bold ${dreResultadoFin >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                          R$ {dreResultadoFin.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-
-                      {/* 9. LAIR */}
-                      <tr className="bg-slate-50 font-black text-slate-900 border-y border-slate-200">
-                        <td className="p-3 font-mono">9.0</td>
-                        <td className="p-3">(=) RESULTADO ANTES DOS TRIBUTOS (LAIR)</td>
-                        <td className="p-3 text-right font-mono text-slate-600">
-                          {dreReceitaBruta > 0 ? ((dreLair / dreReceitaBruta) * 100).toFixed(1) : '0.0'}%
-                        </td>
-                        <td className={`p-3 text-right font-mono ${dreLair >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                          R$ {dreLair.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-
-                      {/* 10. Provisão de Tributos */}
-                      <tr className="text-slate-500">
-                        <td className="p-2.5 font-mono font-bold">10.0</td>
-                        <td className="p-2.5 font-bold">(−) PROVISÃO PARA IRPJ / CSLL / ENCARGOS COOPERATIVOS</td>
-                        <td className="p-2.5 text-right font-mono text-[11px]">
-                          {dreReceitaBruta > 0 ? ((dreProvisaoTributos / dreReceitaBruta) * 100).toFixed(1) : '0.0'}%
-                        </td>
-                        <td className="p-2.5 text-right font-mono font-bold text-rose-700">
-                          - R$ {dreProvisaoTributos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-
-                      {/* 11. Resultado Líquido Final */}
-                      <tr className={`font-black text-sm border-t-2 border-slate-300 ${dreResultadoLiquido >= 0 ? 'bg-emerald-100/70 text-emerald-950' : 'bg-rose-100/70 text-rose-950'}`}>
-                        <td className="p-4 font-mono">11.0</td>
-                        <td className="p-4">(=) RESULTADO LÍQUIDO DO EXERCÍCIO (SOBRAS / PERDAS LÍQUIDAS)</td>
-                        <td className="p-4 text-right font-mono">
-                          {dreReceitaBruta > 0 ? ((dreResultadoLiquido / dreReceitaBruta) * 100).toFixed(1) : '0.0'}%
-                        </td>
-                        <td className="p-4 text-right font-mono text-base font-black">
-                          R$ {dreResultadoLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
+                <div className="mt-6 overflow-x-auto rounded-xl border border-slate-200" tabIndex={0} aria-label="Demonstrativo da DRE">
+                  <table className="w-full text-xs [&_thead_th]:!bg-cyan-800 [&_thead_th]:!text-white">
+                    <thead><tr>
+                      <th scope="col" className="sticky left-0 z-10 text-left">Demonstração do Resultado</th>
+                      <th scope="col" className="text-right">% AV</th>
+                      <th scope="col" className="text-right">Valor (R$)</th>
+                    </tr></thead>
+                    <tbody>
+                      {linhasDre.map(linha => <LinhaExpansivel key={linha.nome} linha={linha} basePercentual={dreReceitaBruta} />)}
                     </tbody>
                   </table>
                 </div>
@@ -872,17 +831,7 @@ if (c) {
                     </tr>
                   </thead>
                   <tbody>
-                    {([
-                      ['Saldo inicial', fluxo.meses.map(m => m.inicial)],
-                      ['Entradas', fluxo.meses.map(m => m.entradas)],
-                    ] as const).map(([nome, valores]) => linhaFluxo(nome, valores))}
-                    {fluxo.categorias.entradas.map(nome => linhaFluxo(nome, fluxo.meses.map(m => m.categoriasEntrada.get(nome) ?? 0), true, `entrada-${nome}`))}
-                    {linhaFluxo('Saídas', fluxo.meses.map(m => -m.saidas))}
-                    {fluxo.categorias.saidas.map(nome => linhaFluxo(nome, fluxo.meses.map(m => -(m.categoriasSaida.get(nome) ?? 0)), true, `saida-${nome}`))}
-                    {fluxo.meses.some(m => m.saldosCadastrados !== 0) && linhaFluxo('Saldos cadastrados no período', fluxo.meses.map(m => m.saldosCadastrados))}
-                    {linhaFluxo('Geração de caixa operacional', fluxo.meses.map(m => m.operacional))}
-                    {linhaFluxo('Geração de caixa total', fluxo.meses.map(m => m.entradas - m.saidas))}
-                    {linhaFluxo('Saldo final', fluxo.meses.map(m => m.final))}
+                    {linhasDoFluxo(fluxo).map(linha => <LinhaExpansivel key={linha.nome} linha={linha} />)}
                   </tbody>
                 </table>
               </div>
