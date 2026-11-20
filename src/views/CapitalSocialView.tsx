@@ -203,67 +203,69 @@ export const CapitalSocialView: React.FC = () => {
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white">Capital Social & Financeiro</h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Controle de Subscrições, Integralizações, Devoluções e Extrato de Cotas-Partes
-          </p>
-        </div>
-        {currentUser.role !== 'CONSULTA' && (
-          <button
-            onClick={handleOpenNewTx}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs transition-colors"
-          >
-            <Plus className="w-4 h-4" /> Lançar Movimentação de Capital
-          </button>
-        )}
-      </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-xs">
-          <div className="text-xs font-bold uppercase text-slate-400">Capital Subscrito Total</div>
-          <div className="text-2xl font-black text-slate-900 dark:text-white font-mono mt-2">
-            R$ {totalSubscrito.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+      <section aria-label="Resumo do capital social" className="sticky top-1.5 z-20 max-h-[50dvh] overflow-y-auto bg-[var(--ui-bg)] space-y-6 pb-1">
+        {/* Header */}
+        <div className="flex items-center justify-between flex-wrap gap-x-3 gap-y-1 py-0.5">
+          <div className="lg:flex lg:flex-wrap lg:items-baseline lg:gap-x-3">
+            <h2 className="text-xl leading-tight font-bold text-slate-900 dark:text-white">Capital Social & Financeiro</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Controle de Subscrições, Integralizações, Devoluções e Extrato de Cotas-Partes
+            </p>
           </div>
-          <div className="text-xs text-slate-500 mt-1">
-            Valor base da cota-parte: R$ {(config?.cotaParteValor || 0).toFixed(2)}
-          </div>
+          {currentUser.role !== 'CONSULTA' && (
+            <button
+              onClick={handleOpenNewTx}
+              className="px-4 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs transition-colors"
+            >
+              <Plus className="w-4 h-4" /> Lançar Movimentação de Capital
+            </button>
+          )}
         </div>
 
-        <div className="p-5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-xs">
-          <div className="text-xs font-bold uppercase text-slate-400">Capital Integralizado (Pago)</div>
-          <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono mt-2">
-            R$ {totalIntegralizado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+        {/* KPI Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-4">
+          <div className="p-5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-xs">
+            <div className="text-xs font-bold uppercase text-slate-400">Capital Subscrito Total</div>
+            <div className="text-2xl font-black text-slate-900 dark:text-white font-mono mt-2">
+              R$ {totalSubscrito.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </div>
+            <div className="text-xs text-slate-500 mt-1">
+              Valor base da cota-parte: R$ {(config?.cotaParteValor || 0).toFixed(2)}
+            </div>
           </div>
-          <div className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-            <ArrowUpRight className="w-3.5 h-3.5 text-emerald-500" />
-            {(((totalIntegralizado || 0) / (totalSubscrito || 1)) * 100).toFixed(1)}% do capital total
-          </div>
-        </div>
 
-        <div className="p-5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-xs">
-          <div className="text-xs font-bold uppercase text-slate-400">A Integralizar (Pendente)</div>
-          <div className="text-2xl font-black text-amber-600 dark:text-amber-400 font-mono mt-2">
-            R$ {totalAIntegralizar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          <div className="p-5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-xs">
+            <div className="text-xs font-bold uppercase text-slate-400">Capital Integralizado (Pago)</div>
+            <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono mt-2">
+              R$ {totalIntegralizado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </div>
+            <div className="text-xs text-slate-500 mt-1 flex items-center gap-1">
+              <ArrowUpRight className="w-3.5 h-3.5 text-emerald-500" />
+              {(((totalIntegralizado || 0) / (totalSubscrito || 1)) * 100).toFixed(1)}% do capital total
+            </div>
           </div>
-          <div className="text-xs text-slate-500 mt-1">
-            Saldos em aberto de cooperados
-          </div>
-        </div>
 
-        <div className="p-5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-xs">
-          <div className="text-xs font-bold uppercase text-slate-400">Parcelas Ativas</div>
-          <div className="text-2xl font-black text-blue-600 dark:text-blue-400 font-mono mt-2">
-            {allParcelas.length}
+          <div className="p-5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-xs">
+            <div className="text-xs font-bold uppercase text-slate-400">A Integralizar (Pendente)</div>
+            <div className="text-2xl font-black text-amber-600 dark:text-amber-400 font-mono mt-2">
+              R$ {totalAIntegralizar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </div>
+            <div className="text-xs text-slate-500 mt-1">
+              Saldos em aberto de cooperados
+            </div>
           </div>
-          <div className="text-xs text-slate-500 mt-1">
-            {allParcelas.filter(p => p.status === 'PAGO').length} quitadas • {allParcelas.filter(p => p.status === 'PENDENTE').length} pendentes
+
+          <div className="p-5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-xs">
+            <div className="text-xs font-bold uppercase text-slate-400">Parcelas Ativas</div>
+            <div className="text-2xl font-black text-blue-600 dark:text-blue-400 font-mono mt-2">
+              {allParcelas.length}
+            </div>
+            <div className="text-xs text-slate-500 mt-1">
+              {allParcelas.filter(p => p.status === 'PAGO').length} quitadas • {allParcelas.filter(p => p.status === 'PENDENTE').length} pendentes
+            </div>
           </div>
         </div>
-      </div>
+      </section>
 
       {/* Tabs for Extrato vs Parcelas */}
       <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-700 pb-2">
