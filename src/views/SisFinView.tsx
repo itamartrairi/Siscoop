@@ -98,6 +98,8 @@ export const SisFinView: React.FC = () => {
   const [filtroCategoria, setFiltroCategoria] = useState('TODAS');
   const [filtroConta, setFiltroConta] = useState('TODAS');
   const [filtroBanco, setFiltroBanco] = useState('TODAS');
+  const [mesExtrato, setMesExtrato] = useState('TODOS');
+  const [anoExtrato, setAnoExtrato] = useState('TODOS');
   // Contas a Pagar e Receber: filtros de tipo e situação (em aberto / pago)
   const [filtroSituacao, setFiltroSituacao] = useState<'TODAS' | 'ABERTO' | 'VENCIDO' | 'PAGO' | 'CANCELADO'>('TODAS');
   const [filtroTipoConta, setFiltroTipoConta] = useState<'TODOS' | 'PAGAR' | 'RECEBER'>('TODOS');
@@ -289,6 +291,12 @@ if (c) {
     ...contasPagarReceber.map(c => (c.dataEmissao || c.dataVencimento || '').slice(0, 4)),
     ...(extratoBancario?.lancamentos || []).map(l => l.data.slice(0, 4))
   ])).filter(Boolean).sort().reverse();
+
+  const lancamentosExtrato = extratoBancario?.lancamentos ?? [];
+  const anosExtrato = [...new Set([
+    String(new Date().getFullYear()),
+    ...lancamentosExtrato.map(lancamento => lancamento.data?.slice(0, 4) ?? '')
+  ].filter(ano => /^\d{4}$/.test(ano)))].sort().reverse();
 
   const aplicarFiltros = () => {
     setFiltroCategoria('TODAS');
@@ -940,12 +948,36 @@ if (c) {
             <span className="text-emerald-700">Saldo Atual: R$ {(extratoBancario?.saldoAtual || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
           </div>
 
-          <div className="flex items-center gap-2 mb-3 text-xs">
-            <span className="font-bold text-slate-600">Conta bancária:</span>
-            <SelectContaBancaria value={filtroBanco} onChange={setFiltroBanco} contas={contasBancarias} todasLabel="Todas as contas" className="p-2 border border-slate-200 rounded-xl" />
+          <div className="mb-3 flex flex-wrap items-center gap-3 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-slate-600">Conta bancária:</span>
+              <SelectContaBancaria value={filtroBanco} onChange={setFiltroBanco} contas={contasBancarias} todasLabel="Todas as contas" className="p-2 border border-slate-200 rounded-xl" />
+            </div>
+            <label className="flex items-center gap-2 font-bold text-slate-600">
+              Mês
+              <select value={mesExtrato} onChange={e => setMesExtrato(e.target.value)} className="rounded-xl border border-slate-200 p-2 font-normal">
+                <option value="TODOS">Todos os meses</option>
+                {mesesAno.map((mes, indice) => (
+                  <option key={mes} value={mes}>
+                    {new Date(2000, indice, 1).toLocaleDateString('pt-BR', { month: 'long' })}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-2 font-bold text-slate-600">
+              Ano
+              <select value={anoExtrato} onChange={e => setAnoExtrato(e.target.value)} className="rounded-xl border border-slate-200 p-2 font-normal">
+                <option value="TODOS">Todos os anos</option>
+                {anosExtrato.map(ano => <option key={ano} value={ano}>{ano}</option>)}
+              </select>
+            </label>
           </div>
           <DataGrid
-              rows={(extratoBancario?.lancamentos || []).filter(l => filtroBanco === 'TODAS' || (l as any).contaBancariaId === filtroBanco)}
+              rows={lancamentosExtrato.filter(lancamento =>
+                noBanco(lancamento.contaBancariaId) &&
+                (mesExtrato === 'TODOS' || lancamento.data?.slice(5, 7) === mesExtrato) &&
+                (anoExtrato === 'TODOS' || lancamento.data?.slice(0, 4) === anoExtrato)
+              )}
               getRowId={l => l.id}
               pageSize={25}
               emptyMessage="Nenhum lançamento no extrato."
