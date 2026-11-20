@@ -199,7 +199,11 @@ export const iniciarSincronizacaoFirestore = (
           try {
             const valor = JSON.parse(dados.json);
             if (OBJETOS.has(dados.colecao)) aplicarRemoto(dados.colecao, { tipo: 'objeto', valor });
-            else listas.set(dados.colecao, [...(listas.get(dados.colecao) || []), valor]);
+            else {
+              const registros = listas.get(dados.colecao);
+              if (registros) registros.push(valor);
+              else listas.set(dados.colecao, [valor]);
+            }
           } catch (e) {
             console.warn(`[Firestore] Registro ilegível ignorado: ${d.id}`, e);
           }
@@ -334,7 +338,9 @@ const gravarPendente = async () => {
     s.conhecidos.forEach((_h, id) => {
       if (!id.startsWith(prefixo)) return;
       const colecao = id.slice(prefixo.length).split('__')[0];
-      porColecaoConhecidos.set(colecao, [...(porColecaoConhecidos.get(colecao) || []), id]);
+      const ids = porColecaoConhecidos.get(colecao);
+      if (ids) ids.push(id);
+      else porColecaoConhecidos.set(colecao, [id]);
     });
     const apagar: string[] = [];
     porColecaoConhecidos.forEach((ids, colecao) => {
