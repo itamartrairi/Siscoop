@@ -241,24 +241,59 @@ function montarFluxoCaixa(
   } };
 }
 
+const TIPOS_ENTRADA_CAIXA = [
+  { nome: 'Receitas de vendas e serviços', padrao: /\b(vendas?|servicos?|revenda|locacao|pnae|paa)\b/ },
+  { nome: 'Receitas financeiras', padrao: /\b(financeir[ao]s?|rendimentos?|juros)\b/ },
+  { nome: 'Capital social e aportes', padrao: /\b(capital|aportes?|integralizacao)\b/ },
+  { nome: 'Transferências recebidas', padrao: /\btransferencias?\b/ },
+  { nome: 'Outras receitas e entradas' },
+];
+
+const TIPOS_SAIDA_CAIXA = [
+  { nome: 'Compras, fornecedores e insumos', padrao: /\b(compras?|fornecedores?|insumos?|aquisicao|custos?)\b/ },
+  { nome: 'Repasses aos cooperados', padrao: /\brepasses?\b/ },
+  { nome: 'Pessoal, salários e encargos', padrao: /\b(pessoal|folha|salarios?|colaboradores?)\b/ },
+  { nome: 'Impostos e contribuições', padrao: /\b(impostos?|tributos?|contribuicoes?|retencoes?|icms|pis|cofins|das|irpj|csll|funrural)\b/ },
+  { nome: 'Despesas administrativas', padrao: /\b(administrativ[ao]s?|aluguel|energia|assinaturas?)\b/ },
+  { nome: 'Logística e transporte', padrao: /\b(logistica|fretes?|transportes?|combustivel)\b/ },
+  { nome: 'Despesas financeiras', padrao: /\b(financeir[ao]s?|tarifas?|juros|iof)\b/ },
+  { nome: 'Transferências enviadas', padrao: /\btransferencias?\b/ },
+  { nome: 'Outras despesas e saídas' },
+];
+
 function linhasDoFluxo(fluxo: ReturnType<typeof montarFluxoCaixa>): LinhaDemonstrativo[] {
   const porConta = (calcular: (mes: typeof fluxo.contas[number]['mensal'][number]) => number) =>
     fluxo.contas.map(conta => ({ id: conta.id, nome: conta.nome, valores: conta.mensal.map(calcular) }))
       .filter(conta => conta.valores.some(valor => valor !== 0));
-  const categorias = (entrada: boolean) => {
+  const tiposDeMovimento = (entrada: boolean): LinhaDemonstrativo[] => {
     const campo = entrada ? 'categoriasEntrada' : 'categoriasSaida';
     const sinal = entrada ? 1 : -1;
-    return fluxo.categorias[entrada ? 'entradas' : 'saidas'].map(nome => ({
-      nome,
-      valores: fluxo.meses.map(mes => sinal * (mes[campo].get(nome) ?? 0)),
-      filhos: porConta(mes => sinal * (mes[campo].get(nome) ?? 0)),
+    const tipos = entrada ? TIPOS_ENTRADA_CAIXA : TIPOS_SAIDA_CAIXA;
+    const grupos = tipos.map(tipo => ({
+      nome: tipo.nome,
+      valores: fluxo.meses.map(() => 0),
+      filhos: [] as LinhaDemonstrativo[],
     }));
+
+    for (const nome of fluxo.categorias[entrada ? 'entradas' : 'saidas']) {
+      const chave = nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const indice = tipos.findIndex(tipo => tipo.padrao?.test(chave));
+      const grupo = grupos[indice === -1 ? grupos.length - 1 : indice];
+      const valores = fluxo.meses.map(mes => sinal * (mes[campo].get(nome) ?? 0));
+      valores.forEach((valor, mes) => { grupo.valores[mes] += valor; });
+      grupo.filhos.push({
+        nome,
+        valores,
+        filhos: porConta(mes => sinal * (mes[campo].get(nome) ?? 0)),
+      });
+    }
+    return grupos;
   };
 
   return [
     { nome: 'Saldo inicial', valores: fluxo.meses.map(m => m.inicial), filhos: porConta(m => m.inicial) },
-    { nome: 'Entradas', valores: fluxo.meses.map(m => m.entradas), filhos: categorias(true) },
-    { nome: 'Saídas', valores: fluxo.meses.map(m => -m.saidas), filhos: categorias(false) },
+    { nome: 'Entradas', valores: fluxo.meses.map(m => m.entradas), filhos: tiposDeMovimento(true) },
+    { nome: 'Saídas', valores: fluxo.meses.map(m => -m.saidas), filhos: tiposDeMovimento(false) },
     ...(fluxo.meses.some(m => m.saldosCadastrados !== 0)
       ? [{ nome: 'Saldos cadastrados no período', valores: fluxo.meses.map(m => m.saldosCadastrados) }] : []),
     { nome: 'Geração de caixa operacional', valores: fluxo.meses.map(m => m.operacional), filhos: porConta(m => m.operacional) },
