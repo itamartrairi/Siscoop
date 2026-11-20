@@ -100,6 +100,8 @@ export const SisFinView: React.FC = () => {
   const [filtroBanco, setFiltroBanco] = useState('TODAS');
   const [mesExtrato, setMesExtrato] = useState('TODOS');
   const [anoExtrato, setAnoExtrato] = useState('TODOS');
+  const [mesVencimento, setMesVencimento] = useState('TODOS');
+  const [anoVencimento, setAnoVencimento] = useState('TODOS');
   // Contas a Pagar e Receber: filtros de tipo e situação (em aberto / pago)
   const [filtroSituacao, setFiltroSituacao] = useState<'TODAS' | 'ABERTO' | 'VENCIDO' | 'PAGO' | 'CANCELADO'>('TODAS');
   const [filtroTipoConta, setFiltroTipoConta] = useState<'TODOS' | 'PAGAR' | 'RECEBER'>('TODOS');
@@ -111,6 +113,8 @@ export const SisFinView: React.FC = () => {
     return s === 'PAGO' ? (c.tipo === 'RECEBER' ? 'Recebido' : 'Pago') : s === 'VENCIDO' ? 'Vencido' : s === 'CANCELADO' ? 'Cancelado' : 'Em aberto';
   };
   const contasListaFiltradas = contasPagarReceber.filter(c =>
+    (mesVencimento === 'TODOS' || c.dataVencimento?.slice(5, 7) === mesVencimento) &&
+    (anoVencimento === 'TODOS' || c.dataVencimento?.slice(0, 4) === anoVencimento) &&
     (filtroBanco === 'TODAS' || (c.contaBancariaId || '') === filtroBanco) &&
     (filtroTipoConta === 'TODOS' || c.tipo === filtroTipoConta) &&
     (filtroSituacao === 'TODAS' || situacaoConta(c) === filtroSituacao || (filtroSituacao === 'ABERTO' && situacaoConta(c) === 'VENCIDO'))
@@ -219,7 +223,6 @@ if (c) {
     const mesOk = filtroMes === 'TODOS' || data.slice(5, 7) === filtroMes;
     return anoOk && mesOk;
   };
-  const chaveMesAno = `${filtroAno}-${filtroMes}`;
   const contasDoPeriodo = contasPagarReceber.filter(c => dataNoPeriodo(c.dataEmissao || c.dataVencimento) && noBanco(c.contaBancariaId));
   const extratoDoPeriodo = (extratoBancario?.lancamentos || []).filter(l => dataNoPeriodo(l.data) && noBanco((l as any).contaBancariaId));
   const periodoPagar = contasDoPeriodo.filter(c => c.tipo === 'PAGAR').reduce((sum, c) => sum + (c.valor || 0), 0);
@@ -273,7 +276,7 @@ if (c) {
       pagar: contasMes.filter(c => c.tipo === 'PAGAR' && c.status !== 'CANCELADO').reduce((s, c) => s + c.valor, 0)
     };
   });
-  const lancamentosContabeisPeriodo = lancamentosContabeis.filter(l => l.data.startsWith(chaveMesAno));
+  const lancamentosContabeisPeriodo = lancamentosContabeis.filter(l => dataNoPeriodo(l.data));
   const balanceteContas = planoContas.filter(conta => conta.ativo !== false).map(conta => {
     const movimentos = lancamentosContabeisPeriodo.filter(l => l.contaDebitoCodigo === conta.codigo || l.contaCreditoCodigo === conta.codigo);
     const debitos = movimentos.filter(l => l.contaDebitoCodigo === conta.codigo).reduce((s, l) => s + l.valor, 0);
@@ -289,14 +292,36 @@ if (c) {
   const anosDisponiveis = Array.from(new Set([
     String(new Date().getFullYear()),
     ...contasPagarReceber.map(c => (c.dataEmissao || c.dataVencimento || '').slice(0, 4)),
+    ...lancamentosContabeis.map(l => l.data?.slice(0, 4) ?? ''),
     ...(extratoBancario?.lancamentos || []).map(l => l.data.slice(0, 4))
   ])).filter(Boolean).sort().reverse();
 
   const lancamentosExtrato = extratoBancario?.lancamentos ?? [];
-  const anosExtrato = [...new Set([
+  const listarAnos = (datas: (string | undefined)[]) => [...new Set([
     String(new Date().getFullYear()),
-    ...lancamentosExtrato.map(lancamento => lancamento.data?.slice(0, 4) ?? '')
+    ...datas.map(data => data?.slice(0, 4) ?? '')
   ].filter(ano => /^\d{4}$/.test(ano)))].sort().reverse();
+
+  const filtrosPeriodo = (mes: string, ano: string, mudarMes: (valor: string) => void, mudarAno: (valor: string) => void, anos: string[]) => (
+    <>
+      <label className="flex items-center gap-2 font-bold text-slate-600">
+        Mês
+        <select value={mes} onChange={e => mudarMes(e.target.value)} className="rounded-xl border border-slate-200 p-2 font-normal">
+          <option value="TODOS">Todos os meses</option>
+          {mesesAno.map((numero, indice) => (
+            <option key={numero} value={numero}>{new Date(2000, indice, 1).toLocaleDateString('pt-BR', { month: 'long' })}</option>
+          ))}
+        </select>
+      </label>
+      <label className="flex items-center gap-2 font-bold text-slate-600">
+        Ano
+        <select value={ano} onChange={e => mudarAno(e.target.value)} className="rounded-xl border border-slate-200 p-2 font-normal">
+          <option value="TODOS">Todos os anos</option>
+          {anos.map(opcao => <option key={opcao} value={opcao}>{opcao}</option>)}
+        </select>
+      </label>
+    </>
+  );
 
   const aplicarFiltros = () => {
     setFiltroCategoria('TODAS');
@@ -308,7 +333,16 @@ if (c) {
     const dinheiro = (valor: number) => `R$ ${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
     const titulos = { DRE: 'DRE — Demonstração do Resultado', FLUXO: 'Fluxo de Caixa', PAGAR_RECEBER: 'Contas a Pagar e Receber', ESTOQUE: 'Posição Financeira do Estoque', CUSTOS: 'Custos Fixos e Variáveis', BALANCETE: 'Balancete de Verificação' };
     doc.setFillColor(4, 120, 87); doc.rect(0, 0, 210, 30, 'F'); doc.setTextColor(255, 255, 255); doc.setFontSize(17); doc.text('SICOOP', 14, 13); doc.setFontSize(10); doc.text(titulos[tipo], 14, 22);
-    doc.setTextColor(30, 41, 59); doc.setFontSize(10); doc.text(`Período: ${filtroMes}/${filtroAno}`, 14, 42); doc.text(`Categoria: ${filtroCategoria} | Conta: ${filtroConta}`, 14, 49);
+    const titulosDoPdf = tipo === 'PAGAR_RECEBER' ? contasListaFiltradas : contasFiltradas;
+    const mesPdf = tipo === 'PAGAR_RECEBER' ? mesVencimento : filtroMes;
+    const anoPdf = tipo === 'PAGAR_RECEBER' ? anoVencimento : filtroAno;
+    doc.setTextColor(30, 41, 59); doc.setFontSize(10);
+    if (tipo === 'PAGAR_RECEBER') {
+      doc.text(`Vencimento: ${mesPdf === 'TODOS' ? 'todos os meses' : mesPdf} / ${anoPdf === 'TODOS' ? 'todos os anos' : anoPdf}`, 14, 42);
+    } else {
+      doc.text(`Período: ${mesPdf}/${anoPdf}`, 14, 42);
+      doc.text(`Categoria: ${filtroCategoria} | Conta: ${filtroConta}`, 14, 49);
+    }
     let y = 65; doc.setFont('helvetica', 'bold');
     const linhas: [string, string][] = tipo === 'DRE' ? [
         ['1.0 RECEITA OPERACIONAL BRUTA', dinheiro(dreReceitaBruta)],
@@ -327,13 +361,13 @@ if (c) {
       : tipo === 'CUSTOS' ? [['Custos fixos', dinheiro(custosFixos)], ['Custos variáveis', dinheiro(custosVariaveis)], ['Custos totais', dinheiro(custosFixos + custosVariaveis)]]
       : tipo === 'ESTOQUE' ? [['Valor total em estoque', dinheiro(valorEstoque)], ['Itens cadastrados', String(estoque.length)], ['Itens abaixo do mínimo', String(itensEstoqueBaixo.length)]]
       : tipo === 'BALANCETE' ? [['Total de débitos', dinheiro(totalBalanceteDebitos)], ['Total de créditos', dinheiro(totalBalanceteCreditos)], ['Diferença', dinheiro(Math.abs(totalBalanceteDebitos - totalBalanceteCreditos))]]
-      : [['Contas a receber', dinheiro(contasFiltradas.filter(c => c.tipo === 'RECEBER').reduce((s, c) => s + c.valor, 0))], ['Contas a pagar', dinheiro(contasFiltradas.filter(c => c.tipo === 'PAGAR').reduce((s, c) => s + c.valor, 0))], ['Títulos no período', String(contasFiltradas.length)]];
+      : [['Contas a receber', dinheiro(titulosDoPdf.filter(c => c.tipo === 'RECEBER').reduce((s, c) => s + c.valor, 0))], ['Contas a pagar', dinheiro(titulosDoPdf.filter(c => c.tipo === 'PAGAR').reduce((s, c) => s + c.valor, 0))], ['Títulos no período', String(titulosDoPdf.length)]];
     linhas.forEach(([label, valor]) => { doc.setFont('helvetica', 'normal'); doc.text(label, 16, y); doc.text(valor, 145, y); y += 10; });
     y += 7; doc.setFont('helvetica', 'bold'); doc.text('Detalhamento', 14, y); y += 9; doc.setFont('helvetica', 'normal');
     if (tipo === 'ESTOQUE') estoque.slice(0, 24).forEach(item => { doc.text(`${item.nomeItem} | ${item.quantidadeAtual} ${item.unidadeMedida} | ${dinheiro((item.quantidadeAtual || 0) * (item.valorUnitarioMedio || 0))}`.substring(0, 115), 14, y); y += 7; if (y > 275) { doc.addPage(); y = 20; } });
     else if (tipo === 'BALANCETE') balanceteContas.slice(0, 24).forEach(c => { doc.text(`${c.codigo} | ${c.nome} | D: ${dinheiro(c.debitos)} | C: ${dinheiro(c.creditos)}`.substring(0, 115), 14, y); y += 7; if (y > 275) { doc.addPage(); y = 20; } });
-    else contasFiltradas.slice(0, 24).forEach(c => { doc.text(`${c.tipo} | ${c.descricao} | ${c.categoria || '-'} | ${dinheiro(c.valor)}`.substring(0, 115), 14, y); y += 7; if (y > 275) { doc.addPage(); y = 20; } });
-    doc.setFontSize(8); doc.setTextColor(100, 116, 139); doc.text('Relatório gerencial gerado pelo SisFin — SICOOP', 14, 289); doc.save(`${tipo.toLowerCase()}-${filtroAno}-${filtroMes}.pdf`);
+    else titulosDoPdf.slice(0, 24).forEach(c => { doc.text(`${c.tipo} | ${c.descricao} | ${c.categoria || '-'} | ${dinheiro(c.valor)}`.substring(0, 115), 14, y); y += 7; if (y > 275) { doc.addPage(); y = 20; } });
+    doc.setFontSize(8); doc.setTextColor(100, 116, 139); doc.text('Relatório gerencial gerado pelo SisFin — SICOOP', 14, 289); doc.save(`${tipo.toLowerCase()}-${anoPdf}-${mesPdf}.pdf`);
   };
 
   const gerarRelatorioFinanceiroPdf = () => {
@@ -853,6 +887,10 @@ if (c) {
                 <option value="PAGO">Pagas / Recebidas</option>
                 <option value="CANCELADO">Canceladas</option>
               </select>
+              <fieldset className="flex flex-wrap items-center gap-2">
+                <legend className="font-bold text-slate-600">Vencimento</legend>
+                {filtrosPeriodo(mesVencimento, anoVencimento, setMesVencimento, setAnoVencimento, listarAnos(contasPagarReceber.map(c => c.dataVencimento)))}
+              </fieldset>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3 text-xs">
               {([
@@ -953,24 +991,7 @@ if (c) {
               <span className="font-bold text-slate-600">Conta bancária:</span>
               <SelectContaBancaria value={filtroBanco} onChange={setFiltroBanco} contas={contasBancarias} todasLabel="Todas as contas" className="p-2 border border-slate-200 rounded-xl" />
             </div>
-            <label className="flex items-center gap-2 font-bold text-slate-600">
-              Mês
-              <select value={mesExtrato} onChange={e => setMesExtrato(e.target.value)} className="rounded-xl border border-slate-200 p-2 font-normal">
-                <option value="TODOS">Todos os meses</option>
-                {mesesAno.map((mes, indice) => (
-                  <option key={mes} value={mes}>
-                    {new Date(2000, indice, 1).toLocaleDateString('pt-BR', { month: 'long' })}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex items-center gap-2 font-bold text-slate-600">
-              Ano
-              <select value={anoExtrato} onChange={e => setAnoExtrato(e.target.value)} className="rounded-xl border border-slate-200 p-2 font-normal">
-                <option value="TODOS">Todos os anos</option>
-                {anosExtrato.map(ano => <option key={ano} value={ano}>{ano}</option>)}
-              </select>
-            </label>
+            {filtrosPeriodo(mesExtrato, anoExtrato, setMesExtrato, setAnoExtrato, listarAnos(lancamentosExtrato.map(l => l.data)))}
           </div>
           <DataGrid
               rows={lancamentosExtrato.filter(lancamento =>
