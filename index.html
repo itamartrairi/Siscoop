@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -15,7 +15,6 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Siscoop" />
-    <script src="https://apis.google.com/js/api.js" async defer></script>
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
@@ -25,7 +24,21 @@
     </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <main style="max-width:32rem;margin:4rem auto;padding:0 1rem;text-align:center;font:1rem system-ui,sans-serif">
+        <p role="status">Carregando SISCOOP…</p>
+        <div id="recuperar-inicializacao" hidden>
+          <p>Se o aplicativo demorar a abrir, verifique a conexão e recarregue a página.</p>
+          <button type="button" onclick="window.location.reload()">Recarregar página</button>
+        </div>
+      </main>
+    </div>
+    <script>
+      window.setTimeout(() => {
+        const recuperar = document.getElementById('recuperar-inicializacao');
+        if (recuperar) recuperar.hidden = false;
+      }, 12000);
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
