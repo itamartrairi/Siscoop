@@ -212,8 +212,8 @@ main[data-module="sisgepa"] > div > .sticky.top-0.z-20 > div:has(> div > h1) {
   }
 }
 
-main[data-module="vendas-relatorios"] > div > .sticky.top-0.z-20.p-6:has(h1) {
-  padding-block: 0.55rem;
+main[data-module="vendas-relatorios"] > div > .sticky.top-0.z-20.p-6:has(> h1):not(.overflow-y-auto) {
+  padding-block: 0.4rem;
 }
 
 /* Pesos de fonte mais leves: menos "gritado", mais profissional */
