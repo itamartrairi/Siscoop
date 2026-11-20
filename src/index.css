@@ -130,7 +130,8 @@ main .sticky.top-0.z-20:has(h1, h2, h3) {
 ) {
   row-gap: 0.5rem;
 
-  &.p-4, &.p-5, &.p-6 { padding-block: 0.25rem; }
+  &.p-4, &.p-5 { padding-block: 0.25rem; }
+  &.p-6 { padding-block: 0.45rem; }
   &.pb-4 { padding-bottom: 0.25rem; }
   & :is(h1, h2) { line-height: 1.15; }
 
