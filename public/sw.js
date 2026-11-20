@@ -1,17 +1,8 @@
-// Service Worker para habilitar instalação PWA e atalho nativo na Área de Trabalho
-const CACHE_NAME = 'siscoop-cache-v1';
-
-self.addEventListener('install', (event) => {
+// O navegador gerencia a rede e o cache dos arquivos versionados.
+self.addEventListener('install', () => {
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
-});
-
-self.addEventListener('fetch', (event) => {
-  // Pass-through de requisições de rede para garantir funcionamento em tempo real
-  event.respondWith(
-    fetch(event.request).catch(() => caches.match(event.request))
-  );
 });
