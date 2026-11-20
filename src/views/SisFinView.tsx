@@ -1,3 +1,4 @@
+import { listarCategoriasEstoque } from '../components/ProdutosTab';
 import { NavegacaoSecoes } from '../components/ui/NavegacaoSecoes';
 import { formatarData } from '../utils/dateHelpers';
 import React, { useState } from 'react';
@@ -296,6 +297,7 @@ export const SisFinView: React.FC = () => {
   const [filtroMes, setFiltroMes] = useState(String(new Date().getMonth() + 1).padStart(2, '0'));
   const [filtroAno, setFiltroAno] = useState(String(new Date().getFullYear()));
   const [filtroCategoria, setFiltroCategoria] = useState('TODAS');
+  const [categoriaEstoque, setCategoriaEstoque] = useState('TODAS');
   const [filtroConta, setFiltroConta] = useState('TODAS');
   const [filtroBanco, setFiltroBanco] = useState('TODAS');
   const [mesExtrato, setMesExtrato] = useState('TODOS');
@@ -433,7 +435,10 @@ if (c) {
   const periodoRecebido = contasDoPeriodo.filter(c => c.tipo === 'RECEBER' && c.status === 'PAGO').reduce((sum, c) => sum + (c.valor || 0), 0);
   const periodoEntradas = extratoDoPeriodo.filter(l => l.tipo === 'CREDITO').reduce((sum, l) => sum + (l.valor || 0), 0);
   const periodoSaidas = extratoDoPeriodo.filter(l => l.tipo === 'DEBITO').reduce((sum, l) => sum + (l.valor || 0), 0);
-  const categoriasFinanceiras = Array.from(new Set(contasPagarReceber.map(c => c.categoria).filter(Boolean))) as string[];
+  const categoriasFinanceiras = [...new Set([
+    ...CATEGORIAS_FINANCEIRAS.map(item => item.categoria),
+    ...contasPagarReceber.flatMap(conta => conta.categoria ? [conta.categoria] : []),
+  ])].sort((a, b) => a.localeCompare(b, 'pt-BR'));
   const contasFinanceiras = Array.from(new Set(contasPagarReceber.map(c => c.centroCusto || c.categoria).filter(Boolean))) as string[];
   const contasFiltradas = contasDoPeriodo.filter(c =>
     (filtroCategoria === 'TODAS' || c.categoria === filtroCategoria) &&
@@ -491,6 +496,8 @@ if (c) {
   const despesasDre = contasFiltradas.filter(c => c.tipo === 'PAGAR' && c.status !== 'CANCELADO').reduce((sum, c) => sum + c.valor, 0);
   const custosFixos = contasFiltradas.filter(c => c.tipo === 'PAGAR' && c.classificacaoDespesa === 'FIXA').reduce((sum, c) => sum + c.valor, 0);
   const custosVariaveis = contasFiltradas.filter(c => c.tipo === 'PAGAR' && c.classificacaoDespesa !== 'FIXA').reduce((sum, c) => sum + c.valor, 0);
+  const estoqueFinanceiro = categoriaEstoque === 'TODAS' ? estoque : estoque.filter(item => item.categoria === categoriaEstoque);
+  const valorEstoqueFinanceiro = estoqueFinanceiro.reduce((total, item) => total + (item.quantidadeAtual || 0) * (item.valorUnitarioMedio || 0), 0);
   const valorEstoque = estoque.reduce((sum, item) => sum + (item.quantidadeAtual || 0) * (item.valorUnitarioMedio || 0), 0);
   const itensEstoqueBaixo = estoque.filter(item => item.quantidadeAtual <= (item.quantidadeMinima ?? item.estoqueMinimo ?? 0));
 
@@ -572,6 +579,8 @@ if (c) {
     doc.setTextColor(30, 41, 59); doc.setFontSize(10);
     if (tipo === 'PAGAR_RECEBER') {
       doc.text(`Vencimento: ${mesPdf === 'TODOS' ? 'todos os meses' : mesPdf} / ${anoPdf === 'TODOS' ? 'todos os anos' : anoPdf}`, 14, 42);
+    } else if (tipo === 'ESTOQUE') {
+      doc.text(`Categoria: ${categoriaEstoque === 'TODAS' ? 'Todas as categorias' : categoriaEstoque}`, 14, 42);
     } else if (tipo === 'FLUXO') {
       doc.text(`Período: ${mesPdf === 'TODOS' ? 'ano completo' : mesPdf} / ${anoPdf}`, 14, 42);
       doc.text(`Conta: ${filtroBanco === 'TODAS' ? 'Todas as contas' : nomeConta(filtroBanco)}`, 14, 49);
@@ -603,12 +612,12 @@ if (c) {
           ['Saldo final', dinheiro(fluxo.total.final)],
         ]
       : tipo === 'CUSTOS' ? [['Custos fixos', dinheiro(custosFixos)], ['Custos variáveis', dinheiro(custosVariaveis)], ['Custos totais', dinheiro(custosFixos + custosVariaveis)]]
-      : tipo === 'ESTOQUE' ? [['Valor total em estoque', dinheiro(valorEstoque)], ['Itens cadastrados', String(estoque.length)], ['Itens abaixo do mínimo', String(itensEstoqueBaixo.length)]]
+      : tipo === 'ESTOQUE' ? [['Valor total em estoque', dinheiro(valorEstoqueFinanceiro)], ['Itens cadastrados', String(estoqueFinanceiro.length)], ['Itens abaixo do mínimo', String(itensEstoqueBaixo.filter(item => categoriaEstoque === 'TODAS' || item.categoria === categoriaEstoque).length)]]
       : tipo === 'BALANCETE' ? [['Total de débitos', dinheiro(totalBalanceteDebitos)], ['Total de créditos', dinheiro(totalBalanceteCreditos)], ['Diferença', dinheiro(Math.abs(totalBalanceteDebitos - totalBalanceteCreditos))]]
       : [['Contas a receber', dinheiro(titulosDoPdf.filter(c => c.tipo === 'RECEBER').reduce((s, c) => s + c.valor, 0))], ['Contas a pagar', dinheiro(titulosDoPdf.filter(c => c.tipo === 'PAGAR').reduce((s, c) => s + c.valor, 0))], ['Títulos no período', String(titulosDoPdf.length)]];
     linhas.forEach(([label, valor]) => { doc.setFont('helvetica', 'normal'); doc.text(label, 16, y); doc.text(valor, 145, y); y += 10; });
     y += 7; doc.setFont('helvetica', 'bold'); doc.text('Detalhamento', 14, y); y += 9; doc.setFont('helvetica', 'normal');
-    if (tipo === 'ESTOQUE') estoque.slice(0, 24).forEach(item => { doc.text(`${item.nomeItem} | ${item.quantidadeAtual} ${item.unidadeMedida} | ${dinheiro((item.quantidadeAtual || 0) * (item.valorUnitarioMedio || 0))}`.substring(0, 115), 14, y); y += 7; if (y > 275) { doc.addPage(); y = 20; } });
+    if (tipo === 'ESTOQUE') estoqueFinanceiro.slice(0, 24).forEach(item => { doc.text(`${item.nomeItem} | ${item.quantidadeAtual} ${item.unidadeMedida} | ${dinheiro((item.quantidadeAtual || 0) * (item.valorUnitarioMedio || 0))}`.substring(0, 115), 14, y); y += 7; if (y > 275) { doc.addPage(); y = 20; } });
     else if (tipo === 'FLUXO' && fluxo) fluxo.meses.forEach(mes => {
       doc.text(`${rotuloMesFluxo(mes.periodo)} | Entradas: ${dinheiro(mes.entradas)} | Saídas: ${dinheiro(-mes.saidas)} | Saldo: ${dinheiro(mes.final)}`, 14, y);
       y += 7;
@@ -695,6 +704,14 @@ if (c) {
               <span className="font-bold text-slate-600">Conta bancária</span>
               <SelectContaBancaria value={filtroBanco} onChange={setFiltroBanco} contas={contasBancarias} todasLabel="Todas as contas" className="rounded-xl border border-slate-200 p-2" />
             </div>
+          ) : activeTab === 'estoque' ? (
+            <label className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-3 text-sm">
+              Categoria
+              <select value={categoriaEstoque} onChange={e => setCategoriaEstoque(e.target.value)} className="rounded-xl border border-slate-200 p-2">
+                <option value="TODAS">Todas as categorias</option>
+                {listarCategoriasEstoque(estoque).map(categoria => <option key={categoria} value={categoria}>{categoria}</option>)}
+              </select>
+            </label>
           ) : (
           <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm flex flex-col xl:flex-row xl:items-end gap-3">
             <div><label className="block text-[11px] font-bold text-slate-500 mb-1">Mês</label><select value={filtroMes} onChange={e => setFiltroMes(e.target.value)} className="p-2.5 rounded-xl border border-slate-200 text-sm"><option value="TODOS">Todos</option><option value="01">Janeiro</option><option value="02">Fevereiro</option><option value="03">Março</option><option value="04">Abril</option><option value="05">Maio</option><option value="06">Junho</option><option value="07">Julho</option><option value="08">Agosto</option><option value="09">Setembro</option><option value="10">Outubro</option><option value="11">Novembro</option><option value="12">Dezembro</option></select></div>
@@ -853,7 +870,7 @@ if (c) {
             </section>
           )}
 
-          {activeTab === 'estoque' && <div className="bg-white rounded-2xl border border-slate-200 p-6"><div className="flex justify-between"><div><h2 className="text-lg font-black text-slate-900">Estoque — visão financeira</h2><p className="text-xs text-slate-500 mt-1">Valor do inventário e itens abaixo do estoque mínimo.</p></div><button onClick={() => gerarRelatorioGerencialPdf('ESTOQUE')} className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold">Exportar PDF</button></div><div className="mt-5 overflow-x-auto"><table className="w-full text-xs"><thead><tr className="text-left border-b"><th className="p-3">Produto</th><th className="p-3">Quantidade</th><th className="p-3">Valor unitário</th><th className="p-3 text-right">Valor total</th></tr></thead><tbody className="divide-y">{estoque.map(item => <tr key={item.id}><td className="p-3 font-bold">{item.nomeItem}</td><td className="p-3">{item.quantidadeAtual} {item.unidadeMedida}</td><td className="p-3">R$ {(item.valorUnitarioMedio || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td><td className="p-3 text-right font-bold">R$ {((item.quantidadeAtual || 0) * (item.valorUnitarioMedio || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td></tr>)}</tbody></table></div></div>}
+          {activeTab === 'estoque' && <div className="bg-white rounded-2xl border border-slate-200 p-6"><div className="flex justify-between"><div><h2 className="text-lg font-black text-slate-900">Estoque — visão financeira</h2><p className="text-xs text-slate-500 mt-1">Valor do inventário e itens abaixo do estoque mínimo.</p></div><button onClick={() => gerarRelatorioGerencialPdf('ESTOQUE')} className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold">Exportar PDF</button></div><div className="mt-5 overflow-x-auto"><table className="w-full text-xs"><thead><tr className="text-left border-b"><th className="p-3">Produto</th><th className="p-3">Quantidade</th><th className="p-3">Valor unitário</th><th className="p-3 text-right">Valor total</th></tr></thead><tbody className="divide-y">{estoqueFinanceiro.map(item => <tr key={item.id}><td className="p-3 font-bold">{item.nomeItem}</td><td className="p-3">{item.quantidadeAtual} {item.unidadeMedida}</td><td className="p-3">R$ {(item.valorUnitarioMedio || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td><td className="p-3 text-right font-bold">R$ {((item.quantidadeAtual || 0) * (item.valorUnitarioMedio || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td></tr>)}{estoqueFinanceiro.length === 0 && <tr><td colSpan={4} className="p-3 text-center text-slate-500">Nenhum item para a categoria selecionada.</td></tr>}</tbody></table></div></div>}
 
           {activeTab === 'custos' && (
             <div className="space-y-6">
