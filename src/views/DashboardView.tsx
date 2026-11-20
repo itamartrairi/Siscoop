@@ -469,7 +469,7 @@ export const DashboardView: React.FC<Props> = ({ setActiveView, onNavigateModule
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-[104rem] mx-auto">
       {/* Top Banner: Firestore Live Sync Status & Actions */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xs transition-all">
+      <div className="sticky top-0 z-20 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xs transition-all">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-start sm:items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
