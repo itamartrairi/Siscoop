@@ -35,11 +35,15 @@ export function VoltarSecoes({ voltar, rotulo = 'Voltar às opções' }: { volta
     const pai = origem.current?.parentElement;
     const faixa = Array.from(pai?.children ?? []).find(el => el.matches('.sticky.top-0.z-20'));
     const titulo = faixa?.querySelector('h1, h2, h3');
-    if (!titulo?.parentElement) return;
+    if (!faixa || !titulo) return;
 
+    const linha = titulo.parentElement?.closest('.flex');
+    const linhaDoCabecalho = linha && faixa.contains(linha) ? linha : null;
     const suporte = document.createElement('div');
-    suporte.className = 'mb-2';
-    titulo.parentElement.insertBefore(suporte, titulo);
+    suporte.className = linhaDoCabecalho
+      ? 'ml-auto flex max-w-full shrink-0 justify-end self-end'
+      : 'mt-1 flex justify-end';
+    (linhaDoCabecalho ?? faixa).appendChild(suporte);
     setDestino(suporte);
     return () => suporte.remove();
   }, []);
@@ -50,5 +54,10 @@ export function VoltarSecoes({ voltar, rotulo = 'Voltar às opções' }: { volta
     </button>
   );
 
-  return <><span ref={origem} hidden />{destino ? createPortal(botao, destino) : botao}</>;
+  return (
+    <>
+      <span ref={origem} hidden />
+      {destino ? createPortal(botao, destino) : <div className="flex justify-end">{botao}</div>}
+    </>
+  );
 }
