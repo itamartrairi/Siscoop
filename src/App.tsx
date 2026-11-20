@@ -220,7 +220,7 @@ const MainAppContent: React.FC = () => {
         <Sidebar activeModule={activeModule} onChangeModule={setActiveModule} />
 
         {/* Dynamic Workspace Container */}
-        <main className="flex-1 overflow-y-auto bg-slate-50/60 p-6 lg:p-8">
+        <main className="flex-1 overflow-y-auto bg-slate-50/60 p-6 pt-3 lg:p-8 lg:pt-4 [&>.p-4]:pt-2 [&>.p-6]:pt-3 sm:[&>.sm\:p-6]:pt-3 lg:[&>.lg\:p-8]:pt-4">
           <Suspense fallback={<CarregandoModulo />}>
           {activeModule === 'login' && (
             <LoginView
