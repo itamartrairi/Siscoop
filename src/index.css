@@ -376,3 +376,41 @@ html.dark, html.dark body { background-color: var(--ui-bg); color: var(--ui-text
       background-color: var(--ui-row-hover) !important;
       color: var(--ui-text) !important;
   }
+
+/* Listas longas de atalhos, com até duas colunas conforme o espaço disponível. */
+:is(
+  ol[aria-label="Seções disponíveis"],
+  ol[aria-label="Seções de Agenda & Atividades"],
+  ol[aria-label="Seções de Estoque"],
+  ol[aria-label="Cadastros disponíveis"],
+  aside > [role="dialog"] > .grid > ol
+):has(> li:nth-child(3)) {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, max(14rem, calc((100% - 1rem) / 2))), 1fr));
+  gap: 1rem;
+
+  & > li {
+    min-width: 0;
+    padding-bottom: 0;
+  }
+
+  & > li::before,
+  & > li > span[aria-hidden="true"].absolute {
+    display: none;
+  }
+
+  & > li > div:last-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+/* Libera largura para os atalhos nos submenus do trilho lateral. */
+@media (min-width: 64rem) {
+  aside > [role="dialog"] > .grid:has(> ol > li:nth-child(3)) {
+    grid-template-columns: 13rem minmax(0, 1fr);
+
+    & > ol { grid-row: span 2; }
+    & > div:last-child { grid-column: 1; }
+  }
+}
