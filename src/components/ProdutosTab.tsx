@@ -19,6 +19,10 @@ const CATEGORIAS_PADRAO = [
   'Defensivos Agrícolas', 'Medicamentos Veterinários', 'Ferramentas e Equipamentos', 'Embalagens',
   'Hortifruti', 'Mercadorias para Revenda', 'Material de Consumo',
 ];
+export const listarCategoriasEstoque = (estoque: Pick<ItemEstoque, 'categoria'>[]) =>
+  [...new Set([...CATEGORIAS_PADRAO, ...estoque.map(item => item.categoria).filter(Boolean)])]
+    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
 const UNIDADES = ['UN', 'KG', 'G', 'L', 'ML', 'SC', 'CX', 'FD', 'PCT', 'M', 'TON', 'DZ'];
 
 const formVazio = (): FormProduto => ({
@@ -55,7 +59,7 @@ export const ProdutosTab: React.FC<{ canWrite: boolean; onBlocked: () => void }>
   const [erro, setErro] = useState('');
 
   const categorias = useMemo(
-    () => Array.from(new Set([...CATEGORIAS_PADRAO, ...estoque.map(i => i.categoria).filter(Boolean)])).sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    () => listarCategoriasEstoque(estoque),
     [estoque]
   );
 
