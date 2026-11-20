@@ -19,7 +19,7 @@ import {
   PieChart as PieChartIcon,
   Printer
 } from 'lucide-react';
-import { ContaPagarReceber } from '../types';
+import type { ContaBancaria, ContaPagarReceber, ExtratoBancario } from '../types';
 import { DataGrid, GridStatus } from '../components/ui/DataGrid';
 import { CheckCircle2 } from 'lucide-react';
 import { playActionCompleteSound } from '../utils/actionSound';
@@ -65,6 +65,126 @@ const CATEGORIAS_FINANCEIRAS: { categoria: string; subcategoria: string; classif
   { categoria: 'Receitas', subcategoria: 'Capital Social', classificacao: 'FIXA' },
   { categoria: 'Outros', subcategoria: 'Diversos', classificacao: 'VARIAVEL' }
 ];
+
+type MovimentoFluxo = NonNullable<ExtratoBancario['lancamentos']>[number] & { categoria?: string };
+
+const MOEDA_FLUXO = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+const MES_FLUXO = new Intl.DateTimeFormat('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' });
+const rotuloMesFluxo = (periodo: string) => MES_FLUXO.format(new Date(`${periodo}-01T00:00:00Z`));
+const valorFluxo = (valor: number) => (
+  <span className={valor < 0 ? 'text-rose-700' : 'text-slate-900'}>{MOEDA_FLUXO.format(valor)}</span>
+);
+
+function linhaFluxo(nome: string, valores: number[], detalhe = false, chave = nome) {
+  return (
+    <tr key={chave} className={detalhe ? 'bg-white' : 'bg-slate-50 font-semibold'}>
+      <th scope="row" className={`sticky left-0 z-10 text-left ${detalhe ? 'bg-white !pl-6 font-normal' : 'bg-slate-50'}`}>{nome}</th>
+      {valores.map((valor, indice) => <td key={indice} className="whitespace-nowrap text-right tabular-nums">{valorFluxo(valor)}</td>)}
+    </tr>
+  );
+}
+
+function montarFluxoCaixa(
+  extrato: ExtratoBancario | undefined,
+  bancos: ContaBancaria[],
+  ano: string,
+  mes: string,
+  bancoId: string
+) {
+  const periodos = mes === 'TODOS'
+    ? Array.from({ length: 12 }, (_, indice) => `${ano}-${String(indice + 1).padStart(2, '0')}`)
+    : [`${ano}-${mes}`];
+  const meses = periodos.map(periodo => ({
+    periodo, inicial: 0, saldosCadastrados: 0, entradas: 0, saidas: 0, final: 0, operacional: 0,
+    categoriasEntrada: new Map<string, number>(), categoriasSaida: new Map<string, number>()
+  }));
+  const categoriasEntrada = new Set<string>();
+  const categoriasSaida = new Set<string>();
+  const porBanco = new Map<string, MovimentoFluxo[]>();
+  for (const lancamento of extrato?.lancamentos ?? []) {
+    if (typeof lancamento.data !== 'string' || !/^\d{4}-(0[1-9]|1[0-2])-\d{2}/.test(lancamento.data)) continue;
+    const id = lancamento.contaBancariaId ?? '';
+    if (bancoId !== 'TODAS' && id !== bancoId) continue;
+    const registros = porBanco.get(id) ?? [];
+    registros.push(lancamento);
+    porBanco.set(id, registros);
+  }
+
+  const ids = new Set([...bancos.filter(banco => bancoId === 'TODAS' || banco.id === bancoId).map(banco => banco.id), ...porBanco.keys()]);
+  const saldoLegado = bancos.length === 0 && bancoId === 'TODAS' ? Number(extrato?.saldoInicial) || 0 : 0;
+  if (saldoLegado) ids.add('');
+  const contas = [...ids].map(id => {
+    const banco = bancos.find(item => item.id === id);
+    const dataBase = banco?.dataSaldoInicial?.slice(0, 10) || '';
+    const saldoBase = Number(banco?.saldoInicial ?? (id === '' ? saldoLegado : 0)) || 0;
+    const registros = porBanco.get(id) ?? [];
+    const movimentos = registros.filter(lancamento => !dataBase || lancamento.data.slice(0, 10) >= dataBase).sort((a, b) => a.data.localeCompare(b.data));
+    const conta = {
+      id, nome: id ? nomeContaBancaria(bancos, id) : 'Sem conta vinculada',
+      inicial: 0, saldosCadastrados: 0, entradas: 0, saidas: 0, operacional: 0, final: 0,
+    };
+    let saldo = 0;
+    let cursor = 0;
+    for (const [indice, coluna] of meses.entries()) {
+      const mesBase = dataBase.slice(0, 7);
+      if (indice === 0 && (!mesBase || mesBase <= coluna.periodo)) saldo += saldoBase;
+      while (cursor < movimentos.length && movimentos[cursor].data.slice(0, 7) < coluna.periodo) {
+        const lancamento = movimentos[cursor++];
+        saldo += (lancamento.tipo === 'CREDITO' ? 1 : -1) * Math.abs(Number(lancamento.valor) || 0);
+      }
+      coluna.inicial += saldo;
+      if (indice === 0) conta.inicial = saldo;
+      if (indice > 0 && mesBase === coluna.periodo) {
+        coluna.saldosCadastrados += saldoBase;
+        conta.saldosCadastrados += saldoBase;
+        saldo += saldoBase;
+      }
+      while (cursor < movimentos.length && movimentos[cursor].data.slice(0, 7) === coluna.periodo) {
+        const lancamento = movimentos[cursor++];
+        const entrada = lancamento.tipo === 'CREDITO';
+        const valor = Math.abs(Number(lancamento.valor) || 0);
+        const categoria = lancamento.categoria?.trim();
+        const nome = categoria ? categoria.replaceAll('_', ' ') : 'Sem categoria';
+        const chave = (categoria || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+        const operacional = /^(RECEITA_VENDA|VENDAS?|COMPRA[S]?|SERVICO[S]?|FORNECEDORES|PESSOAL|FOLHA_PAGAMENTO|IMPOSTO|ADMINISTRATIVO|LOGISTICA|TAXA ADMINISTRATIVA)/.test(chave);
+        const grupo = entrada ? coluna.categoriasEntrada : coluna.categoriasSaida;
+        grupo.set(nome, (grupo.get(nome) ?? 0) + valor);
+        if (entrada) {
+          categoriasEntrada.add(nome);
+          coluna.entradas += valor;
+          conta.entradas += valor;
+        } else {
+          categoriasSaida.add(nome);
+          coluna.saidas += valor;
+          conta.saidas += valor;
+        }
+        const variacao = entrada ? valor : -valor;
+        saldo += variacao;
+        if (operacional) {
+          coluna.operacional += variacao;
+          conta.operacional += variacao;
+        }
+      }
+      coluna.final += saldo;
+      conta.final = saldo;
+    }
+    return conta;
+  });
+
+  const total = contas.reduce((soma, conta) => ({
+    inicial: soma.inicial + conta.inicial,
+    saldosCadastrados: soma.saldosCadastrados + conta.saldosCadastrados,
+    entradas: soma.entradas + conta.entradas,
+    saidas: soma.saidas + conta.saidas,
+    operacional: soma.operacional + conta.operacional,
+    final: soma.final + conta.final,
+  }), { inicial: 0, saldosCadastrados: 0, entradas: 0, saidas: 0, operacional: 0, final: 0 });
+
+  return { meses, contas, total, categorias: {
+    entradas: [...categoriasEntrada].sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    saidas: [...categoriasSaida].sort((a, b) => a.localeCompare(b, 'pt-BR')),
+  } };
+}
 
 export const SisFinView: React.FC = () => {
   const {
@@ -124,7 +244,9 @@ export const SisFinView: React.FC = () => {
     .reduce((s, c) => s + (Number(c.valor) || 0), 0);
   // Filtro de conta bancária: vale para Dashboard, DRE, Fluxo de Caixa, Contas e Extrato.
   const noBanco = (id?: string) => filtroBanco === 'TODAS' || (id || '') === filtroBanco;
-  const [fluxoAnoCompleto, setFluxoAnoCompleto] = useState(true);
+  const [mesFluxo, setMesFluxo] = useState('TODOS');
+  const [anoFluxo, setAnoFluxo] = useState(String(new Date().getFullYear()));
+  const fluxo = activeTab === 'fluxo' ? montarFluxoCaixa(extratoBancario, contasBancarias, anoFluxo, mesFluxo, filtroBanco) : null;
 
   // Modals & Editing
   const [showModal, setShowModal] = useState(false);
@@ -302,7 +424,7 @@ if (c) {
     ...datas.map(data => data?.slice(0, 4) ?? '')
   ].filter(ano => /^\d{4}$/.test(ano)))].sort().reverse();
 
-  const filtrosPeriodo = (mes: string, ano: string, mudarMes: (valor: string) => void, mudarAno: (valor: string) => void, anos: string[]) => (
+  const filtrosPeriodo = (mes: string, ano: string, mudarMes: (valor: string) => void, mudarAno: (valor: string) => void, anos: string[], permiteTodosAnos = true) => (
     <>
       <label className="flex items-center gap-2 font-bold text-slate-600">
         Mês
@@ -316,7 +438,7 @@ if (c) {
       <label className="flex items-center gap-2 font-bold text-slate-600">
         Ano
         <select value={ano} onChange={e => mudarAno(e.target.value)} className="rounded-xl border border-slate-200 p-2 font-normal">
-          <option value="TODOS">Todos os anos</option>
+          {permiteTodosAnos && <option value="TODOS">Todos os anos</option>}
           {anos.map(opcao => <option key={opcao} value={opcao}>{opcao}</option>)}
         </select>
       </label>
@@ -334,11 +456,14 @@ if (c) {
     const titulos = { DRE: 'DRE — Demonstração do Resultado', FLUXO: 'Fluxo de Caixa', PAGAR_RECEBER: 'Contas a Pagar e Receber', ESTOQUE: 'Posição Financeira do Estoque', CUSTOS: 'Custos Fixos e Variáveis', BALANCETE: 'Balancete de Verificação' };
     doc.setFillColor(4, 120, 87); doc.rect(0, 0, 210, 30, 'F'); doc.setTextColor(255, 255, 255); doc.setFontSize(17); doc.text('SICOOP', 14, 13); doc.setFontSize(10); doc.text(titulos[tipo], 14, 22);
     const titulosDoPdf = tipo === 'PAGAR_RECEBER' ? contasListaFiltradas : contasFiltradas;
-    const mesPdf = tipo === 'PAGAR_RECEBER' ? mesVencimento : filtroMes;
-    const anoPdf = tipo === 'PAGAR_RECEBER' ? anoVencimento : filtroAno;
+    const mesPdf = tipo === 'PAGAR_RECEBER' ? mesVencimento : tipo === 'FLUXO' ? mesFluxo : filtroMes;
+    const anoPdf = tipo === 'PAGAR_RECEBER' ? anoVencimento : tipo === 'FLUXO' ? anoFluxo : filtroAno;
     doc.setTextColor(30, 41, 59); doc.setFontSize(10);
     if (tipo === 'PAGAR_RECEBER') {
       doc.text(`Vencimento: ${mesPdf === 'TODOS' ? 'todos os meses' : mesPdf} / ${anoPdf === 'TODOS' ? 'todos os anos' : anoPdf}`, 14, 42);
+    } else if (tipo === 'FLUXO') {
+      doc.text(`Período: ${mesPdf === 'TODOS' ? 'ano completo' : mesPdf} / ${anoPdf}`, 14, 42);
+      doc.text(`Conta: ${filtroBanco === 'TODAS' ? 'Todas as contas' : nomeConta(filtroBanco)}`, 14, 49);
     } else {
       doc.text(`Período: ${mesPdf}/${anoPdf}`, 14, 42);
       doc.text(`Categoria: ${filtroCategoria} | Conta: ${filtroConta}`, 14, 49);
@@ -357,7 +482,15 @@ if (c) {
         ['10.0 (-) PROVISÃO DE TRIBUTOS E ENCARGOS', `- ${dinheiro(dreProvisaoTributos)}`],
         ['11.0 (=) RESULTADO LÍQUIDO (SOBRAS/PERDAS)', dinheiro(dreResultadoLiquido)]
       ]
-      : tipo === 'FLUXO' ? [['Saldo inicial', dinheiro(extratoBancario?.saldoInicial || 0)], ['Entradas conciliadas', dinheiro(periodoEntradas)], ['Saídas conciliadas', dinheiro(periodoSaidas)], ['Saldo projetado', dinheiro((extratoBancario?.saldoInicial || 0) + periodoEntradas - periodoSaidas)]]
+      : tipo === 'FLUXO' && fluxo ? [
+          ['Saldo inicial', dinheiro(fluxo.total.inicial)],
+          ['Entradas', dinheiro(fluxo.total.entradas)],
+          ['Saídas', dinheiro(-fluxo.total.saidas)],
+          ['Geração de caixa operacional', dinheiro(fluxo.total.operacional)],
+          ['Geração de caixa total', dinheiro(fluxo.total.entradas - fluxo.total.saidas)],
+          ...(fluxo.total.saldosCadastrados ? [['Saldos cadastrados no período', dinheiro(fluxo.total.saldosCadastrados)] as [string, string]] : []),
+          ['Saldo final', dinheiro(fluxo.total.final)],
+        ]
       : tipo === 'CUSTOS' ? [['Custos fixos', dinheiro(custosFixos)], ['Custos variáveis', dinheiro(custosVariaveis)], ['Custos totais', dinheiro(custosFixos + custosVariaveis)]]
       : tipo === 'ESTOQUE' ? [['Valor total em estoque', dinheiro(valorEstoque)], ['Itens cadastrados', String(estoque.length)], ['Itens abaixo do mínimo', String(itensEstoqueBaixo.length)]]
       : tipo === 'BALANCETE' ? [['Total de débitos', dinheiro(totalBalanceteDebitos)], ['Total de créditos', dinheiro(totalBalanceteCreditos)], ['Diferença', dinheiro(Math.abs(totalBalanceteDebitos - totalBalanceteCreditos))]]
@@ -365,6 +498,10 @@ if (c) {
     linhas.forEach(([label, valor]) => { doc.setFont('helvetica', 'normal'); doc.text(label, 16, y); doc.text(valor, 145, y); y += 10; });
     y += 7; doc.setFont('helvetica', 'bold'); doc.text('Detalhamento', 14, y); y += 9; doc.setFont('helvetica', 'normal');
     if (tipo === 'ESTOQUE') estoque.slice(0, 24).forEach(item => { doc.text(`${item.nomeItem} | ${item.quantidadeAtual} ${item.unidadeMedida} | ${dinheiro((item.quantidadeAtual || 0) * (item.valorUnitarioMedio || 0))}`.substring(0, 115), 14, y); y += 7; if (y > 275) { doc.addPage(); y = 20; } });
+    else if (tipo === 'FLUXO' && fluxo) fluxo.meses.forEach(mes => {
+      doc.text(`${rotuloMesFluxo(mes.periodo)} | Entradas: ${dinheiro(mes.entradas)} | Saídas: ${dinheiro(-mes.saidas)} | Saldo: ${dinheiro(mes.final)}`, 14, y);
+      y += 7;
+    });
     else if (tipo === 'BALANCETE') balanceteContas.slice(0, 24).forEach(c => { doc.text(`${c.codigo} | ${c.nome} | D: ${dinheiro(c.debitos)} | C: ${dinheiro(c.creditos)}`.substring(0, 115), 14, y); y += 7; if (y > 275) { doc.addPage(); y = 20; } });
     else titulosDoPdf.slice(0, 24).forEach(c => { doc.text(`${c.tipo} | ${c.descricao} | ${c.categoria || '-'} | ${dinheiro(c.valor)}`.substring(0, 115), 14, y); y += 7; if (y > 275) { doc.addPage(); y = 20; } });
     doc.setFontSize(8); doc.setTextColor(100, 116, 139); doc.text('Relatório gerencial gerado pelo SisFin — SICOOP', 14, 289); doc.save(`${tipo.toLowerCase()}-${anoPdf}-${mesPdf}.pdf`);
@@ -438,6 +575,16 @@ if (c) {
 
       {(activeTab === 'dashboard' || activeTab === 'dre' || activeTab === 'fluxo' || activeTab === 'estoque' || activeTab === 'custos') && (
         <div className="space-y-5">
+          {activeTab === 'fluxo' ? (
+            <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 text-xs">
+              {filtrosPeriodo(mesFluxo, anoFluxo, setMesFluxo, setAnoFluxo, listarAnos([
+                ...lancamentosExtrato.map(l => l.data),
+                ...contasBancarias.map(banco => banco.dataSaldoInicial),
+              ]), false)}
+              <span className="font-bold text-slate-600">Conta bancária</span>
+              <SelectContaBancaria value={filtroBanco} onChange={setFiltroBanco} contas={contasBancarias} todasLabel="Todas as contas" className="rounded-xl border border-slate-200 p-2" />
+            </div>
+          ) : (
           <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm flex flex-col xl:flex-row xl:items-end gap-3">
             <div><label className="block text-[11px] font-bold text-slate-500 mb-1">Mês</label><select value={filtroMes} onChange={e => setFiltroMes(e.target.value)} className="p-2.5 rounded-xl border border-slate-200 text-sm"><option value="TODOS">Todos</option><option value="01">Janeiro</option><option value="02">Fevereiro</option><option value="03">Março</option><option value="04">Abril</option><option value="05">Maio</option><option value="06">Junho</option><option value="07">Julho</option><option value="08">Agosto</option><option value="09">Setembro</option><option value="10">Outubro</option><option value="11">Novembro</option><option value="12">Dezembro</option></select></div>
             <div><label className="block text-[11px] font-bold text-slate-500 mb-1">Ano</label><select value={filtroAno} onChange={e => setFiltroAno(e.target.value)} className="p-2.5 rounded-xl border border-slate-200 text-sm w-28"><option value="TODAS">Todos</option>{anosDisponiveis.map(ano => <option key={ano} value={ano}>{ano}</option>)}</select></div>
@@ -446,6 +593,8 @@ if (c) {
             <div><label className="block text-[11px] font-bold text-slate-500 mb-1">Conta bancária</label><SelectContaBancaria value={filtroBanco} onChange={setFiltroBanco} contas={contasBancarias} todasLabel="Todas as contas bancárias" className="p-2.5 rounded-xl border border-slate-200 text-sm" /></div>
             <button onClick={aplicarFiltros} className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50">Limpar filtros</button>
           </div>
+          )}
+
 
           {activeTab === 'dashboard' && <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -690,7 +839,70 @@ if (c) {
             </div>
           )}
 
-          {activeTab === 'fluxo' && <div className="space-y-5"><div className="bg-white rounded-2xl border border-slate-200 p-6"><div className="flex flex-col md:flex-row md:items-center justify-between gap-3"><div><h2 className="text-lg font-black text-slate-900">Fluxo de Caixa Anual</h2><p className="text-xs text-slate-500 mt-1">Todos os meses de {filtroAno}, com contas operacionais da cooperativa.</p></div><div className="flex gap-2"><button onClick={() => setFluxoAnoCompleto(!fluxoAnoCompleto)} className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold">{fluxoAnoCompleto ? 'Exibir resumo' : 'Exibir ano completo'}</button><button onClick={() => gerarRelatorioGerencialPdf('FLUXO')} className="px-3 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold">Exportar PDF</button></div></div><div className="mt-5"><ResponsiveContainer width="100%" height={300}><LineChart data={fluxoAnual}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis dataKey="mes" fontSize={10} /><YAxis fontSize={10} /><Tooltip /><Legend /><Line type="monotone" dataKey="entradas" name="Entradas" stroke="#059669" strokeWidth={3} /><Line type="monotone" dataKey="saidas" name="Saídas" stroke="#e11d48" strokeWidth={3} /><Line type="monotone" dataKey="receber" name="A receber" stroke="#0284c7" strokeDasharray="5 5" /><Line type="monotone" dataKey="pagar" name="A pagar" stroke="#f59e0b" strokeDasharray="5 5" /></LineChart></ResponsiveContainer></div><div className="overflow-x-auto mt-5"><table className="w-full text-xs"><thead><tr className="border-b text-left"><th className="p-3">Mês</th><th className="p-3 text-right">Entradas</th><th className="p-3 text-right">Saídas</th><th className="p-3 text-right">A receber</th><th className="p-3 text-right">A pagar</th><th className="p-3 text-right">Saldo do mês</th></tr></thead><tbody className="divide-y">{((fluxoAnoCompleto || filtroMes === 'TODOS') ? fluxoAnual : fluxoAnual.filter(m => m.mes.startsWith(filtroMes))).map(m => <tr key={m.mes}><td className="p-3 font-bold">{m.mes}</td><td className="p-3 text-right text-emerald-700">R$ {m.entradas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td><td className="p-3 text-right text-rose-700">R$ {m.saidas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td><td className="p-3 text-right">R$ {m.receber.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td><td className="p-3 text-right">R$ {m.pagar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td><td className="p-3 text-right font-black">R$ {(m.entradas - m.saidas).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td></tr>)}</tbody></table></div></div><div className="bg-white rounded-2xl border border-slate-200 p-6"><h2 className="text-lg font-black text-slate-900">Contas do fluxo de caixa</h2><p className="text-xs text-slate-500 mt-1">Contas padrão para cooperativas, conforme o plano contábil e o balancete.</p><div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 mt-5">{contasFluxo.map(conta => <div key={conta} className="p-3 rounded-xl border border-slate-100 bg-slate-50 text-xs font-semibold text-slate-700">{conta}</div>)}</div></div></div>}
+          {activeTab === 'fluxo' && fluxo && (
+            <section className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Fluxo de Caixa Realizado</h2>
+                  <p className="text-sm text-slate-500">Movimentações do extrato por mês, categoria e conta bancária.</p>
+                </div>
+                <button type="button" onClick={() => gerarRelatorioGerencialPdf('FLUXO')} className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white">Exportar PDF</button>
+              </div>
+              <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
+                {([
+                  ['Entradas', fluxo.total.entradas, 'border-l-teal-500'],
+                  ['Saídas', -fluxo.total.saidas, 'border-l-rose-500'],
+                  ['Saldo final', fluxo.total.final, 'border-l-sky-700'],
+                  ['Geração de caixa operacional', fluxo.total.operacional, 'border-l-cyan-600'],
+                  ['Geração de caixa total', fluxo.total.entradas - fluxo.total.saidas, 'border-l-cyan-600'],
+                ] as const).map(([titulo, valor, cor]) => (
+                  <div key={titulo} className={`min-w-0 rounded-xl border border-slate-200 border-l-4 bg-white px-3 py-3 shadow-sm ${cor}`}>
+                    <p className="text-xs font-medium text-slate-600">{titulo}</p>
+                    <div className="mt-1 text-base font-bold tabular-nums sm:text-xl">{valorFluxo(valor)}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white" tabIndex={0} aria-label="Demonstrativo mensal do fluxo de caixa">
+                <table className="w-full text-xs [&_thead_th]:!bg-cyan-800 [&_thead_th]:!text-white">
+                  <thead>
+                    <tr>
+                      <th scope="col" className="sticky left-0 z-10 min-w-40 text-left">Fluxo de Caixa</th>
+                      {fluxo.meses.map(m => <th key={m.periodo} scope="col" className="text-right">{rotuloMesFluxo(m.periodo)}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {([
+                      ['Saldo inicial', fluxo.meses.map(m => m.inicial)],
+                      ['Entradas', fluxo.meses.map(m => m.entradas)],
+                    ] as const).map(([nome, valores]) => linhaFluxo(nome, valores))}
+                    {fluxo.categorias.entradas.map(nome => linhaFluxo(nome, fluxo.meses.map(m => m.categoriasEntrada.get(nome) ?? 0), true, `entrada-${nome}`))}
+                    {linhaFluxo('Saídas', fluxo.meses.map(m => -m.saidas))}
+                    {fluxo.categorias.saidas.map(nome => linhaFluxo(nome, fluxo.meses.map(m => -(m.categoriasSaida.get(nome) ?? 0)), true, `saida-${nome}`))}
+                    {fluxo.meses.some(m => m.saldosCadastrados !== 0) && linhaFluxo('Saldos cadastrados no período', fluxo.meses.map(m => m.saldosCadastrados))}
+                    {linhaFluxo('Geração de caixa operacional', fluxo.meses.map(m => m.operacional))}
+                    {linhaFluxo('Geração de caixa total', fluxo.meses.map(m => m.entradas - m.saidas))}
+                    {linhaFluxo('Saldo final', fluxo.meses.map(m => m.final))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white" tabIndex={0} aria-label="Fluxo por conta bancária">
+                <table className="w-full text-xs [&_thead_th]:!bg-cyan-800 [&_thead_th]:!text-white">
+                  <thead><tr>
+                    <th scope="col" className="sticky left-0 z-10 min-w-40 text-left">Conta bancária</th>
+                    {['Saldo inicial', 'Entradas', 'Saídas', 'Saldo do período', 'Saldo final'].map(nome => <th key={nome} scope="col" className="text-right">{nome}</th>)}
+                  </tr></thead>
+                  <tbody>
+                    {fluxo.contas.map(conta => linhaFluxo(conta.nome, [conta.inicial, conta.entradas, -conta.saidas, conta.entradas - conta.saidas, conta.final], false, conta.id))}
+                    {fluxo.contas.length === 0 && <tr><td colSpan={6} className="text-center text-slate-500">Nenhuma conta ou movimentação no período.</td></tr>}
+                    {linhaFluxo('Total', [fluxo.total.inicial, fluxo.total.entradas, -fluxo.total.saidas, fluxo.total.entradas - fluxo.total.saidas, fluxo.total.final])}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-xs text-slate-500">Os saldos usam a data de abertura cadastrada de cada conta. A geração operacional considera os lançamentos identificados em categorias da operação.</p>
+            </section>
+          )}
 
           {activeTab === 'estoque' && <div className="bg-white rounded-2xl border border-slate-200 p-6"><div className="flex justify-between"><div><h2 className="text-lg font-black text-slate-900">Estoque — visão financeira</h2><p className="text-xs text-slate-500 mt-1">Valor do inventário e itens abaixo do estoque mínimo.</p></div><button onClick={() => gerarRelatorioGerencialPdf('ESTOQUE')} className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold">Exportar PDF</button></div><div className="mt-5 overflow-x-auto"><table className="w-full text-xs"><thead><tr className="text-left border-b"><th className="p-3">Produto</th><th className="p-3">Quantidade</th><th className="p-3">Valor unitário</th><th className="p-3 text-right">Valor total</th></tr></thead><tbody className="divide-y">{estoque.map(item => <tr key={item.id}><td className="p-3 font-bold">{item.nomeItem}</td><td className="p-3">{item.quantidadeAtual} {item.unidadeMedida}</td><td className="p-3">R$ {(item.valorUnitarioMedio || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td><td className="p-3 text-right font-bold">R$ {((item.quantidadeAtual || 0) * (item.valorUnitarioMedio || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td></tr>)}</tbody></table></div></div>}
 
