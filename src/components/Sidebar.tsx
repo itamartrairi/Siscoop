@@ -126,7 +126,7 @@ export const Sidebar: React.FC<Props> = ({
     {
       key: 'dados-cooperativa',
       title: 'Editar Dados da Cooperativa',
-      shortLabel: 'Editar Dados',
+      shortLabel: 'CadCoop',
       icon: Building2,
       subtitle: 'Edite os dados institucionais da cooperativa.',
       tip: 'Os dados da cooperativa aparecem em notas, atas e relatórios.',
