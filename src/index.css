@@ -139,7 +139,7 @@ main .sticky.top-0.z-20:has(h1, h2, h3) {
 }
 
 /* Cabeçalhos das abas do grupo Social. */
-main:is(
+main[data-module]:is(
   [data-module="cadastro-cooperativa"],
   [data-module="cadastros"],
   [data-module="cooperados"],
@@ -159,7 +159,7 @@ main:is(
   }
 }
 
-main[data-module="cadastros"] > div > .sticky.top-0 > div:first-child {
+main[data-module="cadastros"] > div > .sticky.top-0.z-20 > div:first-child {
   & > .mb-2 { display: inline-flex; margin-bottom: 0; }
   & > button { margin-inline-start: 0.375rem; }
 }
