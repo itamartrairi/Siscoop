@@ -124,6 +124,17 @@ export const Sidebar: React.FC<Props> = ({
       ]
     },
     {
+      key: 'dados-cooperativa',
+      title: 'Editar Dados da Cooperativa',
+      shortLabel: 'Editar Dados',
+      icon: Building2,
+      subtitle: 'Edite os dados institucionais da cooperativa.',
+      tip: 'Os dados da cooperativa aparecem em notas, atas e relatórios.',
+      items: [
+        { id: 'cadastro-cooperativa', label: 'Dados da Cooperativa', description: 'Informe CNPJ, endereço, estatuto e dados institucionais.', action: 'Editar Dados', icon: Building2 }
+      ]
+    },
+    {
       key: 'agenda',
       title: 'Agenda & Atividades',
       shortLabel: 'Agenda',
@@ -140,9 +151,8 @@ export const Sidebar: React.FC<Props> = ({
       shortLabel: 'Social',
       icon: Users,
       subtitle: 'Siga os passos ao lado para organizar a base da sua cooperativa.',
-      tip: 'Comece pelos dados da cooperativa: eles aparecem em notas, atas e relatórios.',
+      tip: 'Mantenha o quadro social e os mandatos atualizados para facilitar assembleias e relatórios.',
       items: [
-        { id: 'cadastro-cooperativa', label: 'Dados da Cooperativa', description: 'Informe CNPJ, endereço, estatuto e dados institucionais.', action: 'Editar Dados', icon: Building2 },
         { id: 'cadastros', label: 'Cadastros Agropecuários', description: 'Cadastre produtos, culturas, unidades e demais tabelas de apoio.', action: 'Abrir Cadastros', icon: FolderTree },
         { id: 'cooperados', label: 'Cooperados & Produtores', description: 'Mantenha o quadro de cooperados e produtores sempre atualizado.', action: 'Gerenciar Cooperados', icon: Users },
         { id: 'capital', label: 'Capital Social & Cotas', description: 'Controle integralizações, cotas-partes e movimentações de capital.', action: 'Abrir Capital Social', icon: Wallet },
