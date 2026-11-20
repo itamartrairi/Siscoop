@@ -223,7 +223,7 @@ const MainAppContent: React.FC = () => {
         <main
           className="flex-1 overflow-y-auto bg-slate-50/60 p-6 pt-1.5 lg:p-8 lg:pt-2
             [&>.p-4]:pt-1 [&>.p-6]:pt-1.5 sm:[&>.sm\:p-6]:pt-1.5 lg:[&>.p-4.lg\:p-8]:pt-2
-            [--dashboard-panel-top:calc(var(--spacing)*2.5)] sm:[--dashboard-panel-top:calc(var(--spacing)*3)] lg:[--dashboard-panel-top:calc(var(--spacing)*4)]
+            [--dashboard-panel-top:var(--spacing)] sm:[--dashboard-panel-top:calc(var(--spacing)*1.5)] lg:[--dashboard-panel-top:calc(var(--spacing)*2)]
             [&>.p-4.lg\:p-8>.sticky]:top-[var(--dashboard-panel-top)] [&>.p-4.lg\:p-8>.sticky]:transition-none"
         >
           <Suspense fallback={<CarregandoModulo />}>
