@@ -122,6 +122,15 @@ main .sticky.top-0.z-20:has(h1, h2, h3) {
   box-shadow: 0 -3rem 0 3rem var(--ui-bg) !important;
 }
 
+/* Cabeçalhos das abas em telas amplas. */
+@media (min-width: 1280px) {
+  main .sticky.top-0.z-20:not(.overflow-y-auto):has(h1, h2, h3),
+  main .sticky.top-0.z-20.overflow-y-auto > div:has(> div > h1),
+  main > div > div:first-child:not(.sticky):has(> div > :is(h1, h2), > div > div > h1, > div > div > div > h1) {
+    max-width: 70%;
+  }
+}
+
 /* Pesos de fonte mais leves: menos "gritado", mais profissional */
 main .font-black,
 main .font-extrabold { font-weight: 600 !important; }
