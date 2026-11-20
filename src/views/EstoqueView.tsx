@@ -1,3 +1,4 @@
+import { listarCategoriasEstoque } from '../components/ProdutosTab';
 import { VoltarSecoes } from '../components/ui/NavegacaoSecoes';
 import React, { useState, useMemo } from 'react';
 import { useCoop } from '../context/CoopContext';
@@ -105,9 +106,7 @@ export const EstoqueView: React.FC = () => {
 
   // Filtro de categoria do saldo de estoque
   const [filtroCategoria, setFiltroCategoria] = useState('TODAS');
-  const categoriasDisponiveis = useMemo(() => {
-    return Array.from(new Set(estoque.map(i => i.categoria))).sort();
-  }, [estoque]);
+  const categoriasDisponiveis = useMemo(() => listarCategoriasEstoque(estoque), [estoque]);
   // Top 10 Produtos mais comprados (agregado de Ordens de Compra e Movimentações de Entrada)
   const top10Comprados = useMemo(() => {
     const mapaProdutos: Record<string, { nome: string; quantidade: number; valorTotal: number; unidade: string }> = {};
