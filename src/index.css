@@ -384,7 +384,7 @@ html.dark, html.dark body { background-color: var(--ui-bg); color: var(--ui-text
   ol[aria-label="Seções de Estoque"],
   ol[aria-label="Cadastros disponíveis"],
   aside > [role="dialog"] > .grid > ol
-):has(> li:nth-child(3)) {
+):has(> li:nth-child(4)) {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, max(14rem, calc((100% - 1rem) / 2))), 1fr));
   gap: 1rem;
@@ -407,7 +407,7 @@ html.dark, html.dark body { background-color: var(--ui-bg); color: var(--ui-text
 
 /* Libera largura para os atalhos nos submenus do trilho lateral. */
 @media (min-width: 64rem) {
-  aside > [role="dialog"] > .grid:has(> ol > li:nth-child(3)) {
+  aside > [role="dialog"] > .grid:has(> ol > li:nth-child(4)) {
     grid-template-columns: 13rem minmax(0, 1fr);
 
     & > ol { grid-row: span 2; }
