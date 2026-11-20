@@ -54,14 +54,55 @@ const AppProdutorView = carregar(() => import('./views/AppProdutorView'), 'AppPr
 const AppMotoristaView = carregar(() => import('./views/AppMotoristaView'), 'AppMotoristaView');
 const FiscalView = carregar(() => import('./views/FiscalView'), 'FiscalView');
 
-const CarregandoModulo: React.FC = () => (
-  <div className="flex items-center justify-center py-24 text-slate-500" role="status" aria-live="polite">
-    <div className="flex flex-col items-center gap-3">
-      <div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
-      <span className="text-sm font-medium">Carregando módulo…</span>
+const CarregandoModulo = ({ mensagem = 'Carregando módulo…' }: { mensagem?: string }) => {
+  const [demorado, setDemorado] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDemorado(true), 12_000);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 px-4 py-24 text-center text-slate-600" role="status">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" aria-hidden="true" />
+      <p>{mensagem}</p>
+      {demorado && <p>A conexão está demorando. Você pode aguardar ou recarregar a página.</p>}
+      {demorado && <RecarregarPagina />}
     </div>
-  </div>
-);
+  );
+};
+
+function RecarregarPagina() {
+  return (
+    <button type="button" onClick={() => window.location.reload()} className="rounded-lg bg-emerald-700 px-4 py-2 text-white">
+      Recarregar página
+    </button>
+  );
+}
+
+class LimiteDeErro extends React.Component<React.PropsWithChildren, { falhou: boolean }> {
+  state = { falhou: false };
+
+  static getDerivedStateFromError() {
+    return { falhou: true };
+  }
+
+  componentDidCatch(erro: Error, info: React.ErrorInfo) {
+    console.error('Falha ao abrir uma tela do SISCOOP:', erro, info.componentStack);
+  }
+
+  render() {
+    if (this.state.falhou) {
+      return (
+        <section className="flex flex-col items-center gap-3 px-4 py-16 text-center text-slate-700">
+          <p role="alert">Não foi possível abrir esta tela. Verifique a conexão e recarregue a página.</p>
+          <RecarregarPagina />
+        </section>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 import {
   Building,
@@ -156,12 +197,14 @@ const MainAppContent: React.FC = () => {
 
         {/* Standalone Body */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+          <LimiteDeErro key={activeModule}>
           <Suspense fallback={<CarregandoModulo />}>
             {standalonePortal === 'portal-cooperado' && <PortalCooperadoView />}
             {standalonePortal === 'portal-escola' && <PortalEscolaView />}
             {standalonePortal === 'app-produtor' && <AppProdutorView />}
             {standalonePortal === 'app-motorista' && <AppMotoristaView />}
           </Suspense>
+          </LimiteDeErro>
         </main>
       </div>
     );
@@ -171,7 +214,7 @@ const MainAppContent: React.FC = () => {
   if (!isAuthenticated && !authReady) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <CarregandoModulo />
+        <CarregandoModulo mensagem="Verificando sua sessão…" />
       </div>
     );
   }
@@ -227,6 +270,7 @@ const MainAppContent: React.FC = () => {
             [--dashboard-panel-top:var(--spacing)] sm:[--dashboard-panel-top:calc(var(--spacing)*1.5)] lg:[--dashboard-panel-top:calc(var(--spacing)*2)]
             [&>.p-4.lg\:p-8>.sticky]:top-[var(--dashboard-panel-top)] [&>.p-4.lg\:p-8>.sticky]:transition-none"
         >
+          <LimiteDeErro key={activeModule}>
           <Suspense fallback={<CarregandoModulo />}>
           {activeModule === 'login' && (
             <LoginView
@@ -299,6 +343,7 @@ const MainAppContent: React.FC = () => {
             </>
           )}
           </Suspense>
+          </LimiteDeErro>
         </main>
       </div>
 
@@ -310,9 +355,11 @@ const MainAppContent: React.FC = () => {
 
 export function App() {
   return (
-    <CoopProvider>
-      <MainAppContent />
-    </CoopProvider>
+    <LimiteDeErro>
+      <CoopProvider>
+        <MainAppContent />
+      </CoopProvider>
+    </LimiteDeErro>
   );
 }
 
