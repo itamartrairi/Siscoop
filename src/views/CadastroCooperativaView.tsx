@@ -245,9 +245,9 @@ export const CadastroCooperativaView: React.FC<Props> = ({ onComplete }) => {
   ];
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-12">
+    <div className="max-w-[70rem] mx-auto space-y-6 pb-12">
       {/* Onboarding / Management Header */}
-      <div className="bg-slate-900 rounded-3xl p-6 lg:p-8 border border-slate-800 shadow-xl relative overflow-hidden">
+      <div className="sticky top-0 z-20 bg-slate-900 rounded-3xl p-6 lg:p-8 border border-slate-800 shadow-xl overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-600/10 rounded-full blur-3xl pointer-events-none"></div>
 
         <div className="flex items-center justify-between flex-wrap gap-4 relative z-10">
