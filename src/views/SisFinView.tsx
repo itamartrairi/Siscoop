@@ -1150,7 +1150,7 @@ if (c) {
                   key: 'classificacaoDespesa',
                   header: 'Classificação',
                   width: 110,
-                  value: c => (c.classificacaoDespesa ? (c.classificacaoDespesa === 'FIXA' ? 'Fixa' : 'Variável') : null),
+                  value: c => (c.tipo === 'PAGAR' && c.classificacaoDespesa ? (c.classificacaoDespesa === 'FIXA' ? 'Fixa' : 'Variável') : null),
                 },
                 { key: 'pessoaNome', header: 'Pessoa / Favorecido', width: 200 },
                 { key: 'dataVencimento', header: 'Vencimento', width: 110, value: c => c.dataVencimento, render: c => formatarData(c.dataVencimento) },
@@ -1348,34 +1348,36 @@ if (c) {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-slate-700 font-bold mb-1">Classificação</label>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setContaForm({ ...contaForm, classificacaoDespesa: 'FIXA' })}
-                    className={`flex-1 py-2 rounded-xl text-xs font-bold border-2 transition-all ${
-                      contaForm.classificacaoDespesa === 'FIXA'
-                        ? 'bg-indigo-600 border-indigo-600 text-white'
-                        : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300'
-                    }`}
-                  >
-                    Fixa
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setContaForm({ ...contaForm, classificacaoDespesa: 'VARIAVEL' })}
-                    className={`flex-1 py-2 rounded-xl text-xs font-bold border-2 transition-all ${
-                      contaForm.classificacaoDespesa === 'VARIAVEL'
-                        ? 'bg-amber-600 border-amber-600 text-white'
-                        : 'bg-white border-slate-200 text-slate-600 hover:border-amber-300'
-                    }`}
-                  >
-                    Variável
-                  </button>
+              {contaForm.tipo === 'PAGAR' && (
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">Classificação</label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setContaForm({ ...contaForm, classificacaoDespesa: 'FIXA' })}
+                      className={`flex-1 py-2 rounded-xl text-xs font-bold border-2 transition-all ${
+                        contaForm.classificacaoDespesa === 'FIXA'
+                          ? 'bg-indigo-600 border-indigo-600 text-white'
+                          : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300'
+                      }`}
+                    >
+                      Fixa
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setContaForm({ ...contaForm, classificacaoDespesa: 'VARIAVEL' })}
+                      className={`flex-1 py-2 rounded-xl text-xs font-bold border-2 transition-all ${
+                        contaForm.classificacaoDespesa === 'VARIAVEL'
+                          ? 'bg-amber-600 border-amber-600 text-white'
+                          : 'bg-white border-slate-200 text-slate-600 hover:border-amber-300'
+                      }`}
+                    >
+                      Variável
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1">Fixa: valor estável, se repete todo mês (aluguel, salários). Variável: depende do volume do mês (insumos, combustível).</p>
                 </div>
-                <p className="text-[10px] text-slate-400 mt-1">Fixa: valor estável, se repete todo mês (aluguel, salários). Variável: depende do volume do mês (insumos, combustível).</p>
-              </div>
+              )}
 
               <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
                 <button
