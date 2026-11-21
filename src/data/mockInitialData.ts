@@ -87,23 +87,21 @@ export const INITIAL_TENANTS: CooperativeTenant[] = [
     estado: '',
     telefone: '',
     email: '',
-    cotaParteValor: 100.00,
-    cotaParteMinima: 1,
+    cotaParteValor: 0,
+    cotaParteMinima: 0,
   }
 ];
 
-export const INITIAL_USERS: User[] = [
-  {
-    id: 'usr-admin',
-    name: 'Administrador',
-    email: 'admin@sicoop.com.br',
-    role: 'ADMIN',
-    avatar: '',
-    tenantId: ID_COOPERATIVA_INICIAL,
-    active: true,
-    lastLogin: '',
-  }
-];
+export const USUARIO_SEM_SESSAO: User = {
+  id: '',
+  name: '',
+  email: '',
+  role: 'ADMIN',
+  avatar: '',
+  tenantId: '',
+  active: false,
+  lastLogin: '',
+};
 
 export const INITIAL_COOPERADOS: Cooperado[] = [];
 export const INITIAL_TRANSACAO_CAPITAL: TransacaoCapital[] = [];
@@ -127,8 +125,8 @@ export const INITIAL_CONFIG: SistemaConfig = {
     cidade: '',
     estado: ''
   },
-  cotaParteValor: 100.00,
-  cotaParteMinima: 1,
+  cotaParteValor: 0,
+  cotaParteMinima: 0,
   correcaoAnualPercent: 0,
   emailSmtpServer: '',
   emailSmtpPort: 587,
@@ -333,8 +331,8 @@ export const INITIAL_CONTAS_PAGAR_RECEBER: ContaPagarReceber[] = [];
 export const INITIAL_EXTRATO_BANCARIO: ExtratoBancario = {
   id: 'ext-principal',
   tenantId: ID_COOPERATIVA_INICIAL,
-  bancoNome: 'Banco Principal',
-  agenciaConta: '0001 / 00000-0',
+  bancoNome: '',
+  agenciaConta: '',
   saldoInicial: 0,
   saldoAtual: 0,
   entradasMes: 0,

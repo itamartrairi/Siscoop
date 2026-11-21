@@ -8,6 +8,7 @@
  * - Contas marcadas como "incluída pelo Siscoop" não estavam na planilha e
  *   foram criadas para manter os lançamentos automáticos do sistema.
  */
+import { contasRubricas } from './rubricasCooperativa';
 import { PlanoContaContabil } from '../types';
 
 type LinhaPlano = [codigo: string, nome: string];
@@ -19,24 +20,24 @@ const CONTAS_PLANILHA: LinhaPlano[] = [
   ['11101', "CAIXA"],
   ['11101.0001', "Caixa Matriz"],
   ['11102', "BANCOS CONTA MOVIMENTO"],
-  ['11102.0001', "Banco Bradesco – conta corrente"],
-  ['11102.0005', "Banco do Nordeste – conta corrente"],
-  ['11102.0006', "Caixa Econômica Federal – conta corrente"],
-  ['11102.0007', "Banco do Nordeste – conta corrente"],
-  ['11102.0009', "Banco Cresol – conta corrente"],
+  ['11102.0001', "Bancos – conta corrente"],
+  ['11102.0005', "Bancos – conta corrente"],
+  ['11102.0006', "Bancos – conta corrente"],
+  ['11102.0007', "Bancos – conta corrente"],
+  ['11102.0009', "Bancos – conta corrente"],
   ['11103', "BANCOS C/ APLICAÇÃO FINANCEIRA"],
-  ['11103.0001', "Aplicação financeira – Bradesco"],
-  ['11103.0004', "Aplicação financeira – Banco do Brasil"],
-  ['11103.0006', "Aplicação financeira – Caixa Econômica Federal"],
-  ['11103.0007', "Aplicação financeira – Banco do Nordeste"],
+  ['11103.0001', "Aplicações financeiras"],
+  ['11103.0004', "Aplicações financeiras"],
+  ['11103.0006', "Aplicações financeiras"],
+  ['11103.0007', "Aplicações financeiras"],
   ['112', "CLIENTES"],
   ['11201', "DUPLICATAS A RECEBER"],
-  ['11201.0002', "Prefeitura Municipal de Trairi"],
-  ['11201.0005', "CONAB"],
+  ['11201.0002', "Clientes – Municípios"],
+  ['11201.0005', "Clientes – Órgãos Federais"],
   ['11201.9999', "Duplicatas a Receber Diversas"],
   ['113', "OUTROS CRÉDITOS"],
   ['11301', "OUTROS CRÉDITOS"],
-  ['11301.0001', "Devedores Diversos – Cooperai"],
+  ['11301.0001', "Devedores Diversos"],
   ['11306', "ADIANTAMENTOS"],
   ['11306.0332', "Adiantamento de 13º Salário"],
   ['11306.0900', "Adiantamentos Diversos a Fornecedores"],
@@ -117,7 +118,7 @@ const CONTAS_PLANILHA: LinhaPlano[] = [
   ['22', "PASSIVO NÃO CIRCULANTE"],
   ['221', "EMPRÉSTIMOS E FINANCIAMENTOS"],
   ['22101', "EMPRÉSTIMOS E FINANCIAMENTOS"],
-  ['22101.0101', "Operação Capital de Giro – Bradesco"],
+  ['22101.0101', "Operações de Capital de Giro"],
   ['24', "PATRIMÔNIO LÍQUIDO"],
   ['241', "CAPITAL SOCIAL"],
   ['24101', "CAPITAL SUBSCRITO"],
@@ -217,6 +218,16 @@ const CONTAS_PLANILHA: LinhaPlano[] = [
 
 /** Contas incluídas pelo Siscoop (não constavam na planilha). */
 const CONTAS_INCLUIDAS: LinhaPlano[] = [
+  ['313', 'RECEITAS FINANCEIRAS – ATO COOPERATIVO'],
+  ['31301', 'RECEITAS FINANCEIRAS – ATO COOPERATIVO'],
+  ['31904', 'DESPESAS FINANCEIRAS – ATO COOPERATIVO'],
+  ['11501.0010', 'Estoque de Insumos e Embalagens'],
+  ['11306.0901', 'Adiantamentos de Safra a Cooperados'],
+  ['21901.0010', 'Sobras Aprovadas em Assembleia a Pagar'],
+  ['21901.0011', 'Devolução de Quotas-Partes a Pagar'],
+  ['22101.0102', 'Financiamentos Rurais e Pronaf'],
+  ['24201.1001', 'Outros Fundos Estatutários'],
+  ...contasRubricas.map<LinhaPlano>(([codigo, nome]) => [codigo, nome]),
   ['11301.0099', 'Despesas do Exercício Seguinte'],
   ['11309.9999', 'Outros Tributos a Recuperar'],
   ['21401.9999', 'Outros Impostos a Recolher'],

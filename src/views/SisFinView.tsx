@@ -1,3 +1,6 @@
+import { linhasDoFluxo, montarFluxoCaixa, tipoAtividadeCaixa, TIPOS_ENTRADA_CAIXA, TIPOS_SAIDA_CAIXA, type LinhaDemonstrativo } from '../data/fluxoCaixaCooperativa';
+import { montarResultadoCooperativa } from '../data/rubricasCooperativa';
+import { DemonstracoesContabeis, exportarPdf } from '../components/DemonstracoesContabeis';
 import { listarCategoriasEstoque } from '../components/ProdutosTab';
 import { NavegacaoSecoes } from '../components/ui/NavegacaoSecoes';
 import { formatarData } from '../utils/dateHelpers';
@@ -21,7 +24,7 @@ import {
   PieChart as PieChartIcon,
   Printer
 } from 'lucide-react';
-import type { ContaBancaria, ContaPagarReceber, ExtratoBancario } from '../types';
+import type { ContaPagarReceber } from '../types';
 import { DataGrid, GridStatus } from '../components/ui/DataGrid';
 import { CheckCircle2 } from 'lucide-react';
 import { playActionCompleteSound } from '../utils/actionSound';
@@ -63,18 +66,25 @@ const CATEGORIAS_FINANCEIRAS: { categoria: string; subcategoria: string; classif
   { categoria: 'Logística', subcategoria: 'Manutenção de Veículos', classificacao: 'VARIAVEL' },
   { categoria: 'Logística', subcategoria: 'Frete e Transporte', classificacao: 'VARIAVEL' },
   { categoria: 'Receitas', subcategoria: 'Venda PNAE/PAA', classificacao: 'VARIAVEL' },
+  { categoria: 'Receitas', subcategoria: 'Venda comercial', classificacao: 'VARIAVEL' },
+  { categoria: 'Receitas', subcategoria: 'Insumos e embalagens vendidos aos cooperados', classificacao: 'VARIAVEL' },
+  { categoria: 'Receitas', subcategoria: 'Serviços técnicos e beneficiamento', classificacao: 'VARIAVEL' },
+  { categoria: 'Receitas', subcategoria: 'Serviços a não cooperados', classificacao: 'VARIAVEL' },
+  { categoria: 'Beneficiamento', subcategoria: 'Custos diretos de beneficiamento', classificacao: 'VARIAVEL' },
+  { categoria: 'Administrativo', subcategoria: 'Assistência técnica (ATER)', classificacao: 'VARIAVEL' },
+  { categoria: 'Pessoal', subcategoria: 'Pró-labore e gestão', classificacao: 'FIXA' },
   { categoria: 'Receitas', subcategoria: 'Taxa Administrativa', classificacao: 'VARIAVEL' },
   { categoria: 'Receitas', subcategoria: 'Capital Social', classificacao: 'FIXA' },
   { categoria: 'Outros', subcategoria: 'Diversos', classificacao: 'VARIAVEL' }
 ];
 
-type MovimentoFluxo = NonNullable<ExtratoBancario['lancamentos']>[number] & { categoria?: string };
-
 const MOEDA_FLUXO = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const MES_FLUXO = new Intl.DateTimeFormat('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' });
 const rotuloMesFluxo = (periodo: string) => MES_FLUXO.format(new Date(`${periodo}-01T00:00:00Z`));
+const formatarValor = (valor: number) => valor < 0
+  ? `(${MOEDA_FLUXO.format(-valor)})` : MOEDA_FLUXO.format(valor);
 const valorFluxo = (valor: number) => (
-  <span className={valor < 0 ? 'text-rose-700' : 'text-slate-900'}>{MOEDA_FLUXO.format(valor)}</span>
+  <span className={valor < 0 ? 'text-rose-700' : 'text-slate-900'}>{formatarValor(valor)}</span>
 );
 
 function linhaFluxo(nome: string, valores: number[], detalhe = false, chave = nome) {
@@ -86,19 +96,11 @@ function linhaFluxo(nome: string, valores: number[], detalhe = false, chave = no
   );
 }
 
-type LinhaDemonstrativo = {
-  id?: string;
-  nome: string;
-  valores: number[];
-  filhos?: LinhaDemonstrativo[];
-};
-
-function LinhaExpansivel({ linha, nivel = 0, basePercentual }: {
+function LinhaExpansivel({ linha, nivel = 0 }: {
   linha: LinhaDemonstrativo;
   nivel?: number;
-  basePercentual?: number;
 }) {
-  const [aberta, setAberta] = useState(false);
+  const [aberta, setAberta] = useState(nivel === 0 && /^1\.[12]/.test(linha.nome));
   const filhos = linha.filhos ?? [];
 
   return (
@@ -115,191 +117,13 @@ function LinhaExpansivel({ linha, nivel = 0, basePercentual }: {
             ) : <span className="inline-block py-1 pl-6">{linha.nome}</span>}
           </div>
         </th>
-        {basePercentual !== undefined && (
-          <td className="text-right tabular-nums">{(basePercentual > 0 ? Math.abs(linha.valores[0]) / basePercentual * 100 : 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%</td>
-        )}
         {linha.valores.map((valor, indice) => <td key={indice} className="whitespace-nowrap text-right tabular-nums">{valorFluxo(valor || 0)}</td>)}
       </tr>
       {aberta && filhos.map(filho => (
-        <LinhaExpansivel key={filho.id ?? filho.nome} linha={filho} nivel={nivel + 1} basePercentual={basePercentual} />
+        <LinhaExpansivel key={filho.id ?? filho.nome} linha={filho} nivel={nivel + 1} />
       ))}
     </>
   );
-}
-
-function montarFluxoCaixa(
-  extrato: ExtratoBancario | undefined,
-  bancos: ContaBancaria[],
-  ano: string,
-  mes: string,
-  bancoId: string
-) {
-  const periodos = mes === 'TODOS'
-    ? Array.from({ length: 12 }, (_, indice) => `${ano}-${String(indice + 1).padStart(2, '0')}`)
-    : [`${ano}-${mes}`];
-  const meses = periodos.map(periodo => ({
-    periodo, inicial: 0, saldosCadastrados: 0, entradas: 0, saidas: 0, final: 0, operacional: 0,
-    categoriasEntrada: new Map<string, number>(), categoriasSaida: new Map<string, number>()
-  }));
-  const categoriasEntrada = new Set<string>();
-  const categoriasSaida = new Set<string>();
-  const porBanco = new Map<string, MovimentoFluxo[]>();
-  for (const lancamento of extrato?.lancamentos ?? []) {
-    if (typeof lancamento.data !== 'string' || !/^\d{4}-(0[1-9]|1[0-2])-\d{2}/.test(lancamento.data)) continue;
-    const id = lancamento.contaBancariaId ?? '';
-    if (bancoId !== 'TODAS' && id !== bancoId) continue;
-    const registros = porBanco.get(id) ?? [];
-    registros.push(lancamento);
-    porBanco.set(id, registros);
-  }
-
-  const ids = new Set([...bancos.filter(banco => bancoId === 'TODAS' || banco.id === bancoId).map(banco => banco.id), ...porBanco.keys()]);
-  const saldoLegado = bancos.length === 0 && bancoId === 'TODAS' ? Number(extrato?.saldoInicial) || 0 : 0;
-  if (saldoLegado) ids.add('');
-  const contas = [...ids].map(id => {
-    const banco = bancos.find(item => item.id === id);
-    const dataBase = banco?.dataSaldoInicial?.slice(0, 10) || '';
-    const saldoBase = Number(banco?.saldoInicial ?? (id === '' ? saldoLegado : 0)) || 0;
-    const registros = porBanco.get(id) ?? [];
-    const movimentos = registros.filter(lancamento => !dataBase || lancamento.data.slice(0, 10) >= dataBase).sort((a, b) => a.data.localeCompare(b.data));
-    const conta = {
-      id, nome: id ? nomeContaBancaria(bancos, id) : 'Sem conta vinculada',
-      mensal: meses.map(() => ({
-        inicial: 0, entradas: 0, saidas: 0, final: 0, operacional: 0,
-        categoriasEntrada: new Map<string, number>(), categoriasSaida: new Map<string, number>(),
-      })),
-      inicial: 0, saldosCadastrados: 0, entradas: 0, saidas: 0, operacional: 0, final: 0,
-    };
-    let saldo = 0;
-    let cursor = 0;
-    for (const [indice, coluna] of meses.entries()) {
-      const detalhe = conta.mensal[indice];
-      const mesBase = dataBase.slice(0, 7);
-      if (indice === 0 && (!mesBase || mesBase <= coluna.periodo)) saldo += saldoBase;
-      while (cursor < movimentos.length && movimentos[cursor].data.slice(0, 7) < coluna.periodo) {
-        const lancamento = movimentos[cursor++];
-        saldo += (lancamento.tipo === 'CREDITO' ? 1 : -1) * Math.abs(Number(lancamento.valor) || 0);
-      }
-      coluna.inicial += saldo;
-      detalhe.inicial = saldo;
-      if (indice === 0) conta.inicial = saldo;
-      if (indice > 0 && mesBase === coluna.periodo) {
-        coluna.saldosCadastrados += saldoBase;
-        conta.saldosCadastrados += saldoBase;
-        saldo += saldoBase;
-      }
-      while (cursor < movimentos.length && movimentos[cursor].data.slice(0, 7) === coluna.periodo) {
-        const lancamento = movimentos[cursor++];
-        const entrada = lancamento.tipo === 'CREDITO';
-        const valor = Math.abs(Number(lancamento.valor) || 0);
-        const categoria = lancamento.categoria?.trim();
-        const nome = categoria ? categoria.replaceAll('_', ' ') : 'Sem categoria';
-        const chave = (categoria || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
-        const operacional = /^(RECEITA_VENDA|VENDAS?|COMPRA[S]?|SERVICO[S]?|FORNECEDORES|PESSOAL|FOLHA_PAGAMENTO|IMPOSTO|ADMINISTRATIVO|LOGISTICA|TAXA ADMINISTRATIVA)/.test(chave);
-        const grupo = entrada ? coluna.categoriasEntrada : coluna.categoriasSaida;
-        grupo.set(nome, (grupo.get(nome) ?? 0) + valor);
-        const grupoConta = entrada ? detalhe.categoriasEntrada : detalhe.categoriasSaida;
-        grupoConta.set(nome, (grupoConta.get(nome) ?? 0) + valor);
-        if (entrada) {
-          categoriasEntrada.add(nome);
-          coluna.entradas += valor;
-          conta.entradas += valor;
-          detalhe.entradas += valor;
-        } else {
-          categoriasSaida.add(nome);
-          coluna.saidas += valor;
-          conta.saidas += valor;
-          detalhe.saidas += valor;
-        }
-        const variacao = entrada ? valor : -valor;
-        saldo += variacao;
-        if (operacional) {
-          coluna.operacional += variacao;
-          conta.operacional += variacao;
-          detalhe.operacional += variacao;
-        }
-      }
-      coluna.final += saldo;
-      detalhe.final = saldo;
-      conta.final = saldo;
-    }
-    return conta;
-  });
-
-  const total = contas.reduce((soma, conta) => ({
-    inicial: soma.inicial + conta.inicial,
-    saldosCadastrados: soma.saldosCadastrados + conta.saldosCadastrados,
-    entradas: soma.entradas + conta.entradas,
-    saidas: soma.saidas + conta.saidas,
-    operacional: soma.operacional + conta.operacional,
-    final: soma.final + conta.final,
-  }), { inicial: 0, saldosCadastrados: 0, entradas: 0, saidas: 0, operacional: 0, final: 0 });
-
-  return { meses, contas, total, categorias: {
-    entradas: [...categoriasEntrada].sort((a, b) => a.localeCompare(b, 'pt-BR')),
-    saidas: [...categoriasSaida].sort((a, b) => a.localeCompare(b, 'pt-BR')),
-  } };
-}
-
-const TIPOS_ENTRADA_CAIXA = [
-  { nome: 'Receitas de vendas e serviços', padrao: /\b(vendas?|servicos?|revenda|locacao|pnae|paa)\b/ },
-  { nome: 'Receitas financeiras', padrao: /\b(financeir[ao]s?|rendimentos?|juros)\b/ },
-  { nome: 'Capital social e aportes', padrao: /\b(capital|aportes?|integralizacao)\b/ },
-  { nome: 'Transferências recebidas', padrao: /\btransferencias?\b/ },
-  { nome: 'Outras receitas e entradas' },
-];
-
-const TIPOS_SAIDA_CAIXA = [
-  { nome: 'Compras, fornecedores e insumos', padrao: /\b(compras?|fornecedores?|insumos?|aquisicao|custos?)\b/ },
-  { nome: 'Repasses aos cooperados', padrao: /\brepasses?\b/ },
-  { nome: 'Pessoal, salários e encargos', padrao: /\b(pessoal|folha|salarios?|colaboradores?)\b/ },
-  { nome: 'Impostos e contribuições', padrao: /\b(impostos?|tributos?|contribuicoes?|retencoes?|icms|pis|cofins|das|irpj|csll|funrural)\b/ },
-  { nome: 'Despesas administrativas', padrao: /\b(administrativ[ao]s?|aluguel|energia|assinaturas?)\b/ },
-  { nome: 'Logística e transporte', padrao: /\b(logistica|fretes?|transportes?|combustivel)\b/ },
-  { nome: 'Despesas financeiras', padrao: /\b(financeir[ao]s?|tarifas?|juros|iof)\b/ },
-  { nome: 'Transferências enviadas', padrao: /\btransferencias?\b/ },
-  { nome: 'Outras despesas e saídas' },
-];
-
-function linhasDoFluxo(fluxo: ReturnType<typeof montarFluxoCaixa>): LinhaDemonstrativo[] {
-  const porConta = (calcular: (mes: typeof fluxo.contas[number]['mensal'][number]) => number) =>
-    fluxo.contas.map(conta => ({ id: conta.id, nome: conta.nome, valores: conta.mensal.map(calcular) }))
-      .filter(conta => conta.valores.some(valor => valor !== 0));
-  const tiposDeMovimento = (entrada: boolean): LinhaDemonstrativo[] => {
-    const campo = entrada ? 'categoriasEntrada' : 'categoriasSaida';
-    const sinal = entrada ? 1 : -1;
-    const tipos = entrada ? TIPOS_ENTRADA_CAIXA : TIPOS_SAIDA_CAIXA;
-    const grupos = tipos.map(tipo => ({
-      nome: tipo.nome,
-      valores: fluxo.meses.map(() => 0),
-      filhos: [] as LinhaDemonstrativo[],
-    }));
-
-    for (const nome of fluxo.categorias[entrada ? 'entradas' : 'saidas']) {
-      const chave = nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-      const indice = tipos.findIndex(tipo => tipo.padrao?.test(chave));
-      const grupo = grupos[indice === -1 ? grupos.length - 1 : indice];
-      const valores = fluxo.meses.map(mes => sinal * (mes[campo].get(nome) ?? 0));
-      valores.forEach((valor, mes) => { grupo.valores[mes] += valor; });
-      grupo.filhos.push({
-        nome,
-        valores,
-        filhos: porConta(mes => sinal * (mes[campo].get(nome) ?? 0)),
-      });
-    }
-    return grupos;
-  };
-
-  return [
-    { nome: 'Saldo inicial', valores: fluxo.meses.map(m => m.inicial), filhos: porConta(m => m.inicial) },
-    { nome: 'Entradas', valores: fluxo.meses.map(m => m.entradas), filhos: tiposDeMovimento(true) },
-    { nome: 'Saídas', valores: fluxo.meses.map(m => -m.saidas), filhos: tiposDeMovimento(false) },
-    ...(fluxo.meses.some(m => m.saldosCadastrados !== 0)
-      ? [{ nome: 'Saldos cadastrados no período', valores: fluxo.meses.map(m => m.saldosCadastrados) }] : []),
-    { nome: 'Geração de caixa operacional', valores: fluxo.meses.map(m => m.operacional), filhos: porConta(m => m.operacional) },
-    { nome: 'Geração de caixa total', valores: fluxo.meses.map(m => m.entradas - m.saidas), filhos: porConta(m => m.entradas - m.saidas) },
-    { nome: 'Saldo final', valores: fluxo.meses.map(m => m.final), filhos: porConta(m => m.final) },
-  ];
 }
 
 export const SisFinView: React.FC = () => {
@@ -310,7 +134,7 @@ export const SisFinView: React.FC = () => {
     deleteContaPagarReceber,
     pagarReceberConta,
     extratoBancario,
-    addLancamentoExtrato,
+    registrarMovimentoManual,
     estoque,
     movimentacoesEstoque,
     lancamentosContabeis,
@@ -328,7 +152,7 @@ export const SisFinView: React.FC = () => {
     alert('Seu perfil de acesso tem permissão apenas de leitura neste módulo. Fale com um administrador para solicitar permissão de edição.');
   };
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'dre' | 'fluxo' | 'contas' | 'estoque' | 'custos' | 'extrato' | 'balanco' | 'bancos' | 'relatorios' | null>(null);
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'dre' | 'fluxo' | 'conciliacao' | 'contas' | 'estoque' | 'custos' | 'extrato' | 'balanco' | 'bancos' | 'relatorios' | null>(null);
   const [filtroMes, setFiltroMes] = useState(String(new Date().getMonth() + 1).padStart(2, '0'));
   const [filtroAno, setFiltroAno] = useState(String(new Date().getFullYear()));
   const [filtroCategoria, setFiltroCategoria] = useState('TODAS');
@@ -359,11 +183,16 @@ export const SisFinView: React.FC = () => {
   const somaContas = (tipo: 'PAGAR' | 'RECEBER', aberto: boolean) => contasListaFiltradas
     .filter(c => c.tipo === tipo && (aberto ? (c.status !== 'PAGO' && c.status !== 'CANCELADO') : c.status === 'PAGO'))
     .reduce((s, c) => s + (Number(c.valor) || 0), 0);
-  // Filtro de conta bancária: vale para Dashboard, DRE, Fluxo de Caixa, Contas e Extrato.
+  // O fluxo permite consultar uma conta bancária ou a tesouraria consolidada.
   const noBanco = (id?: string) => filtroBanco === 'TODAS' || (id || '') === filtroBanco;
-  const [mesFluxo, setMesFluxo] = useState('TODOS');
+  const [mesFluxo, setMesFluxo] = useState(() => new Date().getMonth() < 6 ? 'S1' : 'S2');
+  const [fluxoProjetado, setFluxoProjetado] = useState(false);
   const [anoFluxo, setAnoFluxo] = useState(String(new Date().getFullYear()));
-  const fluxo = activeTab === 'fluxo' ? montarFluxoCaixa(extratoBancario, contasBancarias, anoFluxo, mesFluxo, filtroBanco) : null;
+  const fluxo = activeTab === 'fluxo' || activeTab === 'conciliacao'
+    ? montarFluxoCaixa(extratoBancario, contasBancarias, anoFluxo, mesFluxo,
+      activeTab === 'conciliacao' ? 'TODAS' : filtroBanco, contasPagarReceber, fluxoProjetado)
+    : null;
+  const linhasFluxo = fluxo ? linhasDoFluxo(fluxo) : [];
 
   // Modals & Editing
   const [showModal, setShowModal] = useState(false);
@@ -376,7 +205,8 @@ export const SisFinView: React.FC = () => {
     documento: '',
     tipo: 'CREDITO' as 'CREDITO' | 'DEBITO',
     valor: 0,
-    categoria: 'RECEITA_VENDA',
+    categoria: '',
+    contrapartidaContabil: '',
     contaBancariaId: contaPadraoId as string
   });
 
@@ -387,6 +217,7 @@ export const SisFinView: React.FC = () => {
     descricao: '',
     pessoaNome: '',
     valor: 0,
+    dataEmissao: new Date().toISOString().split('T')[0],
     dataVencimento: new Date(Date.now() + 86400000 * 5).toISOString().split('T')[0],
     categoria: 'FORNECEDOR' as any,
     subcategoria: '',
@@ -401,6 +232,7 @@ if (c) {
       setEditingConta(c);
       setContaForm({
         tipo: c.tipo,
+        dataEmissao: c.dataEmissao || c.dataVencimento,
         descricao: c.descricao,
         pessoaNome: c.pessoaNome,
         valor: c.valor,
@@ -418,6 +250,7 @@ if (c) {
         descricao: '',
         pessoaNome: '',
         valor: 0,
+        dataEmissao: new Date().toISOString().split('T')[0],
         dataVencimento: new Date(Date.now() + 86400000 * 5).toISOString().split('T')[0],
         categoria: 'FORNECEDOR',
         subcategoria: '',
@@ -451,8 +284,9 @@ if (c) {
   const handleSaveExtrato = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canWrite) { blockWriteAction(); return; }
-    if (!extratoForm.historico || !extratoForm.valor) return;
-    addLancamentoExtrato(extratoForm);
+    if (!extratoForm.historico || !extratoForm.valor || !extratoForm.categoria) return;
+    const { contrapartidaContabil, ...movimento } = extratoForm;
+    if (registrarMovimentoManual(movimento, contrapartidaContabil) === false) return;
     setShowExtratoModal(false);
   };
 
@@ -479,54 +313,7 @@ if (c) {
     (filtroCategoria === 'TODAS' || c.categoria === filtroCategoria) &&
     (filtroConta === 'TODAS' || (c.centroCusto || c.categoria) === filtroConta)
   );
-  const totalContasReceber = contasFiltradas.filter(c => c.tipo === 'RECEBER' && c.status !== 'CANCELADO').reduce((sum, c) => sum + c.valor, 0);
-  const totalContasPagar = contasFiltradas.filter(c => c.tipo === 'PAGAR' && c.status !== 'CANCELADO').reduce((sum, c) => sum + c.valor, 0);
 
-  // DRE Empresarial Completo
-  const dreReceitaBruta = totalContasReceber;
-  const dreDeducoes = Math.round(dreReceitaBruta * 0.0565 * 100) / 100; // Impostos e retenções sobre vendas (ex: ICMS/PIS/COFINS/Devoluções ~5.65%)
-  const dreReceitaLiquida = Math.max(0, dreReceitaBruta - dreDeducoes);
-  const dreCpv = contasFiltradas.filter(c => c.tipo === 'PAGAR' && c.classificacaoDespesa !== 'FIXA').reduce((sum, c) => sum + c.valor, 0);
-  const dreLucroBruto = dreReceitaLiquida - dreCpv;
-  const dreDespesasAdm = contasFiltradas.filter(c => c.tipo === 'PAGAR' && c.classificacaoDespesa === 'FIXA').reduce((sum, c) => sum + c.valor, 0);
-  const dreEbitda = dreLucroBruto - dreDespesasAdm;
-  const dreReceitasFin = (extratoDoPeriodo || []).filter(l => l.tipo === 'CREDITO' && (l.descricao?.toLowerCase().includes('rendimento') || l.descricao?.toLowerCase().includes('juros'))).reduce((s, l) => s + (l.valor || 0), 0);
-  const dreDespesasFin = (extratoDoPeriodo || []).filter(l => l.tipo === 'DEBITO' && (l.descricao?.toLowerCase().includes('tarifa') || l.descricao?.toLowerCase().includes('juros') || l.descricao?.toLowerCase().includes('iof'))).reduce((s, l) => s + (l.valor || 0), 0) || (contasFiltradas.filter(c => c.tipo === 'PAGAR' && c.categoria === 'FINANCEIRA').reduce((s, c) => s + c.valor, 0));
-  const dreResultadoFin = dreReceitasFin - dreDespesasFin;
-  const dreLair = dreEbitda + dreResultadoFin;
-  const dreProvisaoTributos = dreLair > 0 ? Math.round(dreLair * 0.15 * 100) / 100 : 0;
-  const dreResultadoLiquido = dreLair - dreProvisaoTributos;
-  const agruparTitulosDre = (titulos: ContaPagarReceber[], sinal = 1): LinhaDemonstrativo[] => {
-    const grupos = new Map<string, ContaPagarReceber[]>();
-    for (const titulo of titulos) {
-      const categoria = titulo.categoria || 'Sem categoria';
-      const grupo = grupos.get(categoria) ?? [];
-      grupo.push(titulo);
-      grupos.set(categoria, grupo);
-    }
-    return [...grupos].sort(([a], [b]) => a.localeCompare(b, 'pt-BR')).map(([nome, grupo]) => ({
-      nome,
-      valores: [sinal * grupo.reduce((total, titulo) => total + titulo.valor, 0)],
-      filhos: grupo.map(titulo => ({
-        id: titulo.id, nome: titulo.descricao, valores: [sinal * titulo.valor],
-      })),
-    }));
-  };
-  const linhaDre = (nome: string, valor: number, filhos?: LinhaDemonstrativo[]): LinhaDemonstrativo =>
-    ({ nome, valores: [valor], filhos });
-  const linhasDre = activeTab === 'dre' ? [
-    linhaDre('1. Receita operacional bruta', dreReceitaBruta, agruparTitulosDre(contasFiltradas.filter(c => c.tipo === 'RECEBER' && c.status !== 'CANCELADO'))),
-    linhaDre('2. Deduções da receita bruta', -dreDeducoes, [linhaDre('Estimativa de deduções sobre a receita bruta (5,65%)', -dreDeducoes)]),
-    linhaDre('3. Receita operacional líquida', dreReceitaLiquida, [linhaDre('Receita bruta', dreReceitaBruta), linhaDre('Deduções estimadas', -dreDeducoes)]),
-    linhaDre('4. Custos dos produtos e mercadorias (CPV / CMV)', -dreCpv, agruparTitulosDre(contasFiltradas.filter(c => c.tipo === 'PAGAR' && c.classificacaoDespesa !== 'FIXA'), -1)),
-    linhaDre('5. Lucro bruto', dreLucroBruto, [linhaDre('Receita líquida', dreReceitaLiquida), linhaDre('CPV / CMV', -dreCpv)]),
-    linhaDre('6. Despesas operacionais fixas e administrativas', -dreDespesasAdm, agruparTitulosDre(contasFiltradas.filter(c => c.tipo === 'PAGAR' && c.classificacaoDespesa === 'FIXA'), -1)),
-    linhaDre('7. Resultado operacional (EBITDA / LAJIDA)', dreEbitda, [linhaDre('Lucro bruto', dreLucroBruto), linhaDre('Despesas operacionais', -dreDespesasAdm)]),
-    linhaDre('8. Resultado financeiro líquido', dreResultadoFin, [linhaDre('Receitas financeiras', dreReceitasFin), linhaDre('Despesas financeiras', -dreDespesasFin)]),
-    linhaDre('9. Resultado antes dos tributos (LAIR)', dreLair, [linhaDre('Resultado operacional', dreEbitda), linhaDre('Resultado financeiro', dreResultadoFin)]),
-    linhaDre('10. Provisão para tributos e encargos', -dreProvisaoTributos, [linhaDre('Estimativa sobre o resultado positivo antes dos tributos (15%)', -dreProvisaoTributos)]),
-    linhaDre('11. Resultado líquido do exercício', dreResultadoLiquido, [linhaDre('Resultado antes dos tributos', dreLair), linhaDre('Provisão estimada', -dreProvisaoTributos)]),
-  ] : [];
     const receitasDre = contasFiltradas.filter(c => c.tipo === 'RECEBER' && c.status !== 'CANCELADO').reduce((sum, c) => sum + c.valor, 0);
   const despesasDre = contasFiltradas.filter(c => c.tipo === 'PAGAR' && c.status !== 'CANCELADO').reduce((sum, c) => sum + c.valor, 0);
   const custosFixos = contasFiltradas.filter(c => c.tipo === 'PAGAR' && c.classificacaoDespesa === 'FIXA').reduce((sum, c) => sum + c.valor, 0);
@@ -577,12 +364,13 @@ if (c) {
     ...datas.map(data => data?.slice(0, 4) ?? '')
   ].filter(ano => /^\d{4}$/.test(ano)))].sort().reverse();
 
-  const filtrosPeriodo = (mes: string, ano: string, mudarMes: (valor: string) => void, mudarAno: (valor: string) => void, anos: string[], permiteTodosAnos = true) => (
+  const filtrosPeriodo = (mes: string, ano: string, mudarMes: (valor: string) => void, mudarAno: (valor: string) => void, anos: string[], permiteTodosAnos = true, semestres = false) => (
     <>
       <label className="flex items-center gap-2 font-bold text-slate-600">
         Mês
         <select value={mes} onChange={e => mudarMes(e.target.value)} className="rounded-xl border border-slate-200 p-2 font-normal">
           <option value="TODOS">Todos os meses</option>
+          {semestres && <><option value="S1">1º semestre</option><option value="S2">2º semestre</option></>}
           {mesesAno.map((numero, indice) => (
             <option key={numero} value={numero}>{new Date(2000, indice, 1).toLocaleDateString('pt-BR', { month: 'long' })}</option>
           ))}
@@ -603,63 +391,103 @@ if (c) {
     setFiltroConta('TODAS');
   };
 
-  const gerarRelatorioGerencialPdf = (tipo: 'DRE' | 'FLUXO' | 'PAGAR_RECEBER' | 'ESTOQUE' | 'CUSTOS' | 'BALANCETE') => {
+  const gerarRelatorioGerencialPdf = (tipo: 'PAGAR_RECEBER' | 'ESTOQUE' | 'CUSTOS' | 'BALANCETE') => {
     const doc = new jsPDF();
     const dinheiro = (valor: number) => `R$ ${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
-    const titulos = { DRE: 'DRE — Demonstração do Resultado', FLUXO: 'Fluxo de Caixa', PAGAR_RECEBER: 'Contas a Pagar e Receber', ESTOQUE: 'Posição Financeira do Estoque', CUSTOS: 'Custos Fixos e Variáveis', BALANCETE: 'Balancete de Verificação' };
+    const titulos = { PAGAR_RECEBER: 'Contas a Pagar e Receber', ESTOQUE: 'Posição Financeira do Estoque', CUSTOS: 'Custos Fixos e Variáveis', BALANCETE: 'Balancete de Verificação' };
     doc.setFillColor(4, 120, 87); doc.rect(0, 0, 210, 30, 'F'); doc.setTextColor(255, 255, 255); doc.setFontSize(17); doc.text('SICOOP', 14, 13); doc.setFontSize(10); doc.text(titulos[tipo], 14, 22);
     const titulosDoPdf = tipo === 'PAGAR_RECEBER' ? contasListaFiltradas : contasFiltradas;
-    const mesPdf = tipo === 'PAGAR_RECEBER' ? mesVencimento : tipo === 'FLUXO' ? mesFluxo : filtroMes;
-    const anoPdf = tipo === 'PAGAR_RECEBER' ? anoVencimento : tipo === 'FLUXO' ? anoFluxo : filtroAno;
+    const mesPdf = tipo === 'PAGAR_RECEBER' ? mesVencimento : filtroMes;
+    const anoPdf = tipo === 'PAGAR_RECEBER' ? anoVencimento : filtroAno;
     doc.setTextColor(30, 41, 59); doc.setFontSize(10);
     if (tipo === 'PAGAR_RECEBER') {
       doc.text(`Vencimento: ${mesPdf === 'TODOS' ? 'todos os meses' : mesPdf} / ${anoPdf === 'TODOS' ? 'todos os anos' : anoPdf}`, 14, 42);
     } else if (tipo === 'ESTOQUE') {
       doc.text(`Categoria: ${categoriaEstoque === 'TODAS' ? 'Todas as categorias' : categoriaEstoque}`, 14, 42);
-    } else if (tipo === 'FLUXO') {
-      doc.text(`Período: ${mesPdf === 'TODOS' ? 'ano completo' : mesPdf} / ${anoPdf}`, 14, 42);
-      doc.text(`Conta: ${filtroBanco === 'TODAS' ? 'Todas as contas' : nomeConta(filtroBanco)}`, 14, 49);
     } else {
       doc.text(`Período: ${mesPdf}/${anoPdf}`, 14, 42);
       doc.text(`Categoria: ${filtroCategoria} | Conta: ${filtroConta}`, 14, 49);
     }
     let y = 65; doc.setFont('helvetica', 'bold');
-    const linhas: [string, string][] = tipo === 'DRE' ? [
-        ['1.0 RECEITA OPERACIONAL BRUTA', dinheiro(dreReceitaBruta)],
-        ['2.0 (-) DEDUÇÕES E TRIBUTOS SOBRE VENDAS', `- ${dinheiro(dreDeducoes)}`],
-        ['3.0 (=) RECEITA OPERACIONAL LÍQUIDA', dinheiro(dreReceitaLiquida)],
-        ['4.0 (-) CUSTOS DAS MERCADORIAS/PRODUTOS (CPV)', `- ${dinheiro(dreCpv)}`],
-        ['5.0 (=) LUCRO BRUTO / MARGEM BRUTA', dinheiro(dreLucroBruto)],
-        ['6.0 (-) DESPESAS OPERACIONAIS E FIXAS', `- ${dinheiro(dreDespesasAdm)}`],
-        ['7.0 (=) RESULTADO OPERACIONAL (EBITDA)', dinheiro(dreEbitda)],
-        ['8.0 (+/-) RESULTADO FINANCEIRO LÍQUIDO', dinheiro(dreResultadoFin)],
-        ['9.0 (=) RESULTADO ANTES TRIBUTOS (LAIR)', dinheiro(dreLair)],
-        ['10.0 (-) PROVISÃO DE TRIBUTOS E ENCARGOS', `- ${dinheiro(dreProvisaoTributos)}`],
-        ['11.0 (=) RESULTADO LÍQUIDO (SOBRAS/PERDAS)', dinheiro(dreResultadoLiquido)]
-      ]
-      : tipo === 'FLUXO' && fluxo ? [
-          ['Saldo inicial', dinheiro(fluxo.total.inicial)],
-          ['Entradas', dinheiro(fluxo.total.entradas)],
-          ['Saídas', dinheiro(-fluxo.total.saidas)],
-          ['Geração de caixa operacional', dinheiro(fluxo.total.operacional)],
-          ['Geração de caixa total', dinheiro(fluxo.total.entradas - fluxo.total.saidas)],
-          ...(fluxo.total.saldosCadastrados ? [['Saldos cadastrados no período', dinheiro(fluxo.total.saldosCadastrados)] as [string, string]] : []),
-          ['Saldo final', dinheiro(fluxo.total.final)],
-        ]
-      : tipo === 'CUSTOS' ? [['Custos fixos', dinheiro(custosFixos)], ['Custos variáveis', dinheiro(custosVariaveis)], ['Custos totais', dinheiro(custosFixos + custosVariaveis)]]
+    const linhas: [string, string][] = tipo === 'CUSTOS' ? [['Custos fixos', dinheiro(custosFixos)], ['Custos variáveis', dinheiro(custosVariaveis)], ['Custos totais', dinheiro(custosFixos + custosVariaveis)]]
       : tipo === 'ESTOQUE' ? [['Valor total em estoque', dinheiro(valorEstoqueFinanceiro)], ['Itens cadastrados', String(estoqueFinanceiro.length)], ['Itens abaixo do mínimo', String(itensEstoqueBaixo.filter(item => categoriaEstoque === 'TODAS' || item.categoria === categoriaEstoque).length)]]
       : tipo === 'BALANCETE' ? [['Total de débitos', dinheiro(totalBalanceteDebitos)], ['Total de créditos', dinheiro(totalBalanceteCreditos)], ['Diferença', dinheiro(Math.abs(totalBalanceteDebitos - totalBalanceteCreditos))]]
       : [['Contas a receber', dinheiro(titulosDoPdf.filter(c => c.tipo === 'RECEBER').reduce((s, c) => s + c.valor, 0))], ['Contas a pagar', dinheiro(titulosDoPdf.filter(c => c.tipo === 'PAGAR').reduce((s, c) => s + c.valor, 0))], ['Títulos no período', String(titulosDoPdf.length)]];
     linhas.forEach(([label, valor]) => { doc.setFont('helvetica', 'normal'); doc.text(label, 16, y); doc.text(valor, 145, y); y += 10; });
     y += 7; doc.setFont('helvetica', 'bold'); doc.text('Detalhamento', 14, y); y += 9; doc.setFont('helvetica', 'normal');
     if (tipo === 'ESTOQUE') estoqueFinanceiro.slice(0, 24).forEach(item => { doc.text(`${item.nomeItem} | ${item.quantidadeAtual} ${item.unidadeMedida} | ${dinheiro((item.quantidadeAtual || 0) * (item.valorUnitarioMedio || 0))}`.substring(0, 115), 14, y); y += 7; if (y > 275) { doc.addPage(); y = 20; } });
-    else if (tipo === 'FLUXO' && fluxo) fluxo.meses.forEach(mes => {
-      doc.text(`${rotuloMesFluxo(mes.periodo)} | Entradas: ${dinheiro(mes.entradas)} | Saídas: ${dinheiro(-mes.saidas)} | Saldo: ${dinheiro(mes.final)}`, 14, y);
-      y += 7;
-    });
     else if (tipo === 'BALANCETE') balanceteContas.slice(0, 24).forEach(c => { doc.text(`${c.codigo} | ${c.nome} | D: ${dinheiro(c.debitos)} | C: ${dinheiro(c.creditos)}`.substring(0, 115), 14, y); y += 7; if (y > 275) { doc.addPage(); y = 20; } });
     else titulosDoPdf.slice(0, 24).forEach(c => { doc.text(`${c.tipo} | ${c.descricao} | ${c.categoria || '-'} | ${dinheiro(c.valor)}`.substring(0, 115), 14, y); y += 7; if (y > 275) { doc.addPage(); y = 20; } });
     doc.setFontSize(8); doc.setTextColor(100, 116, 139); doc.text('Relatório gerencial gerado pelo SisFin — SICOOP', 14, 289); doc.save(`${tipo.toLowerCase()}-${anoPdf}-${mesPdf}.pdf`);
+  };
+
+  const exportarFluxo = () => {
+    if (!fluxo) return;
+    const expandirRubricas = (linhas: LinhaDemonstrativo[]) => linhas.flatMap(linha => [
+      { cels: [linha.nome, ...linha.valores.map(formatarValor)], negrito: true },
+      ...['1.1', '1.2'].some(prefixo => linha.nome.startsWith(prefixo))
+        ? (linha.filhos ?? []).map(filha => ({ cels: [filha.nome, ...filha.valores.map(formatarValor)], recuo: 1 }))
+        : [],
+    ]);
+    const linhas = expandirRubricas(linhasFluxo);
+    exportarPdf('Fluxo de Caixa', `${fluxoProjetado ? 'Projetado (realizado + títulos em aberto por vencimento)' : 'Realizado'} | ${anoFluxo} | ${filtroBanco === 'TODAS' ? 'Todas as contas' : nomeConta(filtroBanco)}`,
+      ['Movimentação Financeira', ...fluxo.meses.map(mes => rotuloMesFluxo(mes.periodo)), 'Acumulado'],
+      [fluxo.meses.length > 6 ? 82 : 117, ...fluxo.meses.map(() => fluxo.meses.length > 6 ? 13 : 21), 30],
+      linhas, `fluxo-de-caixa-${anoFluxo}-${mesFluxo}.pdf`, undefined, 0);
+  };
+
+  const fecharMes = (periodo: string) => {
+    const [ano, mes] = periodo.split('-').map(Number);
+    return `${periodo}-${new Date(Date.UTC(ano, mes, 0)).getUTCDate()}`;
+  };
+  const abrirDre = (inicio: string, fim: string) =>
+    montarResultadoCooperativa(planoContas, lancamentosContabeis, contasPagarReceber, inicio, fim, 'competencia');
+  const resultadoDashboard = activeTab === 'dashboard'
+    ? montarResultadoCooperativa(planoContas, lancamentosContabeis.filter(lancamento => dataNoPeriodo(lancamento.data)),
+      contasPagarReceber, '0001-01-01', '9999-12-31', 'competencia').resultado
+    : 0;
+  const conciliacao = fluxo && activeTab === 'conciliacao'
+    ? abrirDre(`${fluxo.meses[0].periodo}-01`, fecharMes(fluxo.meses[fluxo.meses.length - 1].periodo))
+    : null;
+  const valorAcumulado = (prefixo: string) => linhasFluxo.find(linha => linha.nome.startsWith(prefixo))?.valores.at(-1) ?? 0;
+  const metricasCaixa = fluxo ? {
+    minimo: Math.min(...fluxo.meses.map(mes => mes.final)),
+    maximo: Math.max(...fluxo.meses.map(mes => mes.final)),
+    operacionalMedio: fluxo.total.operacional / fluxo.meses.length,
+    variacaoPercentual: fluxo.total.inicial > 0 ? (fluxo.total.final - fluxo.total.inicial) / fluxo.total.inicial * 100 : null,
+  } : null;
+  const sinteseCaixa = fluxo ? [
+    { nome: 'Saldo inicial de caixa e bancos', entradas: null, saidas: null, liquido: fluxo.total.inicial },
+    { nome: 'Atividades operacionais', entradas: valorAcumulado('1.1'), saidas: -valorAcumulado('1.2'),
+      liquido: fluxo.total.operacional },
+    ...['Investimento', 'Financiamento'].map(atividade => {
+      const grupo = tipoAtividadeCaixa(fluxo, atividade === 'Investimento' ? 'investimento' : 'financiamento');
+      return { nome: `Atividades de ${atividade.toLowerCase()}`, ...grupo };
+    }),
+    { nome: 'Variação líquida de caixa', entradas: fluxo.total.entradas, saidas: fluxo.total.saidas,
+      liquido: fluxo.total.entradas - fluxo.total.saidas },
+    { nome: 'Saldo final de caixa e bancos', entradas: null, saidas: null, liquido: fluxo.total.final },
+  ] : [];
+  const quadroConciliacao: [string, number, number, string][] = conciliacao && fluxo ? [
+    ['Receitas de produção e serviços', conciliacao.receitaBruta, valorAcumulado('1.1'),
+      'Vendas por competência, recebimentos de vendas a prazo e outras entradas operacionais.'],
+    ['Custos e despesas operacionais', conciliacao.custosDespesas, -valorAcumulado('1.2'),
+      'Prazos de fornecedores e repasses, estoques, tributos e despesas sem desembolso.'],
+    ['Depreciação e amortização', conciliacao.depreciacao, 0, 'Encargo reconhecido por competência.'],
+    ['Sobras ou perdas líquidas × geração operacional de caixa', conciliacao.resultado, fluxo.total.operacional,
+      'Diferença entre resultado, capital de giro e itens operacionais com efeitos em períodos distintos.'],
+    ['Saldo mínimo de caixa no período', 0, metricasCaixa?.minimo ?? 0, 'Menor saldo de fechamento mensal.'],
+    ['Destinações para Fundo de Reserva e FATES', conciliacao.reservas, 0, 'Destinações patrimoniais do resultado.'],
+  ] : [];
+
+  const exportarConciliacao = () => {
+    exportarPdf('Resumo e Conciliação Econômico-Financeira',
+      `${mesFluxo} / ${anoFluxo} | Fluxo ${fluxoProjetado ? 'projetado' : 'realizado'}`,
+      ['Rubrica', 'Competência', 'Caixa', 'Diferença'],
+      [154, 40, 40, 43], quadroConciliacao.flatMap(([nome, competencia, caixa, fator]) => [
+        { cels: [nome, formatarValor(competencia), formatarValor(caixa), formatarValor(caixa - competencia)], negrito: true },
+        { cels: [fator], recuo: 1 },
+      ]), `conciliacao-${anoFluxo}-${mesFluxo}.pdf`, undefined, 0);
   };
 
   const gerarRelatorioFinanceiroPdf = () => {
@@ -723,23 +551,30 @@ if (c) {
         { titulo: <>Balanço Financeiro</>, descricao: "Consulte a posição patrimonial e financeira.", icone: BarChart3, abrir: () => setActiveTab('balanco') },
         { titulo: 'Dashboard', descricao: 'Acompanhe os indicadores financeiros.', icone: BarChart3, abrir: () => setActiveTab('dashboard') },
         { titulo: 'DRE', descricao: 'Consulte o resultado do exercício.', icone: BarChart3, abrir: () => setActiveTab('dre') },
+        { titulo: 'Resumo e Conciliação', descricao: 'Compare competência e caixa no mesmo período.', icone: Scale, abrir: () => setActiveTab('conciliacao') },
         { titulo: 'Fluxo de Caixa', descricao: 'Acompanhe as entradas e saídas de caixa.', icone: BarChart3, abrir: () => setActiveTab('fluxo') },
         { titulo: 'Estoque', descricao: 'Consulte os saldos de estoque.', icone: BarChart3, abrir: () => setActiveTab('estoque') },
         { titulo: 'Custos', descricao: 'Analise os custos da operação.', icone: BarChart3, abrir: () => setActiveTab('custos') }
       ]} />
 
-      {(activeTab === 'dashboard' || activeTab === 'dre' || activeTab === 'fluxo' || activeTab === 'estoque' || activeTab === 'custos') && (
+      {(activeTab === 'dashboard' || activeTab === 'dre' || activeTab === 'fluxo' || activeTab === 'conciliacao' || activeTab === 'estoque' || activeTab === 'custos') && (
         <div className="space-y-5">
-          {activeTab === 'fluxo' ? (
+          {(activeTab === 'fluxo' || activeTab === 'conciliacao') ? (
             <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 text-xs">
               {filtrosPeriodo(mesFluxo, anoFluxo, setMesFluxo, setAnoFluxo, listarAnos([
                 ...lancamentosExtrato.map(l => l.data),
                 ...contasBancarias.map(banco => banco.dataSaldoInicial),
-              ]), false)}
-              <span className="font-bold text-slate-600">Conta bancária</span>
-              <SelectContaBancaria value={filtroBanco} onChange={setFiltroBanco} contas={contasBancarias} todasLabel="Todas as contas" className="rounded-xl border border-slate-200 p-2" />
+              ]), false, true)}
+              <label className="flex items-center gap-2 font-bold text-slate-600">
+                Visão do fluxo
+                <select value={fluxoProjetado ? 'projetado' : 'realizado'} onChange={e => setFluxoProjetado(e.target.value === 'projetado')} className="rounded-xl border border-slate-200 p-2 font-normal">
+                  <option value="realizado">Caixa realizado</option><option value="projetado">Caixa projetado</option>
+                </select>
+              </label>
+              {activeTab === 'fluxo' && <><span className="font-bold text-slate-600">Conta bancária</span>
+              <SelectContaBancaria value={filtroBanco} onChange={setFiltroBanco} contas={contasBancarias} todasLabel="Todas as contas" className="rounded-xl border border-slate-200 p-2" /></>}
             </div>
-          ) : activeTab === 'estoque' ? (
+          ) : activeTab === 'dre' ? null : activeTab === 'estoque' ? (
             <label className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-3 text-sm">
               Categoria
               <select value={categoriaEstoque} onChange={e => setCategoriaEstoque(e.target.value)} className="rounded-xl border border-slate-200 p-2">
@@ -762,7 +597,7 @@ if (c) {
           {activeTab === 'dashboard' && <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               {[
-                ['Resultado DRE', receitasDre - despesasDre, (receitasDre - despesasDre >= 0 ? 'text-emerald-700' : 'text-rose-700'), (receitasDre - despesasDre >= 0 ? 'bg-emerald-50' : 'bg-rose-50')],
+                ['Resultado DRE por competência', resultadoDashboard, resultadoDashboard >= 0 ? 'text-emerald-700' : 'text-rose-700', resultadoDashboard >= 0 ? 'bg-emerald-50' : 'bg-rose-50'],
                 ['Saldo de caixa', (extratoBancario?.saldoInicial || 0) + periodoEntradas - periodoSaidas, 'text-blue-700', 'bg-blue-50'],
                 ['Contas a pagar', contasFiltradas.filter(c => c.tipo === 'PAGAR' && c.status !== 'CANCELADO').reduce((s, c) => s + c.valor, 0), 'text-rose-700', 'bg-rose-50/80'],
                 ['Contas a receber', contasFiltradas.filter(c => c.tipo === 'RECEBER' && c.status !== 'CANCELADO').reduce((s, c) => s + c.valor, 0), 'text-emerald-700', 'bg-emerald-50/80'],
@@ -776,7 +611,7 @@ if (c) {
                 </div>
               ))}
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5"><div className="bg-white rounded-2xl border border-slate-200 p-6"><h2 className="font-black text-slate-900">Desempenho do período</h2><div className="space-y-4 mt-5"><div><div className="flex justify-between text-xs"><span>Receitas</span><strong className="text-emerald-700">R$ {receitasDre.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div><div className="h-2 bg-slate-100 rounded-full mt-2"><div className="h-2 bg-emerald-500 rounded-full" style={{ width: `${Math.min(100, receitasDre ? (receitasDre / Math.max(receitasDre, despesasDre)) * 100 : 0)}%` }} /></div></div><div><div className="flex justify-between text-xs"><span>Despesas</span><strong className="text-rose-700">R$ {despesasDre.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div><div className="h-2 bg-slate-100 rounded-full mt-2"><div className="h-2 bg-rose-500 rounded-full" style={{ width: `${Math.min(100, despesasDre ? (despesasDre / Math.max(receitasDre, despesasDre)) * 100 : 0)}%` }} /></div></div></div></div><div className="bg-white rounded-2xl border border-slate-200 p-6"><h2 className="font-black text-slate-900">Acompanhamento gerencial</h2><div className="grid grid-cols-2 gap-3 mt-5"><div className="p-3 rounded-xl bg-indigo-50"><span className="text-[11px] text-indigo-700">Custos fixos</span><strong className="block text-lg text-indigo-900">R$ {custosFixos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div><div className="p-3 rounded-xl bg-amber-50"><span className="text-[11px] text-amber-700">Custos variáveis</span><strong className="block text-lg text-amber-900">R$ {custosVariaveis.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div><div className="p-3 rounded-xl bg-rose-50"><span className="text-[11px] text-rose-700">Estoque mínimo</span><strong className="block text-lg text-rose-900">{itensEstoqueBaixo.length} item(ns)</strong></div><div className="p-3 rounded-xl bg-slate-50"><span className="text-[11px] text-slate-500">Títulos filtrados</span><strong className="block text-lg text-slate-900">{contasFiltradas.length}</strong></div></div></div></div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5"><div className="bg-white rounded-2xl border border-slate-200 p-6"><h2 className="font-black text-slate-900">Desempenho do período</h2><div className="space-y-4 mt-5"><div><div className="flex justify-between text-xs"><span>Títulos a receber</span><strong className="text-emerald-700">R$ {receitasDre.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div><div className="h-2 bg-slate-100 rounded-full mt-2"><div className="h-2 bg-emerald-500 rounded-full" style={{ width: `${Math.min(100, receitasDre ? (receitasDre / Math.max(receitasDre, despesasDre)) * 100 : 0)}%` }} /></div></div><div><div className="flex justify-between text-xs"><span>Títulos a pagar</span><strong className="text-rose-700">R$ {despesasDre.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div><div className="h-2 bg-slate-100 rounded-full mt-2"><div className="h-2 bg-rose-500 rounded-full" style={{ width: `${Math.min(100, despesasDre ? (despesasDre / Math.max(receitasDre, despesasDre)) * 100 : 0)}%` }} /></div></div></div></div><div className="bg-white rounded-2xl border border-slate-200 p-6"><h2 className="font-black text-slate-900">Acompanhamento gerencial</h2><div className="grid grid-cols-2 gap-3 mt-5"><div className="p-3 rounded-xl bg-indigo-50"><span className="text-[11px] text-indigo-700">Custos fixos</span><strong className="block text-lg text-indigo-900">R$ {custosFixos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div><div className="p-3 rounded-xl bg-amber-50"><span className="text-[11px] text-amber-700">Custos variáveis</span><strong className="block text-lg text-amber-900">R$ {custosVariaveis.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div><div className="p-3 rounded-xl bg-rose-50"><span className="text-[11px] text-rose-700">Estoque mínimo</span><strong className="block text-lg text-rose-900">{itensEstoqueBaixo.length} item(ns)</strong></div><div className="p-3 rounded-xl bg-slate-50"><span className="text-[11px] text-slate-500">Títulos filtrados</span><strong className="block text-lg text-slate-900">{contasFiltradas.length}</strong></div></div></div></div>
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
               <div className="bg-white rounded-2xl border border-slate-200 p-5"><div className="flex items-center justify-between mb-4"><h2 className="font-black text-slate-900 flex items-center gap-2"><TrendingUp className="w-4 h-4 text-emerald-600" /> Fluxo anual</h2><span className="text-[10px] text-slate-500">Entradas x saídas</span></div><ResponsiveContainer width="100%" height={270}><AreaChart data={fluxoAnual}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis dataKey="mes" fontSize={10} /><YAxis fontSize={10} tickFormatter={v => `R$${(Number(v) / 1000).toFixed(0)}k`} /><Tooltip formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} /><Legend /><Area type="monotone" dataKey="entradas" name="Entradas" stroke="#059669" fill="#a7f3d0" strokeWidth={2} /><Area type="monotone" dataKey="saidas" name="Saídas" stroke="#e11d48" fill="#fecdd3" strokeWidth={2} /></AreaChart></ResponsiveContainer></div>
               <div className="bg-white rounded-2xl border border-slate-200 p-5"><div className="flex items-center justify-between mb-4"><h2 className="font-black text-slate-900 flex items-center gap-2"><WalletCards className="w-4 h-4 text-blue-600" /> Previsão mensal</h2><span className="text-[10px] text-slate-500">A pagar x receber</span></div><ResponsiveContainer width="100%" height={270}><BarChart data={fluxoAnual}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis dataKey="mes" fontSize={10} /><YAxis fontSize={10} tickFormatter={v => `R$${(Number(v) / 1000).toFixed(0)}k`} /><Tooltip formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} /><Legend /><Bar dataKey="receber" name="A receber" fill="#10b981" radius={[4, 4, 0, 0]} /><Bar dataKey="pagar" name="A pagar" fill="#f43f5e" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>
@@ -784,71 +619,7 @@ if (c) {
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-5"><div className="bg-white rounded-2xl border border-slate-200 p-5"><h2 className="font-black text-slate-900 mb-4 flex items-center gap-2"><PieChartIcon className="w-4 h-4 text-indigo-600" /> Composição dos custos</h2><ResponsiveContainer width="100%" height={250}><PieChart><Pie data={[{ name: 'Fixos', value: custosFixos }, { name: 'Variáveis', value: custosVariaveis }]} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={82} label>{["#6366f1", "#f59e0b"].map(color => <Cell key={color} fill={color} />)}</Pie><Tooltip formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} /><Legend /></PieChart></ResponsiveContainer></div><div className="bg-white rounded-2xl border border-slate-200 p-5"><h2 className="font-black text-slate-900 mb-4 flex items-center gap-2"><Scale className="w-4 h-4 text-cyan-600" /> Equilíbrio contábil</h2><ResponsiveContainer width="100%" height={250}><BarChart data={[{ nome: 'Débitos x créditos', debitos: totalBalanceteDebitos, creditos: totalBalanceteCreditos }]}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis dataKey="nome" fontSize={10} /><YAxis fontSize={10} /><Tooltip formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} /><Legend /><Bar dataKey="debitos" name="Débitos" fill="#0ea5e9" /><Bar dataKey="creditos" name="Créditos" fill="#8b5cf6" /></BarChart></ResponsiveContainer></div></div>
           </>}
 
-          {activeTab === 'dre' && (
-            <div className="space-y-6">
-              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
-                  <div>
-                    <h2 className="text-xl font-black text-slate-900">
-                      DRE — Demonstração do Resultado do Exercício (Empresarial & Contábil)
-                    </h2>
-                    <p className="text-xs text-slate-500 mt-1">
-                      DRE gerencial do período selecionado, com deduções e provisões estimadas.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => gerarRelatorioGerencialPdf('DRE')}
-                    className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-sm cursor-pointer shrink-0"
-                  >
-                    <Printer className="w-4 h-4 text-emerald-400" /> Exportar DRE em PDF
-                  </button>
-                </div>
-
-                {/* KPIs Sintéticos da DRE */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
-                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-[11px] font-bold text-slate-500 uppercase block">1. Receita Operacional Bruta</span>
-                    <strong className="text-lg font-black text-slate-900 mt-1 block">
-                      R$ {dreReceitaBruta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </strong>
-                  </div>
-                  <div className="p-4 rounded-xl bg-blue-50 border border-blue-100">
-                    <span className="text-[11px] font-bold text-blue-700 uppercase block">3. Receita Operacional Líquida</span>
-                    <strong className="text-lg font-black text-blue-900 mt-1 block">
-                      R$ {dreReceitaLiquida.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </strong>
-                  </div>
-                  <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-100">
-                    <span className="text-[11px] font-bold text-indigo-700 uppercase block">5. Lucro Bruto</span>
-                    <strong className={`text-lg font-black mt-1 block ${dreLucroBruto >= 0 ? 'text-indigo-900' : 'text-rose-700'}`}>
-                      R$ {dreLucroBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </strong>
-                  </div>
-                  <div className={`p-4 rounded-xl border ${dreResultadoLiquido >= 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-rose-50 border-rose-200 text-rose-900'}`}>
-                    <span className="text-[11px] font-bold uppercase block">
-                      {dreResultadoLiquido >= 0 ? 'Sobras Líquidas do Exercício' : 'Perdas Líquidas do Exercício'}
-                    </span>
-                    <strong className="text-lg font-black mt-1 block">
-                      R$ {dreResultadoLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </strong>
-                  </div>
-                </div>
-
-                <div className="mt-6 overflow-x-auto rounded-xl border border-slate-200" tabIndex={0} aria-label="Demonstrativo da DRE">
-                  <table className="w-full text-xs [&_thead_th]:!bg-cyan-800 [&_thead_th]:!text-white">
-                    <thead><tr>
-                      <th scope="col" className="sticky left-0 z-10 text-left">Demonstração do Resultado</th>
-                      <th scope="col" className="text-right">% AV</th>
-                      <th scope="col" className="text-right">Valor (R$)</th>
-                    </tr></thead>
-                    <tbody>
-                      {linhasDre.map(linha => <LinhaExpansivel key={linha.nome} linha={linha} basePercentual={dreReceitaBruta} />)}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
+          {activeTab === 'dre' && <DemonstracoesContabeis modo="dsp" />}
 
           {activeTab === 'fluxo' && fluxo && (
             <section className="space-y-4">
@@ -857,7 +628,7 @@ if (c) {
                   <h2 className="text-lg font-bold text-slate-900">Fluxo de Caixa Realizado</h2>
                   <p className="text-sm text-slate-500">Movimentações do extrato por mês, categoria e conta bancária.</p>
                 </div>
-                <button type="button" onClick={() => gerarRelatorioGerencialPdf('FLUXO')} className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white">Exportar PDF</button>
+                <button type="button" onClick={exportarFluxo} className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white">Exportar PDF</button>
               </div>
               <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
                 {([
@@ -874,16 +645,28 @@ if (c) {
                 ))}
               </div>
 
+              {metricasCaixa && (
+                <div className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
+                  {[
+                    ['Saldo mínimo mensal', formatarValor(metricasCaixa.minimo)],
+                    ['Saldo máximo mensal', formatarValor(metricasCaixa.maximo)],
+                    ['Geração operacional mensal média', formatarValor(metricasCaixa.operacionalMedio)],
+                    ['Variação do saldo de caixa', metricasCaixa.variacaoPercentual === null ? '—'
+                      : `${metricasCaixa.variacaoPercentual.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`],
+                  ].map(([nome, valor]) => <div key={nome} className="rounded-lg border border-slate-200 bg-white p-3">{nome} <strong className="mt-1 block">{valor}</strong></div>)}
+                </div>
+              )}
               <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white" tabIndex={0} aria-label="Demonstrativo mensal do fluxo de caixa">
                 <table className="w-full text-xs [&_thead_th]:!bg-cyan-800 [&_thead_th]:!text-white">
                   <thead>
                     <tr>
-                      <th scope="col" className="sticky left-0 z-10 min-w-40 text-left">Fluxo de Caixa</th>
+                      <th scope="col" className="sticky left-0 z-10 min-w-48 text-left">Movimentação Financeira (Entradas e Saídas)</th>
                       {fluxo.meses.map(m => <th key={m.periodo} scope="col" className="text-right">{rotuloMesFluxo(m.periodo)}</th>)}
+                      <th scope="col" className="text-right">Acumulado (R$)</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {linhasDoFluxo(fluxo).map(linha => <LinhaExpansivel key={linha.nome} linha={linha} />)}
+                    {linhasFluxo.map(linha => <LinhaExpansivel key={linha.nome} linha={linha} />)}
                   </tbody>
                 </table>
               </div>
@@ -901,7 +684,61 @@ if (c) {
                   </tbody>
                 </table>
               </div>
-              <p className="text-xs text-slate-500">Os saldos usam a data de abertura cadastrada de cada conta. A geração operacional considera os lançamentos identificados em categorias da operação.</p>
+              <p className="text-xs text-slate-500">{fluxoProjetado ? 'A projeção soma os movimentos realizados e os títulos em aberto pelo vencimento. ' : ''}O fluxo usa as datas dos recebimentos e dos pagamentos. O acumulado mostra o saldo de abertura do primeiro mês, a soma das movimentações e o saldo de fechamento do último mês.</p>
+            </section>
+          )}
+
+          {conciliacao && fluxo && (
+            <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-lg font-bold">Resumo e Conciliação Econômico-Financeira</h2>
+                <button type="button" onClick={exportarConciliacao} className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white">Exportar PDF</button>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {([
+                  ['Sobras ou perdas líquidas', formatarValor(conciliacao.resultado)],
+                  ['Margem líquida', `${(conciliacao.receitaLiquida > 0 ? conciliacao.resultado / conciliacao.receitaLiquida * 100 : 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`],
+                  ['Geração de caixa operacional', formatarValor(fluxo.total.operacional)],
+                  ['Fundo de Reserva', formatarValor(conciliacao.reserva)],
+                  ['FATES', formatarValor(conciliacao.fates)],
+                  ['Saldo final de caixa e bancos', formatarValor(fluxo.total.final)],
+                ]).map(([nome, valor]) => (
+                  <div key={nome} className="rounded-xl bg-slate-50 p-3 text-xs"><p>{nome}</p><strong className="mt-1 block text-base">{valor}</strong></div>
+                ))}
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead><tr>{['Resumo do DRE', 'Ato Cooperativo', 'Ato Não Cooperativo', 'Consolidado'].map(nome => <th key={nome}>{nome}</th>)}</tr></thead>
+                  <tbody>{conciliacao.linhas.filter(linha => !linha.detalhe).map(linha => (
+                    <tr key={linha.rotulo}><th scope="row" className="text-left">{linha.rotulo}</th>
+                      {linha.valores.map((valor, indice) => <td key={indice} className="whitespace-nowrap text-right">{valor === null ? '—' : formatarValor(valor)}</td>)}
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead><tr>{['Síntese do fluxo de caixa', 'Entradas (R$)', 'Saídas (R$)', 'Resultado Líquido (R$)', '% Sobre Entradas'].map(nome => <th key={nome}>{nome}</th>)}</tr></thead>
+                  <tbody>{sinteseCaixa.map(linha => (
+                    <tr key={linha.nome}><th scope="row" className="text-left">{linha.nome}</th>
+                      {[linha.entradas, linha.saidas, linha.liquido].map((valor, indice) => <td key={indice} className="whitespace-nowrap text-right">{valor === null ? '—' : formatarValor(valor)}</td>)}
+                      <td className="whitespace-nowrap text-right">{linha.entradas && linha.entradas > 0
+                        ? `${(linha.liquido / linha.entradas * 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%` : '—'}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px] text-xs">
+                  <thead><tr>{['Rubrica de conciliação', 'Competência (R$)', 'Caixa (R$)', 'Diferença (R$)', 'Fator contábil'].map(nome => <th key={nome}>{nome}</th>)}</tr></thead>
+                  <tbody>{quadroConciliacao.map(([nome, competencia, caixa, fator]) => (
+                    <tr key={nome}><th scope="row" className="text-left">{nome}</th>
+                      {[competencia, caixa, caixa - competencia].map((valor, indice) => <td key={indice} className="whitespace-nowrap text-right">{formatarValor(valor)}</td>)}
+                      <td>{fator}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
             </section>
           )}
 
@@ -1304,6 +1141,13 @@ if (c) {
                 />
               </div>
 
+              <label className="block font-bold text-slate-700">
+                Data de emissão / competência
+                <input type="date" required value={contaForm.dataEmissao}
+                  onChange={e => setContaForm({ ...contaForm, dataEmissao: e.target.value })}
+                  className="mt-1 w-full rounded-xl border border-slate-200 p-2.5" />
+              </label>
+
               <div>
                 <label className="block text-slate-700 font-bold mb-1">Data de Vencimento</label>
                 <input
@@ -1414,7 +1258,7 @@ if (c) {
                   <label className="block text-slate-700 font-bold mb-1">Tipo Movimentação</label>
                   <select
                     value={extratoForm.tipo}
-                    onChange={e => setExtratoForm({ ...extratoForm, tipo: e.target.value as any })}
+                    onChange={e => setExtratoForm({ ...extratoForm, tipo: e.target.value as 'CREDITO' | 'DEBITO', categoria: '' })}
                     className="w-full p-2.5 border border-slate-200 rounded-xl text-xs bg-white font-bold"
                   >
                     <option value="CREDITO">CRÉDITO (Entrada)</option>
@@ -1433,6 +1277,29 @@ if (c) {
                   />
                 </div>
               </div>
+
+              <label className="block font-bold text-slate-700">
+                Rubrica do fluxo
+                <select required value={extratoForm.categoria}
+                  onChange={e => setExtratoForm({ ...extratoForm, categoria: e.target.value })}
+                  className="mt-1 w-full rounded-xl border border-slate-200 p-2.5 font-normal">
+                  <option value="">Selecione uma rubrica</option>
+                  {(extratoForm.tipo === 'CREDITO' ? TIPOS_ENTRADA_CAIXA : TIPOS_SAIDA_CAIXA).map(rubrica => (
+                    <option key={rubrica.nome} value={rubrica.nome}>{rubrica.nome}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block font-bold text-slate-700">
+                Contrapartida contábil
+                <select value={extratoForm.contrapartidaContabil}
+                  onChange={e => setExtratoForm({ ...extratoForm, contrapartidaContabil: e.target.value })}
+                  className="mt-1 w-full rounded-xl border border-slate-200 p-2.5 font-normal">
+                  <option value="">Somente registrar no extrato</option>
+                  {planoContas.filter(conta => conta.aceitaLancamento && conta.ativo !== false).map(conta => (
+                    <option key={conta.codigo} value={conta.codigo}>{conta.codigo} · {conta.nome}</option>
+                  ))}
+                </select>
+              </label>
 
               <div>
                 <label className="block text-slate-700 font-bold mb-1">Histórico / Descrição *</label>

@@ -40,8 +40,8 @@ export const CadastroCooperativaView: React.FC<Props> = ({ onComplete }) => {
   const [estado, setEstado] = useState(currentTenant?.estado ?? '');
 
   // Capital Social
-  const [cotaParteValor, setCotaParteValor] = useState<number>(currentTenant?.cotaParteValor ?? 100.00);
-  const [cotaParteMinima, setCotaParteMinima] = useState<number>(currentTenant?.cotaParteMinima ?? 10);
+  const [cotaParteValor, setCotaParteValor] = useState<number>(currentTenant?.cotaParteValor ?? 0);
+  const [cotaParteMinima, setCotaParteMinima] = useState<number>(currentTenant?.cotaParteMinima ?? 0);
   
   // Logotipo Upload & Presets
   const [logoUrl, setLogoUrl] = useState(currentTenant?.logoUrl || '');
@@ -64,8 +64,8 @@ export const CadastroCooperativaView: React.FC<Props> = ({ onComplete }) => {
       setBairro(currentTenant.bairro ?? '');
       setCidade(currentTenant.cidade ?? '');
       setEstado(currentTenant.estado ?? '');
-      setCotaParteValor(currentTenant.cotaParteValor ?? 100.00);
-      setCotaParteMinima(currentTenant.cotaParteMinima ?? 10);
+      setCotaParteValor(currentTenant.cotaParteValor ?? 0);
+      setCotaParteMinima(currentTenant.cotaParteMinima ?? 0);
       setLogoUrl(currentTenant.logoUrl || '');
     }
   }, [currentTenant]);
@@ -219,8 +219,8 @@ export const CadastroCooperativaView: React.FC<Props> = ({ onComplete }) => {
         bairro,
         cidade,
         estado,
-        cotaParteValor: Number(cotaParteValor) || 100,
-        cotaParteMinima: Number(cotaParteMinima) || 10,
+        cotaParteValor: Number(cotaParteValor) || 0,
+        cotaParteMinima: Number(cotaParteMinima) || 0,
         logoUrl: logoUrl || ''
       };
 

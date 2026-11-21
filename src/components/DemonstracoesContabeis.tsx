@@ -3,6 +3,7 @@ import { FileDown, AlertTriangle, CheckCircle2, Scale } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { useCoop } from '../context/CoopContext';
 import { PlanoContaContabil } from '../types';
+import { montarResultadoCooperativa, type RegimeResultado } from '../data/rubricasCooperativa';
 
 /**
  * Demonstrações do SisCont calculadas a partir dos lançamentos contábeis:
@@ -88,8 +89,8 @@ function calcularSaldos(
 const saldoFinal = (m?: Movimento) => (m ? m.anterior + m.debitos - m.creditos : 0);
 
 /** Gera um PDF simples em tabela, com quebra de página. */
-function exportarPdf(titulo: string, subtitulo: string, colunas: string[], larguras: number[], linhas: { cels: string[]; negrito?: boolean; recuo?: number }[], nomeArquivo: string, cooperativa?: string) {
-  const doc = new jsPDF({ orientation: colunas.length > 4 ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' });
+export function exportarPdf(titulo: string, subtitulo: string, colunas: string[], larguras: number[], linhas: { cels: string[]; negrito?: boolean; recuo?: number }[], nomeArquivo: string, cooperativa?: string, colunaDescricao = colunas.length === 2 ? 0 : 1) {
+  const doc = new jsPDF({ orientation: colunas.length > 4 || colunaDescricao === 0 && colunas.length >= 4 ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' });
   const largura = doc.internal.pageSize.getWidth();
   const altura = doc.internal.pageSize.getHeight();
   let y = 14;
@@ -108,7 +109,7 @@ function exportarPdf(titulo: string, subtitulo: string, colunas: string[], largu
     doc.setFont('helvetica', 'bold');
     let x = 10;
     colunas.forEach((c, i) => {
-      const alinhaDireita = i >= 2 || (colunas.length === 2 && i === 1);
+      const alinhaDireita = i > colunaDescricao;
       doc.text(c, alinhaDireita ? x + larguras[i] - 1 : x, y, alinhaDireita ? { align: 'right' } : undefined);
       x += larguras[i];
     });
@@ -118,21 +119,28 @@ function exportarPdf(titulo: string, subtitulo: string, colunas: string[], largu
   };
   cabecalho();
   for (const linha of linhas) {
-    if (y > altura - 12) {
+    const ajustarFonte = () => {
+      doc.setFont('helvetica', linha.negrito ? 'bold' : 'normal');
+      doc.setFontSize(8);
+    };
+    ajustarFonte();
+    const recuo = (linha.recuo || 0) * 3;
+    const descricao: string[] = doc.splitTextToSize(linha.cels[colunaDescricao], larguras[colunaDescricao] - 2 - recuo);
+    const alturaLinha = Math.max(5, descricao.length * 3.5 + 1.5);
+    if (y + alturaLinha > altura - 8) {
       doc.addPage();
       y = 14;
       cabecalho();
+      ajustarFonte();
     }
-    doc.setFont('helvetica', linha.negrito ? 'bold' : 'normal');
-    doc.setFontSize(8);
     let x = 10;
     linha.cels.forEach((c, i) => {
-      const alinhaDireita = i >= 2 || (linha.cels.length === 2 && i === 1);
-      const texto = i === 1 || (linha.cels.length === 2 && i === 0) ? doc.splitTextToSize(' '.repeat((linha.recuo || 0) * 2) + c, larguras[i] - 2)[0] : c;
-      doc.text(texto, alinhaDireita ? x + larguras[i] - 1 : x, y, alinhaDireita ? { align: 'right' } : undefined);
+      if (i === colunaDescricao) doc.text(descricao, x + recuo, y, { lineHeightFactor: 1.24 });
+      else if (i > colunaDescricao) doc.text(c, x + larguras[i] - 1, y, { align: 'right' });
+      else doc.text(c, x, y);
       x += larguras[i];
     });
-    y += 5;
+    y += alturaLinha;
   }
   doc.setFontSize(7);
   doc.setFont('helvetica', 'normal');
@@ -141,7 +149,10 @@ function exportarPdf(titulo: string, subtitulo: string, colunas: string[], largu
 }
 
 export const DemonstracoesContabeis: React.FC<{ modo: Modo }> = ({ modo }) => {
-  const { planoContas, lancamentosContabeis, currentTenant } = useCoop() as any;
+  const { planoContas, lancamentosContabeis, contasPagarReceber, currentTenant } = useCoop();
+  const [regime, setRegime] = useState<RegimeResultado>('competencia');
+  const [simularTributos, setSimularTributos] = useState(false);
+  const [percentualOutrosFundos, setPercentualOutrosFundos] = useState(0);
   const [dataFim, setDataFim] = useState(hoje());
   const [dataInicio, setDataInicio] = useState(inicioDoAno(hoje()));
   const [mostrarZeradas, setMostrarZeradas] = useState(false);
@@ -177,7 +188,7 @@ export const DemonstracoesContabeis: React.FC<{ modo: Modo }> = ({ modo }) => {
         <label className="block font-bold text-slate-600 mb-1">{modo === 'balanco' ? 'Posição em' : 'Até'}</label>
         <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className="p-2 border border-slate-200 rounded-xl" />
       </div>
-      <div>
+      {modo !== 'dsp' && <div>
         <label className="block font-bold text-slate-600 mb-1">Detalhar até</label>
         <select value={nivelMaximo} onChange={e => setNivelMaximo(Number(e.target.value))} className="p-2 border border-slate-200 rounded-xl">
           <option value={2}>Grupos</option>
@@ -185,7 +196,16 @@ export const DemonstracoesContabeis: React.FC<{ modo: Modo }> = ({ modo }) => {
           <option value={4}>Contas sintéticas</option>
           <option value={5}>Contas analíticas</option>
         </select>
-      </div>
+      </div>}
+      {modo === 'dsp' && (
+        <label className="block font-bold text-slate-600">
+          Regime
+          <select value={regime} onChange={e => setRegime(e.target.value as RegimeResultado)} className="block mt-1 p-2 border border-slate-200 rounded-xl">
+            <option value="competencia">Competência</option>
+            <option value="caixa">Caixa</option>
+          </select>
+        </label>
+      )}
       {modo === 'balancete' && (
         <label className="flex items-center gap-1.5 font-bold text-slate-600 pb-2">
           <input type="checkbox" checked={mostrarZeradas} onChange={e => setMostrarZeradas(e.target.checked)} /> Mostrar contas zeradas
@@ -439,62 +459,25 @@ export const DemonstracoesContabeis: React.FC<{ modo: Modo }> = ({ modo }) => {
     );
   }
 
-  /* ------------------- DEMONSTRAÇÃO DE SOBRAS OU PERDAS ------------------ */
-  // Receitas positivas, custos e despesas negativos (crédito − débito).
-  const res = (codigo: string) => {
-    const m = periodo.porCodigo.get(codigo);
-    return m ? m.creditos - m.debitos : 0;
-  };
-  type LinhaDsp = { rotulo: string; codigo?: string; valor: number; negrito?: boolean; recuo?: number; total?: boolean };
-  const detalhe = (prefixo: string, recuo = 1): LinhaDsp[] =>
-    plano
-      .filter(c => c.codigo.startsWith(prefixo) && c.codigo !== prefixo && (c.nivel || 5) <= nivelMaximo && Math.abs(res(c.codigo)) > 0.004)
-      .map(c => ({ rotulo: c.nome, codigo: c.codigo, valor: res(c.codigo), recuo: recuo + (c.nivel || 4) - 4, negrito: c.tipoConta === 'SINTETICA' }));
-
-  const coopReceitas = res('311');
-  const coopCustos = res('316');
-  const coopDespesas = res('319');
-  const coopBruto = coopReceitas + coopCustos;
-  const coopResultado = coopBruto + coopDespesas;
-  const ncReceitas = res('351') + res('353');
-  const ncCustos = res('356');
-  const ncDespesas = res('357') + res('359');
-  const ncResultado = ncReceitas + ncCustos + ncDespesas;
-  const liquido = coopResultado + ncResultado;
-
-  const linhasDsp: LinhaDsp[] = [
-    { rotulo: 'ATO COOPERATIVO', valor: coopResultado, negrito: true },
-    { rotulo: 'Ingressos e receitas operacionais', codigo: '311', valor: coopReceitas, negrito: true, recuo: 1 },
-    ...detalhe('311', 2),
-    { rotulo: '(-) Custo dos produtos vendidos', codigo: '316', valor: coopCustos, negrito: true, recuo: 1 },
-    ...detalhe('316', 2),
-    { rotulo: '= Sobra bruta do ato cooperativo', valor: coopBruto, total: true, recuo: 1 },
-    { rotulo: '(-) Dispêndios e despesas operacionais', codigo: '319', valor: coopDespesas, negrito: true, recuo: 1 },
-    ...detalhe('319', 2),
-    { rotulo: '= Resultado do ato cooperativo', valor: coopResultado, total: true, recuo: 1 },
-    { rotulo: 'ATO NÃO COOPERATIVO', valor: ncResultado, negrito: true },
-    { rotulo: 'Receitas operacionais e financeiras', valor: ncReceitas, negrito: true, recuo: 1 },
-    ...detalhe('351', 2),
-    ...detalhe('353', 2),
-    { rotulo: '(-) Custos dos produtos vendidos', codigo: '356', valor: ncCustos, negrito: true, recuo: 1 },
-    ...detalhe('356', 2),
-    { rotulo: '(-) Despesas operacionais e não operacionais', valor: ncDespesas, negrito: true, recuo: 1 },
-    ...detalhe('357', 2),
-    ...detalhe('359', 2),
-    { rotulo: '= Resultado do ato não cooperativo (antes do IRPJ/CSLL)', valor: ncResultado, total: true, recuo: 1 },
-    { rotulo: liquido >= 0 ? 'SOBRAS LÍQUIDAS DO PERÍODO' : 'PERDAS LÍQUIDAS DO PERÍODO', valor: liquido, total: true },
-  ];
-
-  const pdfDsp = () =>
-    exportarPdf(
-      'Demonstração de Sobras ou Perdas',
-      `Período: ${dataBR(dataInicio)} a ${dataBR(dataFim)}`,
-      ['Código', 'Descrição', 'Valor (R$)'],
-      [24, 131, 35],
-      linhasDsp.map(l => ({ cels: [l.codigo || '', l.rotulo, valorDemo(l.valor)], negrito: l.negrito || l.total, recuo: l.recuo })),
-      `demonstracao-sobras-perdas-${dataInicio}-a-${dataFim}.pdf`,
-      nomeCoop
-    );
+  const demonstrativo = montarResultadoCooperativa(planoContas, lancamentosContabeis, contasPagarReceber, dataInicio, dataFim, regime, simularTributos, percentualOutrosFundos);
+  const colunasDsp = ['Conta / Rubrica', 'Ato Cooperativo (R$)', 'Ato Não Cooperativo (R$)', 'Total Consolidado (R$)', '% Receita Líquida'];
+  const percentual = (valor: number | null) => valor === null ? '—' : `${moeda(demonstrativo.receitaLiquida > 0 ? 100 * valor / demonstrativo.receitaLiquida : 0)}%`;
+  const formatarDsp = (valor: number | null) => valor === null ? '—' : valor < 0 ? `(${moeda(-valor)})` : moeda(valor);
+  const nomeRegime = regime === 'caixa' ? 'Caixa' : 'Competência';
+  const pdfDsp = () => exportarPdf(
+    'Demonstração de Sobras ou Perdas',
+    `${nomeRegime} | ${dataBR(dataInicio)} a ${dataBR(dataFim)}${regime === 'competencia' ? ' | Destinações indicativas' : ''}`,
+    colunasDsp,
+    [129, 34, 45, 39, 30],
+    demonstrativo.linhas.map(linha => ({
+      cels: [linha.rotulo, ...linha.valores.map(formatarDsp), percentual(linha.valores[2])],
+      negrito: !linha.detalhe,
+      recuo: linha.detalhe ? 1 : 0,
+    })),
+    `demonstracao-sobras-perdas-${regime}-${dataInicio}-a-${dataFim}.pdf`,
+    nomeCoop,
+    0,
+  );
 
   return (
     <div className="space-y-4">
@@ -504,36 +487,48 @@ export const DemonstracoesContabeis: React.FC<{ modo: Modo }> = ({ modo }) => {
           <FileDown className="w-4 h-4" /> Exportar PDF
         </button>
       </div>
+      {regime === 'competencia' && (
+        <div className="flex flex-wrap gap-4 text-xs text-slate-600">
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={simularTributos} onChange={e => setSimularTributos(e.target.checked)} />
+            Simular IRPJ e CSLL (34%) quando não houver provisão contabilizada
+          </label>
+          <label className="flex items-center gap-2">
+            Outros fundos estatutários (%)
+            <input type="number" min="0" max="85" step="0.01" value={percentualOutrosFundos}
+              onChange={e => setPercentualOutrosFundos(Math.max(0, Math.min(85, Number(e.target.value) || 0)))}
+              className="w-20 rounded-lg border border-slate-200 p-1.5" />
+          </label>
+        </div>
+      )}
       {avisoNaoEncontradas(periodo.naoEncontradas)}
-      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-        <table className="w-full text-xs">
+      {demonstrativo.semAto.length > 0 && (
+        <p role="status" className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900">
+          Classifique o ato das contas para incluí-las no resultado: {demonstrativo.semAto.join(', ')}.
+        </p>
+      )}
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-x-auto">
+        <table className="w-full min-w-[660px] text-xs">
           <thead className="bg-slate-50 text-slate-600">
-            <tr>
-              <th className="p-3 text-left">Descrição</th>
-              <th className="p-3 text-right">
-                {dataBR(dataInicio)} a {dataBR(dataFim)}
-              </th>
-            </tr>
+            <tr>{colunasDsp.map((coluna, indice) => <th key={coluna} scope="col" className={indice === 0 ? 'text-left' : 'text-right'}>{coluna}</th>)}</tr>
           </thead>
           <tbody>
-            {linhasDsp.map((l, i) => (
-              <tr
-                key={(l.codigo || l.rotulo) + i}
-                className={`border-t border-slate-100 ${l.total ? 'font-black bg-slate-100' : l.negrito ? 'font-bold' : ''}`}
-              >
-                <td className="p-2.5" style={{ paddingLeft: `${0.6 + (l.recuo || 0) * 0.9}rem` }}>
-                  {l.codigo && <span className="font-mono text-slate-400 mr-2">{l.codigo}</span>}
-                  {l.rotulo}
-                </td>
-                <td className={`p-2.5 text-right whitespace-nowrap ${l.valor < 0 ? 'text-rose-700' : ''}`}>{valorDemo(l.valor)}</td>
+            {demonstrativo.linhas.map(linha => (
+              <tr key={linha.rotulo} className={linha.detalhe ? 'border-t border-slate-100' : 'border-t border-slate-100 font-bold bg-slate-50'}>
+                <th scope="row" className={linha.detalhe ? 'text-left font-normal !pl-6' : 'text-left'}>{linha.rotulo}</th>
+                {linha.valores.map((valor, indice) => (
+                  <td key={indice} className={`text-right whitespace-nowrap tabular-nums ${(valor ?? 0) < 0 ? 'text-rose-700' : ''}`}>{formatarDsp(valor)}</td>
+                ))}
+                <td className="text-right whitespace-nowrap tabular-nums">{percentual(linha.valores[2])}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p className="text-[11px] text-slate-500">
-        Separação entre ato cooperativo (grupo 31) e ato não cooperativo (grupo 35), conforme o plano de contas. Valores entre parênteses
-        reduzem o resultado.
+      <p className="text-xs text-slate-600">
+        {regime === 'competencia'
+          ? 'Os tributos sobre o lucro vêm da escrituração. As destinações indicativas usam os mínimos legais da Reserva (10%) e do FATES (5%) sobre as sobras do ato cooperativo. O FATES inclui o resultado positivo do ato não cooperativo. A destinação efetiva é definida no encerramento do exercício.'
+          : 'A visão gerencial de caixa usa a liquidação dos títulos vinculados e os lançamentos de resultado com contrapartida em caixa ou banco.'}
       </p>
     </div>
   );

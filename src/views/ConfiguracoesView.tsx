@@ -599,8 +599,8 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
     bairro: currentTenant?.bairro || config.enderecoSede?.bairro || 'Bela Vista',
     cidade: currentTenant?.cidade || config.enderecoSede?.cidade || 'São Paulo',
     estado: currentTenant?.estado || config.enderecoSede?.estado || 'SP',
-    cotaParteValor: currentTenant?.cotaParteValor ?? config.cotaParteValor ?? 100,
-    cotaParteMinima: currentTenant?.cotaParteMinima ?? config.cotaParteMinima ?? 10,
+    cotaParteValor: currentTenant?.cotaParteValor ?? config.cotaParteValor ?? 0,
+    cotaParteMinima: currentTenant?.cotaParteMinima ?? config.cotaParteMinima ?? 0,
     correcaoAnualPercent: config.correcaoAnualPercent || 4.5
   });
 
@@ -685,8 +685,8 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
         bairro: currentTenant.bairro || config.enderecoSede?.bairro || 'Bela Vista',
         cidade: currentTenant.cidade || config.enderecoSede?.cidade || 'São Paulo',
         estado: currentTenant.estado || config.enderecoSede?.estado || 'SP',
-        cotaParteValor: currentTenant.cotaParteValor ?? config.cotaParteValor ?? 100,
-        cotaParteMinima: currentTenant.cotaParteMinima ?? config.cotaParteMinima ?? 10,
+        cotaParteValor: currentTenant.cotaParteValor ?? config.cotaParteValor ?? 0,
+        cotaParteMinima: currentTenant.cotaParteMinima ?? config.cotaParteMinima ?? 0,
         correcaoAnualPercent: config.correcaoAnualPercent || 4.5
       });
     }
@@ -818,8 +818,8 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
       emailOficial: coopForm.email,
       telefoneOficial: coopForm.telefone,
       logoUrl: coopForm.logoUrl,
-      cotaParteValor: Number(coopForm.cotaParteValor) || 100,
-      cotaParteMinima: Number(coopForm.cotaParteMinima) || 10,
+      cotaParteValor: Number(coopForm.cotaParteValor) || 0,
+      cotaParteMinima: Number(coopForm.cotaParteMinima) || 0,
       enderecoSede: {
         cep: coopForm.cep,
         logradouro: coopForm.logradouro,
@@ -842,8 +842,8 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
         bairro: coopForm.bairro,
         cidade: coopForm.cidade,
         estado: coopForm.estado,
-        cotaParteValor: Number(coopForm.cotaParteValor) || 100,
-        cotaParteMinima: Number(coopForm.cotaParteMinima) || 10,
+        cotaParteValor: Number(coopForm.cotaParteValor) || 0,
+        cotaParteMinima: Number(coopForm.cotaParteMinima) || 0,
         logoUrl: coopForm.logoUrl
       });
     }

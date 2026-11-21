@@ -1094,6 +1094,9 @@ export interface ExtratoBancario {
     id: string;
     contaBancariaId?: string;
     data: string;
+    documento?: string;
+    categoria?: string;
+    subcategoria?: string;
     historico: string;
     tipo: 'CREDITO' | 'DEBITO';
     valor: number;

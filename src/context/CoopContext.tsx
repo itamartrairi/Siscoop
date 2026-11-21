@@ -69,7 +69,7 @@ import { IndicadorSincronizacao } from '../components/IndicadorSincronizacao';
 import { transmitirParaNuvemFiscal } from '../services/nuvemFiscalService';
 import {
   INITIAL_TENANTS,
-  INITIAL_USERS,
+  USUARIO_SEM_SESSAO,
   INITIAL_COOPERADOS,
   INITIAL_TRANSACAO_CAPITAL,
   INITIAL_ASSEMBLEIAS,
@@ -136,6 +136,7 @@ import {
   fetchTenantFromFirestore,
   lerPermissoesMembro
   } from '../services/firebaseDbService';
+import { contaResultadoPorSubcategoria } from '../data/rubricasCooperativa';
 import { PLANO_CONTAS_COOPERATIVA, migrarLancamentosContabeis, CODIGO_BANCO_PADRAO } from '../data/planoContasCooperativa';
 import { publicarPortalEscolas, ouvirComprovantesPortal } from '../services/portalEscolaRemoto';
 import { publicarPortalMotoristas, ouvirAtualizacoesMotoristas, mesclarParadas } from '../services/portalMotoristaRemoto';
@@ -650,7 +651,8 @@ interface CoopContextType {
   pagarReceberConta: (id: string) => void;
 
   extratoBancario: ExtratoBancario;
-  addLancamentoExtrato: (item: { data: string; historico: string; documento: string; tipo: 'CREDITO' | 'DEBITO'; valor: number; categoria: string; contaBancariaId?: string }) => void;
+  addLancamentoExtrato: (item: { data: string; historico: string; documento: string; tipo: 'CREDITO' | 'DEBITO'; valor: number; categoria: string; subcategoria?: string; contaBancariaId?: string }) => void;
+  registrarMovimentoManual: (item: { data: string; historico: string; documento: string; tipo: 'CREDITO' | 'DEBITO'; valor: number; categoria: string; subcategoria?: string; contaBancariaId?: string }, codigoContrapartida: string) => boolean;
 
   solicitacoesCompra: SolicitacaoCompra[];
   addSolicitacaoCompra: (s: Omit<SolicitacaoCompra, 'id' | 'tenantId'>) => void;
@@ -1047,7 +1049,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (parsed.currentUser) return { ...parsed.currentUser, role: 'ADMIN' };
       }
     } catch (e) {}
-    return { ...INITIAL_USERS[0], role: 'ADMIN' };
+    return USUARIO_SEM_SESSAO;
   });
 
   const [users, setUsers] = useState<User[]>(() => {
@@ -1058,7 +1060,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (Array.isArray(parsed.users) && parsed.users.length > 0) return parsed.users;
       }
     } catch (e) {}
-    return INITIAL_USERS;
+    return [];
   });
 
   const [rolePermissions, setRolePermissions] = useState<RolePermissionsMap>(() => {
@@ -1072,11 +1074,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return DEFAULT_ROLE_PERMISSIONS;
   });
 
-  // Em produção a sessão só existe com login real no Firebase Auth (Google ou
-  // e-mail/senha): o app começa deslogado e o onAuthStateChanged restaura a
-  // sessão salva no navegador. Em desenvolvimento (npm run dev) mantém o
-  // acesso direto de demonstração.
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => !!(import.meta as any).env?.DEV);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authReady, setAuthReady] = useState<boolean>(false);
   const [isPendingCooperativeSetup, setIsPendingCooperativeSetup] = useState<boolean>(false);
 
@@ -1209,184 +1207,26 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const DEFAULT_SEFAZ_CE_CONFIG: SefazCeConfig = {
     ambiente: 'HOMOLOGACAO',
     uf: 'CE',
-    inscricaoEstadual: '06.849.201-4',
-    cnpjEmitente: '07.812.345/0001-90',
-    razaoSocialEmitente: 'COOPERATIVA AGROPECUÁRIA FAMILIAR DE TRAIRI E REGIÃO - COOPERAI',
-    certificadoCadastrado: true,
-    certificadoNomeArquivo: 'cert_cooperai_ceara_a1.pfx',
-    certificadoDataValidade: '2027-12-31',
-    senhaCertificado: '••••••••',
-    tokenCscId: '000001',
-    tokenCscCodigo: 'SEFAZ-CE-CSC-998877665544332211',
+    inscricaoEstadual: '',
+    cnpjEmitente: '',
+    razaoSocialEmitente: '',
+    certificadoCadastrado: false,
+    certificadoNomeArquivo: '',
+    certificadoDataValidade: '',
+    senhaCertificado: '',
+    tokenCscId: '',
+    tokenCscCodigo: '',
     serieNFe: '1',
-    proximoNumeroNFe: 104,
+    proximoNumeroNFe: 1,
     serieNFCe: '1',
-    proximoNumeroNFCe: 52,
-    regimeTributario: 'SIMPLES_NACIONAL',
-    isencaoIcmsPnaeCeara: true,
+    proximoNumeroNFCe: 1,
+    regimeTributario: 'REGIME_NORMAL',
+    isencaoIcmsPnaeCeara: false,
     nuvemFiscalAtiva: false,
     nuvemFiscalClientId: '',
     nuvemFiscalClientSecret: '',
-    nuvemFiscalEmpresaId: ''
+    nuvemFiscalEmpresaId: '',
   };
-
-  const INITIAL_NOTAS_FISCAIS_LIST: NotaFiscal[] = [
-    {
-      id: 'nf-ce-101',
-      tenantId: 'coop-01',
-      numeroNota: '000101',
-      serie: '1',
-      modelo: 'NFE_55',
-      tipoOperacao: 'SAIDA_PNAE_PAA',
-      emitenteRazaoSocial: 'COOPERATIVA AGROPECUÁRIA FAMILIAR DE TRAIRI E REGIÃO - COOPERAI',
-      emitenteCnpjCpf: '07.812.345/0001-90',
-      emitenteInscricaoEstadual: '06.849.201-4',
-      emitenteMunicipio: 'Trairi',
-      emitenteUf: 'CE',
-      destinatarioNome: 'PREFEITURA MUNICIPAL DE TRAIRI - SECRETARIA DE EDUCAÇÃO (PNAE)',
-      destinatarioCnpjCpf: '07.418.912/0001-50',
-      destinatarioInscricaoEstadual: 'ISENTO',
-      destinatarioEndereco: 'Rua Fernando Bezerra, 120 - Centro',
-      destinatarioMunicipio: 'Trairi',
-      destinatarioUf: 'CE',
-      destinatarioEmail: 'pnae.educacao@trairi.ce.gov.br',
-      dataEmissao: '2026-08-10',
-      dataSaidaEntrada: '2026-08-10',
-      valorProdutos: 14850.00,
-      valorFrete: 0,
-      valorDesconto: 0,
-      valorIcms: 0,
-      valorTotalNota: 14850.00,
-      naturezaOperacao: 'Venda de Produção Agrícola Familiar para Alimentação Escolar (PNAE CE)',
-      statusSefaz: 'AUTORIZADA',
-      ambienteSefaz: 'HOMOLOGACAO',
-      chaveAcesso44: '23260807812345000190550010000001011987654321',
-      protocoloAutorizacao: '123260008492015',
-      dataHoraAutorizacao: '2026-08-10T10:15:30-03:00',
-      motivoStatusSefaz: '100 - Autorizado o uso da NF-e (SEFAZ Ceará)',
-      observacoesFiscais: 'ISENÇÃO DE ICMS CONFORME REGULAMENTO DO ICMS DO ESTADO DO CEARÁ - DECRETO ESTADUAL PNAE/PAA.',
-      itens: [
-        {
-          id: 'nfi-1',
-          descricao: 'Morango Orgânico In Natura (Kg)',
-          ncm: '0810.10.00',
-          cfop: '5101',
-          unidade: 'KG',
-          quantidade: 450,
-          valorUnitario: 18.00,
-          valorTotal: 8100.00,
-          icmsCstCsosn: '400',
-          icmsAliquota: 0,
-          icmsValor: 0
-        },
-        {
-          id: 'nfi-2',
-          descricao: 'Melancia Redonda In Natura (Kg)',
-          ncm: '0807.11.00',
-          cfop: '5101',
-          unidade: 'KG',
-          quantidade: 1500,
-          valorUnitario: 4.50,
-          valorTotal: 6750.00,
-          icmsCstCsosn: '400',
-          icmsAliquota: 0,
-          icmsValor: 0
-        }
-      ]
-    },
-    {
-      id: 'nf-ce-102',
-      tenantId: 'coop-01',
-      numeroNota: '000102',
-      serie: '1',
-      modelo: 'NFAE_AVULSA',
-      tipoOperacao: 'SAIDA_VENDA',
-      emitenteRazaoSocial: 'João Batista Ribeiro (Produtor Rural)',
-      emitenteCnpjCpf: '123.456.789-00',
-      emitenteInscricaoEstadual: '06.901.882-9',
-      emitenteMunicipio: 'Trairi',
-      emitenteUf: 'CE',
-      destinatarioNome: 'COOPERATIVA AGROPECUÁRIA FAMILIAR DE TRAIRI E REGIÃO - COOPERAI',
-      destinatarioCnpjCpf: '07.812.345/0001-90',
-      destinatarioInscricaoEstadual: '06.849.201-4',
-      destinatarioEndereco: 'AV. LUIZ ALVES DE OLIVEIRA, 450 - CENTRO',
-      destinatarioMunicipio: 'Trairi',
-      destinatarioUf: 'CE',
-      dataEmissao: '2026-08-11',
-      valorProdutos: 3200.00,
-      valorFrete: 0,
-      valorDesconto: 0,
-      valorIcms: 0,
-      valorTotalNota: 3200.00,
-      naturezaOperacao: 'Entrega de Produção de Cooperado para Comercialização Conjunta (NFA-e SEFAZ CE)',
-      statusSefaz: 'AUTORIZADA',
-      ambienteSefaz: 'HOMOLOGACAO',
-      chaveAcesso44: '23260812345678900100550010000001021122334455',
-      protocoloAutorizacao: '123260009123847',
-      dataHoraAutorizacao: '2026-08-11T14:22:10-03:00',
-      motivoStatusSefaz: '100 - Autorizado o uso da NFA-e (SEFAZ Ceará)',
-      observacoesFiscais: 'NOTA FISCAL AVULSA ELETRÔNICA DO PRODUTOR RURAL EMITIDA JUNTO À SEFAZ/CEARÁ.',
-      itens: [
-        {
-          id: 'nfi-3',
-          descricao: 'Milho Verde em Espiga (Kg)',
-          ncm: '0710.40.00',
-          cfop: '5101',
-          unidade: 'KG',
-          quantidade: 800,
-          valorUnitario: 4.00,
-          valorTotal: 3200.00,
-          icmsCstCsosn: '400',
-          icmsAliquota: 0,
-          icmsValor: 0
-        }
-      ]
-    },
-    {
-      id: 'nf-ce-103',
-      tenantId: 'coop-01',
-      numeroNota: '000103',
-      serie: '1',
-      modelo: 'NFE_55',
-      tipoOperacao: 'SAIDA_PNAE_PAA',
-      emitenteRazaoSocial: 'COOPERATIVA AGROPECUÁRIA FAMILIAR DE TRAIRI E REGIÃO - COOPERAI',
-      emitenteCnpjCpf: '07.812.345/0001-90',
-      emitenteInscricaoEstadual: '06.849.201-4',
-      emitenteMunicipio: 'Trairi',
-      emitenteUf: 'CE',
-      destinatarioNome: 'SECRETARIA DA PROTEÇÃO SOCIAL (PAA CEARÁ)',
-      destinatarioCnpjCpf: '08.812.990/0001-11',
-      destinatarioInscricaoEstadual: 'ISENTO',
-      destinatarioEndereco: 'Av. Bezerra de Menezes, 1820 - Fortaleza',
-      destinatarioMunicipio: 'Fortaleza',
-      destinatarioUf: 'CE',
-      dataEmissao: '2026-08-12',
-      valorProdutos: 8400.00,
-      valorFrete: 0,
-      valorDesconto: 0,
-      valorIcms: 0,
-      valorTotalNota: 8400.00,
-      naturezaOperacao: 'Venda de Alimentos Agricultura Familiar - Programa de Aquisição de Alimentos (PAA CE)',
-      statusSefaz: 'RASCUNHO',
-      ambienteSefaz: 'HOMOLOGACAO',
-      observacoesFiscais: 'Aguardando envio e validação do lote na SEFAZ Ceará.',
-      itens: [
-        {
-          id: 'nfi-4',
-          descricao: 'Feijão Caupi Macassar (Saca 50kg)',
-          ncm: '0713.35.00',
-          cfop: '5101',
-          unidade: 'SACAS',
-          quantidade: 35,
-          valorUnitario: 240.00,
-          valorTotal: 8400.00,
-          icmsCstCsosn: '400',
-          icmsAliquota: 0,
-          icmsValor: 0
-        }
-      ]
-    }
-  ];
 
   const [sefazCeConfig, setSefazCeConfig] = useState<SefazCeConfig>(() => {
     try {
@@ -1404,10 +1244,10 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const saved = lerBlobPersistido();
       if (saved) {
         const parsed = parseSnapshot(saved);
-        if (Array.isArray(parsed.notasFiscais) && parsed.notasFiscais.length > 0) return parsed.notasFiscais;
+        if (Array.isArray(parsed.notasFiscais)) return parsed.notasFiscais;
       }
     } catch (e) {}
-    return INITIAL_NOTAS_FISCAIS_LIST;
+    return [];
   });
 
   const DEFAULT_LICENSE_INFO: LicenseInfo = {
@@ -1968,7 +1808,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         if (fbUser) {
           await montarSessaoFirebase(fbUser, 'sessão salva');
-        } else if (!(import.meta as any).env?.DEV) {
+        } else {
           setIsAuthenticated(false);
         }
       } catch (e) {
@@ -2092,52 +1932,8 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.warn('Tentativa de login Firebase Auth:', error?.code || error?.message);
     }
 
-    // Os logins de demonstração (usuários de exemplo e "qualquer e-mail com
-    // senha de 4 caracteres") só existem em desenvolvimento. Em produção,
-    // sem uma conta válida no Firebase, o acesso é negado.
-    if (!(import.meta as any).env?.DEV) {
-      return { success: false, requiresCooperativeSetup: false, error: erroFirebase ? traduzirErroAuth(erroFirebase) : 'E-mail ou senha incorretos.' };
-    }
-
-    // Check existing users / demo users fallback
-    const foundUser = users.find(u => u.email.toLowerCase() === email.toLowerCase()) ||
-                      INITIAL_USERS.find(u => u.email.toLowerCase() === email.toLowerCase());
-    if (foundUser) {
-      if (foundUser.password && foundUser.password !== pass) {
-        return { success: false, requiresCooperativeSetup: false, error: 'Senha incorreta.' };
-      }
-      setCurrentUser(foundUser);
-      setIsAuthenticated(true);
-      const userTenant = tenants.find(t => t.id === foundUser.tenantId);
-      if (userTenant) {
-        setCurrentTenant(userTenant);
-        setIsPendingCooperativeSetup(false);
-      } else {
-        setIsPendingCooperativeSetup(true);
-      }
-      addAuditLog('AUTH', 'LOGIN', `Usuário ${foundUser.name} realizou login com e-mail/senha`);
-      return { success: true, requiresCooperativeSetup: !userTenant };
-    }
-
-    // Default fallthrough user if password >= 4 chars
-    if (email && pass.length >= 4) {
-      const newUser: User = {
-        id: `user-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
-        name: email.split('@')[0],
-        email: email,
-        role: 'ADMIN',
-        tenantId: '',
-        active: true,
-        lastLogin: new Date().toISOString()
-      };
-      setCurrentUser(newUser);
-      setIsAuthenticated(true);
-      setIsPendingCooperativeSetup(true);
-      addAuditLog('AUTH', 'LOGIN', `Novo usuário ${newUser.name} autenticado via Firebase`);
-      return { success: true, requiresCooperativeSetup: true };
-    }
-
-    return { success: false, requiresCooperativeSetup: false, error: 'Credenciais inválidas. Digite e-mail e senha cadastrados no Firebase.' };
+    return { success: false, requiresCooperativeSetup: false,
+      error: erroFirebase ? traduzirErroAuth(erroFirebase) : 'Credenciais inválidas. Use uma conta cadastrada.' };
   };
 
   const loginWithGoogle = async () => {
@@ -3865,9 +3661,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     Object.entries(porProdutor).forEach(([pNome, totalValor]) => {
-      const newConta: ContaPagarReceber = {
-        id: `fin-ped-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
-        tenantId: currentTenant.id,
+      addContaPagarReceber({
         tipo: 'PAGAR',
         descricao: `Repasse Produção ${newPed.programa} - Pedido ${newPed.numeroPedido}`,
         pessoaNome: pNome,
@@ -3877,8 +3671,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         dataVencimento: newPed.dataPrevistaEntrega || newPed.dataPedido,
         status: 'PENDENTE',
         centroCusto: `Mód. ${newPed.programa}`
-      };
-      setContasPagarReceber(prev => [newConta, ...prev]);
+      });
     });
 
     // 2. Integrar em Tempo Real com Estoque
@@ -3895,24 +3688,6 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       }
     });
-
-    // 3. Integrar em Tempo Real com Contabilidade SisCont
-    const newLanc: LancamentoContabil = {
-      id: `lanc-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
-      tenantId: currentTenant.id,
-      numeroLancamento: 2000 + Math.floor(Math.random() * 8000),
-      data: newPed.dataPedido,
-      contaDebitoCodigo: '31101.0009',
-      contaDebitoNome: 'Custo da Produção e Repasse aos Cooperados',
-      contaCreditoCodigo: '21302.0900',
-      contaCreditoNome: 'Fornecedores e Produtores Rurais',
-      valor: newPed.valorTotalPedido,
-      historico: `Pedido de Produtos ${newPed.programa} aos Produtores (${newPed.numeroPedido}) - ${newPed.fonteRecursos}`,
-      documentoRef: newPed.id,
-      moduloOrigem: 'FINANCEIRO',
-      usuario: currentUser.name
-    };
-    setLancamentosContabeis(prev => [newLanc, ...prev]);
 
     addAuditLog('RELATORIOS', 'INCLUSAO', `Registrou Pedido de Produtos aos Produtores #${newPed.numeroPedido} (${newPed.programa}) no valor de R$ ${newPed.valorTotalPedido.toFixed(2)}`);
   };
@@ -4268,7 +4043,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addAuditLog('SISCONT', 'EXCLUSAO', `Excluiu conta do plano de contas ${(alvo?.codigo + " - " + alvo?.nome) || id}`);
   };
 
-  const addLancamentoExtrato = (item: { data: string; historico: string; documento: string; tipo: 'CREDITO' | 'DEBITO'; valor: number; categoria: string; contaBancariaId?: string }) => {
+  const addLancamentoExtrato = (item: { data: string; historico: string; documento: string; tipo: 'CREDITO' | 'DEBITO'; valor: number; categoria: string; subcategoria?: string; contaBancariaId?: string }) => {
     setExtratoBancario(prev => {
       // Se o extrato salvo no navegador pertence a outra cooperativa (ex.:
       // sessão anterior de outro tenant), começa do zero em vez de somar em
@@ -4310,6 +4085,28 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     setLancamentosContabeis(prev => [newLanc, ...prev]);
     addAuditLog('CONFIGURACOES', 'INCLUSAO', `Registrou lançamento contábil #${newLanc.numeroLancamento} de R$ ${(Number(newLanc.valor) || 0).toFixed(2)}`);
+  };
+
+  const registrarMovimentoManual: CoopContextType['registrarMovimentoManual'] = (item, codigoContrapartida) => {
+    if (!Number.isFinite(item.valor) || item.valor <= 0) return false;
+    if (codigoContrapartida) {
+      const codigoBanco = codigoBancoContabil(item.contaBancariaId);
+      const banco = planoContas.find(p => p.codigo === codigoBanco && p.aceitaLancamento && p.ativo !== false);
+      const contraparte = planoContas.find(p => p.codigo === codigoContrapartida && p.aceitaLancamento && p.ativo !== false);
+      if (!banco || !contraparte || banco.codigo === contraparte.codigo) {
+        alert('Selecione contas contábeis analíticas e diferentes para o banco e a contrapartida.');
+        return false;
+      }
+      const [debito, credito] = item.tipo === 'CREDITO' ? [banco, contraparte] : [contraparte, banco];
+      addLancamentoContabil({
+        numeroLancamento: Math.max(1000, ...lancamentosContabeis.map(l => Number(l.numeroLancamento) || 0)) + 1,
+        data: item.data, valor: item.valor, historico: item.historico,
+        contaDebitoCodigo: debito.codigo, contaDebitoNome: debito.nome,
+        contaCreditoCodigo: credito.codigo, contaCreditoNome: credito.nome, moduloOrigem: 'FINANCEIRO',
+      });
+    }
+    addLancamentoExtrato(item);
+    return true;
   };
 
   const updateLancamentoContabil = (id: string, lData: Partial<LancamentoContabil>) => {
@@ -4473,10 +4270,10 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // níveis, com separação entre atos cooperativos e não cooperativos).
   const CONTAS_POR_CATEGORIA: Record<string, { ativoPassivoCodigo: string; ativoPassivoNome: string; receitaDespesaCodigo: string; receitaDespesaNome: string }> = {
     'FOLHA_PAGAMENTO': { ativoPassivoCodigo: '21601.0099', ativoPassivoNome: 'Salários a Pagar', receitaDespesaCodigo: '31901.0001', receitaDespesaNome: 'Salários' },
-    'COMPRAS_INSUMOS': { ativoPassivoCodigo: '21302.0900', ativoPassivoNome: 'Fornecedores de Insumos', receitaDespesaCodigo: '35601.0009', receitaDespesaNome: 'Aquisição de Produtos de Terceiros' },
-    'Impostos e Retenções': { ativoPassivoCodigo: '21401.0025', ativoPassivoNome: 'Outros Tributos a Recolher (FUNRURAL)', receitaDespesaCodigo: '31601.0009', receitaDespesaNome: 'Aquisição da Produção dos Cooperados' },
+    'COMPRAS_INSUMOS': { ativoPassivoCodigo: '21302.0900', ativoPassivoNome: 'Fornecedores de Insumos', receitaDespesaCodigo: '11501.0010', receitaDespesaNome: 'Estoque de Insumos e Embalagens' },
+    'Impostos e Retenções': { ativoPassivoCodigo: '21401.0025', ativoPassivoNome: 'Funrural a Recolher', receitaDespesaCodigo: '31903.0041', receitaDespesaNome: 'Impostos e Contribuições sobre Vendas' },
     'Taxa Administrativa PAA/PNAE': { ativoPassivoCodigo: '11201.9999', ativoPassivoNome: 'Clientes', receitaDespesaCodigo: '31103.0999', receitaDespesaNome: 'Outras Receitas de Atos Cooperativos' },
-    'COMPRAS_REVENDA': { ativoPassivoCodigo: '21302.0900', ativoPassivoNome: 'Fornecedores de Insumos', receitaDespesaCodigo: '35601.0009', receitaDespesaNome: 'Custos das Mercadorias Vendidas – Ato não cooperativo' },
+    'COMPRAS_REVENDA': { ativoPassivoCodigo: '21302.0900', ativoPassivoNome: 'Fornecedores de Insumos', receitaDespesaCodigo: '11504.0099', receitaDespesaNome: 'Estoque de Mercadorias para Revenda' },
     'VENDAS_REVENDA': { ativoPassivoCodigo: '11201.9999', ativoPassivoNome: 'Duplicatas a Receber Diversas', receitaDespesaCodigo: '35101.0009', receitaDespesaNome: 'Mercadorias e Produtos Diversos – Ato Não Cooperativo' },
     'IMPOSTO_ICMS': { ativoPassivoCodigo: '21401.0320', ativoPassivoNome: 'ICMS a Recolher', receitaDespesaCodigo: '35903.0001', receitaDespesaNome: 'ICMS sobre Vendas – Ato Não Cooperativo' },
     'IMPOSTO_PIS': { ativoPassivoCodigo: '21401.0309', ativoPassivoNome: 'PIS a Recolher', receitaDespesaCodigo: '35903.0002', receitaDespesaNome: 'PIS sobre Vendas – Ato Não Cooperativo' },
@@ -4484,8 +4281,19 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     'IMPOSTO_DAS': { ativoPassivoCodigo: '21401.0321', ativoPassivoNome: 'Simples Nacional (DAS) a Recolher', receitaDespesaCodigo: '35903.0004', receitaDespesaNome: 'Simples Nacional (DAS) – Ato Não Cooperativo' },
     'IMPOSTO_IRPJ': { ativoPassivoCodigo: '21401.0322', ativoPassivoNome: 'IRPJ a Recolher', receitaDespesaCodigo: '35903.0005', receitaDespesaNome: 'IRPJ – Ato Não Cooperativo' },
     'IMPOSTO_CSLL': { ativoPassivoCodigo: '21401.0314', ativoPassivoNome: 'CSSLL a Recolher', receitaDespesaCodigo: '35903.0006', receitaDespesaNome: 'CSLL – Ato Não Cooperativo' },
+    'REPASSE_PRODUCAO': { ativoPassivoCodigo: '21001.0001', ativoPassivoNome: 'Produção a Pagar aos Cooperados', receitaDespesaCodigo: '31601.0009', receitaDespesaNome: 'Repasse da Produção' },
     'DEFAULT_PAGAR': { ativoPassivoCodigo: '21001.0001', ativoPassivoNome: 'Produção a Pagar aos Cooperados', receitaDespesaCodigo: '31601.0009', receitaDespesaNome: 'Aquisição da Produção dos Cooperados' },
     'DEFAULT_RECEBER': { ativoPassivoCodigo: '11201.9999', ativoPassivoNome: 'Clientes', receitaDespesaCodigo: '31101.0009', receitaDespesaNome: 'Venda da Produção dos Cooperados' }
+  };
+
+  const contasPorTitulo = (params: Pick<ContaPagarReceber, 'tipo' | 'categoria' | 'subcategoria'>) => {
+    const padrao = params.tipo === 'RECEBER' ? 'DEFAULT_RECEBER' : 'DEFAULT_PAGAR';
+    const contas = (params.categoria && CONTAS_POR_CATEGORIA[params.categoria]) || CONTAS_POR_CATEGORIA[padrao];
+    const codigo = contaResultadoPorSubcategoria(params.subcategoria);
+    if (!codigo || (params.tipo === 'RECEBER' ? !/^3[15][13]/.test(codigo) : /^3[15][13]/.test(codigo))) return contas;
+    const fornecedores = { ativoPassivoCodigo: '21302.0900', ativoPassivoNome: 'Fornecedores de Insumos' };
+    return { ...contas, ...(padrao === 'DEFAULT_PAGAR' && contas === CONTAS_POR_CATEGORIA[padrao] ? fornecedores : {}),
+      receitaDespesaCodigo: codigo };
   };
 
   const gerarLancamentoContabilAutomatico = (params: {
@@ -4496,10 +4304,11 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     classificacaoDespesa?: 'FIXA' | 'VARIAVEL';
     moduloOrigem: LancamentoContabil['moduloOrigem'];
     documentoRef?: string;
+    subcategoria?: string;
+    dataEmissao?: string;
   }) => {
     if (!params.valor || params.valor <= 0) return;
-    const chaveDefault = params.tipo === 'RECEBER' ? 'DEFAULT_RECEBER' : 'DEFAULT_PAGAR';
-    const contas = (params.categoria && CONTAS_POR_CATEGORIA[params.categoria]) || CONTAS_POR_CATEGORIA[chaveDefault];
+    const contas = contasPorTitulo(params);
     if (params.documentoRef && lancamentosContabeis.some(l => pertenceAoTenant(l, currentTenant.id) && l.documentoRef === params.documentoRef)) return;
     const codigoDebito = params.tipo === 'RECEBER' ? contas.ativoPassivoCodigo : contas.receitaDespesaCodigo;
     const codigoCredito = params.tipo === 'RECEBER' ? contas.receitaDespesaCodigo : contas.ativoPassivoCodigo;
@@ -4515,7 +4324,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: `lanc-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
       tenantId: currentTenant.id,
       numeroLancamento: proximoNumero,
-      data: new Date().toISOString().split('T')[0],
+      data: params.dataEmissao || new Date().toISOString().split('T')[0],
       contaDebitoCodigo: contaDebito.codigo,
       contaDebitoNome: contaDebito.nome,
       contaCreditoCodigo: contaCredito.codigo,
@@ -4538,6 +4347,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     const newConta: ContaPagarReceber = {
       ...cData,
+      ...(cData.status === 'PAGO' && !cData.dataPagamento ? { dataPagamento: new Date().toISOString().split('T')[0] } : {}),
       id: `fin-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
       tenantId: currentTenant.id
     };
@@ -4555,6 +4365,8 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       valor: newConta.valor,
       tipo: newConta.tipo,
       categoria: newConta.categoria,
+      subcategoria: newConta.subcategoria,
+      dataEmissao: newConta.dataEmissao,
       classificacaoDespesa: newConta.classificacaoDespesa,
       moduloOrigem: 'FINANCEIRO',
       documentoRef: newConta.id
@@ -4573,10 +4385,36 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (cData.status === 'CANCELADO' && alvo && alvo.status !== 'CANCELADO') {
       setLancamentosContabeis(prev => prev.filter(l => l.documentoRef !== id));
     }
+    if (alvo && cData.status !== 'CANCELADO') {
+      const atualizado = { ...alvo, ...cData };
+      const mudouClassificacao = atualizado.tipo !== alvo.tipo || atualizado.categoria !== alvo.categoria
+        || atualizado.subcategoria !== alvo.subcategoria;
+      const contas = contasPorTitulo(atualizado);
+      const receber = atualizado.tipo === 'RECEBER';
+      const codigoDebito = receber ? contas.ativoPassivoCodigo : contas.receitaDespesaCodigo;
+      const codigoCredito = receber ? contas.receitaDespesaCodigo : contas.ativoPassivoCodigo;
+      const debito = planoContas.find(p => p.codigo === codigoDebito && p.aceitaLancamento);
+      const credito = planoContas.find(p => p.codigo === codigoCredito && p.aceitaLancamento);
+      if (mudouClassificacao && (!debito || !credito)) {
+        alert('A alteração requer as contas analíticas correspondentes no plano de contas.');
+        return;
+      }
+      setLancamentosContabeis(prev => prev.map(l => l.documentoRef === id && pertenceAoTenant(l, currentTenant.id) ? {
+        ...l, valor: atualizado.valor, ...(cData.dataEmissao ? { data: cData.dataEmissao } : {}),
+        historico: `[Lançamento automático] ${atualizado.descricao}`,
+        ...(atualizado.classificacaoDespesa ? { classificacaoDespesa: atualizado.classificacaoDespesa } : {}),
+        ...(mudouClassificacao && debito && credito ? {
+          contaDebitoCodigo: debito.codigo, contaDebitoNome: debito.nome,
+          contaCreditoCodigo: credito.codigo, contaCreditoNome: credito.nome,
+        } : {}),
+      } : l));
+    }
     // Baixa pelo formulário (status → PAGO): lança extrato e contábil da liquidação.
     if (cData.status === 'PAGO' && alvo && alvo.status !== 'PAGO') {
       cData = { ...cData, dataPagamento: cData.dataPagamento || new Date().toISOString().split('T')[0] };
-      registrarLiquidacaoConta({ ...alvo, ...cData } as ContaPagarReceber);
+      const alterouClassificacao = (cData.tipo ?? alvo.tipo) !== alvo.tipo || (cData.categoria ?? alvo.categoria) !== alvo.categoria
+        || (cData.subcategoria ?? alvo.subcategoria) !== alvo.subcategoria;
+      registrarLiquidacaoConta({ ...alvo, ...cData }, !alterouClassificacao);
     }
     setContasPagarReceber(prev => prev.map(c => c.id === id ? { ...c, ...cData } : c));
     addAuditLog('SISFIN', 'ALTERACAO', `Atualizou conta a pagar/receber ${alvo?.descricao || id}`);
@@ -4599,7 +4437,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // manual (pagarReceberConta), por títulos que já nascem pagos (vendas e
   // compras à vista) e quando o status de um título muda para PAGO.
   // ---------------------------------------------------------------------------
-  const registrarLiquidacaoConta = (conta: ContaPagarReceber) => {
+  const registrarLiquidacaoConta = (conta: ContaPagarReceber, usarOrigem = true) => {
     const dataBaixa = conta.dataPagamento || new Date().toISOString().split('T')[0];
     const isReceber = conta.tipo === 'RECEBER';
     addLancamentoExtrato({
@@ -4609,21 +4447,25 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       tipo: isReceber ? 'CREDITO' : 'DEBITO',
       valor: conta.valor,
       categoria: conta.categoria || 'FINANCEIRO',
+      ...(conta.subcategoria ? { subcategoria: conta.subcategoria } : {}),
       ...(conta.contaBancariaId ? { contaBancariaId: conta.contaBancariaId } : {})
     });
     // Reverte a conta "a pagar/receber" (lançada na criação do título por
     // gerarLancamentoContabilAutomatico) para o Caixa/Banco, usando a mesma
     // conta de contrapartida da categoria original.
-    const contasRef = (conta.categoria && CONTAS_POR_CATEGORIA[conta.categoria]) || CONTAS_POR_CATEGORIA[isReceber ? 'DEFAULT_RECEBER' : 'DEFAULT_PAGAR'];
+    const contasRef = contasPorTitulo(conta);
+    const origem = usarOrigem ? lancamentosContabeis.find(l => pertenceAoTenant(l, currentTenant.id) && l.documentoRef === conta.id) : undefined;
+    const contraparteCodigo = (isReceber ? origem?.contaDebitoCodigo : origem?.contaCreditoCodigo) || contasRef.ativoPassivoCodigo;
+    const contraparteNome = planoContas.find(p => p.codigo === contraparteCodigo)?.nome || contasRef.ativoPassivoNome;
     const codigoBanco = codigoBancoContabil(conta.contaBancariaId);
     const contaCaixaBanco = { codigo: codigoBanco, nome: planoContas.find(p => p.codigo === codigoBanco)?.nome || 'Bancos Conta Movimento' };
     addLancamentoContabil({
       numeroLancamento: 4000 + Math.floor(Math.random() * 5000),
       data: dataBaixa,
-      contaDebitoCodigo: isReceber ? contaCaixaBanco.codigo : contasRef.ativoPassivoCodigo,
-      contaDebitoNome: isReceber ? contaCaixaBanco.nome : contasRef.ativoPassivoNome,
-      contaCreditoCodigo: isReceber ? contasRef.ativoPassivoCodigo : contaCaixaBanco.codigo,
-      contaCreditoNome: isReceber ? contasRef.ativoPassivoNome : contaCaixaBanco.nome,
+      contaDebitoCodigo: isReceber ? contaCaixaBanco.codigo : contraparteCodigo,
+      contaDebitoNome: isReceber ? contaCaixaBanco.nome : contraparteNome,
+      contaCreditoCodigo: isReceber ? contraparteCodigo : contaCaixaBanco.codigo,
+      contaCreditoNome: isReceber ? contraparteNome : contaCaixaBanco.nome,
       valor: conta.valor,
       historico: `Liquidação de Título (${conta.tipo}) - ${conta.descricao} (${conta.pessoaNome})`,
       moduloOrigem: 'FINANCEIRO'
@@ -5274,48 +5116,29 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     setEntregasEscola(prev => [newEnt, ...prev]);
 
-    const valorTotalEntrega = newEnt.itensRecebidos ? newEnt.itensRecebidos.reduce((acc, item) => acc + (item.qtdRecebida || item.qtdEsperada || 0) * 12, 0) : 0;
+    const pedido = pedidosProdutorPAA.find(item => item.id === newEnt.pedidoId);
+    const recebidos = (newEnt.itensRecebidos ?? []).filter(item => item.qtdRecebida > 0);
+    const valores = recebidos.map(item => {
+      const nome = chaveUnica(item.produto);
+      const preco = pedido?.itens.find(linha => chaveUnica(linha.produtoNome) === nome)?.precoUnitario
+        ?? produtos.find(produto => chaveUnica(produto.nome) === nome)?.precoReferencia;
+      return Number.isFinite(preco) && Number(preco) > 0 ? item.qtdRecebida * Number(preco) : null;
+    });
+    const valorTotalEntrega = valores.every(valor => valor !== null)
+      ? valores.reduce<number>((total, valor) => total + (valor ?? 0), 0) : 0;
     const dataEntregaReal = newEnt.dataHoraEntrega ? newEnt.dataHoraEntrega.substring(0, 10) : new Date().toISOString().split('T')[0];
-    const isEntregue = newEnt.statusConfirmacao === 'RECEBIDO_OK' || newEnt.statusConfirmacao === 'RECEBIDO_COM_RESTRICAO';
 
-    // Financial Title (Receber)
-    const newConta: ContaPagarReceber = {
-      id: `fin-ent-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
-      tenantId: currentTenant.id,
+    if (valorTotalEntrega > 0) addContaPagarReceber({
       tipo: 'RECEBER',
       descricao: `Faturamento Entrega Escolar PNAE - ${newEnt.escolaNome || 'Prefeitura'}`,
       pessoaNome: newEnt.escolaNome || 'Secretaria de Educação / PNAE',
       categoria: 'RECEITA_VENDA',
+      subcategoria: 'Venda PNAE/PAA',
       valor: valorTotalEntrega,
       dataEmissao: dataEntregaReal,
       dataVencimento: dataEntregaReal,
-      status: isEntregue ? 'PAGO' : 'PENDENTE',
-      dataPagamento: isEntregue ? dataEntregaReal : undefined,
-      centroCusto: 'Programa PNAE'
-    };
-    setContasPagarReceber(prev => [newConta, ...prev]);
-
-    if (isEntregue) {
-      addLancamentoExtrato({
-        data: dataEntregaReal,
-        historico: `Crédito PNAE Entrega Escolar (${newEnt.escolaNome})`,
-        documento: newEnt.id,
-        tipo: 'CREDITO',
-        valor: valorTotalEntrega,
-        categoria: 'RECEITA_VENDA'
-      });
-    }
-
-    addLancamentoContabil({
-      numeroLancamento: 6000 + Math.floor(Math.random() * 3000),
-      data: dataEntregaReal,
-      contaDebitoCodigo: '11201.9999',
-      contaDebitoNome: 'Clientes',
-      contaCreditoCodigo: '31101.0009',
-      contaCreditoNome: 'Venda da Produção dos Cooperados',
-      valor: valorTotalEntrega,
-      historico: `Entrega de Alimentos PNAE - Escola ${newEnt.escolaNome}`,
-      moduloOrigem: 'FINANCEIRO'
+      status: 'PENDENTE',
+      centroCusto: 'Programa PNAE',
     });
     addAuditLog('SISGEPA', 'INCLUSAO', `Cadastrou entrega para escola: ${newEnt.escolaNome || newEnt.id}`);
   };
@@ -5391,10 +5214,12 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if ((mData.tipoMovimento === 'SAIDA' || mData.tipoMovimento === 'PERDA') && itemMovimentado?.valorUnitarioMedio) {
       const valorMovimentado = Number((mData.quantidade * itemMovimentado.valorUnitarioMedio).toFixed(2));
       if (valorMovimentado > 0) {
-        const contaEstoque = { codigo: '11501.9999', nome: 'Insumos Agrícolas' };
-        const contaContrapartida = mData.tipoMovimento === 'PERDA'
-          ? { codigo: '31601.0009', nome: 'Perdas de Estoques' }
-          : { codigo: '31601.0009', nome: 'Custos de Comercialização' };
+        const insumo = itemMovimentado.categoria === 'Insumos e Embalagens';
+        const codigoEstoque = itemMovimentado.paraRevenda ? '11504.0099' : insumo ? '11501.0010' : '11501.9999';
+        const codigoCusto = itemMovimentado.paraRevenda ? '35601.0009' : insumo ? '31601.0010' : '31601.0011';
+        const contaEstoque = planoContas.find(conta => conta.codigo === codigoEstoque);
+        const contaContrapartida = planoContas.find(conta => conta.codigo === codigoCusto);
+        if (!contaEstoque || !contaContrapartida) return;
         const proximoNumero = Math.max(1000, ...lancamentosContabeis.map(l => Number(l.numeroLancamento) || 0)) + 1;
         setLancamentosContabeis(prev => [{
           id: `lanc-est-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
@@ -5545,6 +5370,9 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const gerarNotaFiscalDePrestacaoContas = (prestacao: PrestacaoContasPAA): NotaFiscal => {
     const num = sefazCeConfig.proximoNumeroNFe.toString().padStart(6, '0');
+    const escola = escolasPnae.find(item => item.id === prestacao.escolaId);
+    const valor = prestacao.valorTotalExecutado ?? prestacao.valorTotalRepasse ?? 0;
+    const quantidade = prestacao.totalKgEntregues ?? 0;
     const newNf: NotaFiscal = {
       id: `nf-pnae-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
       tenantId: currentTenant?.id || 'coop-01',
@@ -5555,20 +5383,20 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       emitenteRazaoSocial: currentTenant?.razaoSocial || sefazCeConfig.razaoSocialEmitente,
       emitenteCnpjCpf: currentTenant?.cnpj || sefazCeConfig.cnpjEmitente,
       emitenteInscricaoEstadual: sefazCeConfig.inscricaoEstadual,
-      emitenteMunicipio: currentTenant?.cidade || 'Trairi',
+      emitenteMunicipio: currentTenant?.cidade || '',
       emitenteUf: 'CE',
       destinatarioNome: prestacao.escolaNome || 'PREFEITURA MUNICIPAL DE TRAIRI / SECRETARIA DE EDUCAÇÃO (PNAE)',
-      destinatarioCnpjCpf: '07.418.912/0001-50',
+      destinatarioCnpjCpf: escola?.cnpj || '',
       destinatarioInscricaoEstadual: 'ISENTO',
-      destinatarioEndereco: 'Rua Fernando Bezerra, 120 - Centro',
-      destinatarioMunicipio: 'Trairi',
+      destinatarioEndereco: escola?.endereco || '',
+      destinatarioMunicipio: escola?.municipio || '',
       destinatarioUf: 'CE',
       dataEmissao: new Date().toISOString().substring(0, 10),
-      valorProdutos: prestacao.valorTotalExecutado || prestacao.valorTotalRepasse || 5000,
+      valorProdutos: valor,
       valorFrete: 0,
       valorDesconto: 0,
       valorIcms: 0,
-      valorTotalNota: prestacao.valorTotalExecutado || prestacao.valorTotalRepasse || 5000,
+      valorTotalNota: valor,
       naturezaOperacao: 'Venda de Produção Agrícola Familiar para Alimentação Escolar (PNAE CE)',
       statusSefaz: 'RASCUNHO',
       ambienteSefaz: sefazCeConfig.ambiente,
@@ -5581,9 +5409,9 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           ncm: '0810.90.00',
           cfop: '5101',
           unidade: 'KG',
-          quantidade: prestacao.totalKgEntregues || 500,
-          valorUnitario: (prestacao.valorTotalExecutado || 5000) / (prestacao.totalKgEntregues || 500),
-          valorTotal: prestacao.valorTotalExecutado || 5000,
+          quantidade: quantidade,
+          valorUnitario: quantidade > 0 ? valor / quantidade : 0,
+          valorTotal: valor,
           icmsCstCsosn: '400',
           icmsAliquota: 0,
           icmsValor: 0
@@ -5606,12 +5434,12 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const prod = produtores.find(p => p.id === produtorId) || {
       id: produtorId,
       nome: 'Produtor Cooperado',
-      cpfCnpj: '000.000.000-00',
-      cafDapNum: 'DAP-CE-2026',
-      nomePropriedade: 'Sítio Familiar',
-      municipio: 'Trairi',
+      cpfCnpj: '',
+      cafDapNum: '',
+      nomePropriedade: '',
+      municipio: '',
       uf: 'CE',
-      comunidade: 'Zona Rural'
+      comunidade: ''
     };
 
     // Itens correspondentes a este produtor no pedido
@@ -5666,7 +5494,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       emitenteRazaoSocial: currentTenant?.razaoSocial || sefazCeConfig.razaoSocialEmitente,
       emitenteCnpjCpf: currentTenant?.cnpj || sefazCeConfig.cnpjEmitente,
       emitenteInscricaoEstadual: sefazCeConfig.inscricaoEstadual,
-      emitenteMunicipio: currentTenant?.cidade || 'Trairi',
+      emitenteMunicipio: currentTenant?.cidade || '',
       emitenteUf: 'CE',
       emitenteEndereco: currentTenant?.logradouro ? `${currentTenant.logradouro}, ${currentTenant.numero}` : 'Sede da Cooperativa',
 
@@ -5730,22 +5558,24 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     escolaId: string,
     sistemaTributario: SistemaTributarioNFe = 'TRADICIONAL_ATUAL'
   ): NotaFiscal => {
-    const esc = escolasPnae.find(e => e.id === escolaId) || {
+    const esc = escolasPnae.find(e => e.id === escolaId) ?? {
       id: escolaId,
       nomeEscola: ('escolaNome' in pedidoOuEntrega && pedidoOuEntrega.escolaNome) ? pedidoOuEntrega.escolaNome : 'Escola da Rede Municipal de Ensino',
-      inepCodigo: '23000001',
-      diretorResponsavel: 'Secretaria Municipal de Educação',
-      telefone: '(85) 3341-1200',
-      endereco: 'Sede da Unidade Escolar',
-      alunosAtendidos: 250,
+      inepCodigo: '',
+      diretorResponsavel: '',
+      telefone: '',
+      endereco: '',
+      alunosAtendidos: 0,
+      cnpj: '',
+      municipio: '',
       tenantId: currentTenant?.id || 'coop-01'
     };
 
     // Mapear itens da entrega ou pedido
     const rawItens = ('itens' in pedidoOuEntrega && Array.isArray(pedidoOuEntrega.itens)) ? pedidoOuEntrega.itens : [];
     const itensMapeados: NotaFiscalItem[] = rawItens.map((it: any, idx) => {
-      const qtd = it.quantidadePedida || it.quantidadePrevista || it.quantidadeEntregue || 100;
-      const preco = it.precoUnitario || (produtos.find(p => p.id === it.produtoId)?.precoReferencia) || 5.0;
+      const qtd = it.quantidadeEntregue ?? it.quantidadePedida ?? it.quantidadePrevista ?? 0;
+      const preco = it.precoUnitario ?? produtos.find(p => p.id === it.produtoId)?.precoReferencia ?? 0;
       const valorTotal = it.valorTotalItem || (qtd * preco);
       const prodCadastrado = produtos.find(p => p.id === it.produtoId || p.nome === it.produtoNome);
       const ncm = prodCadastrado?.codigoNcm || '0810.90.00';
@@ -5782,16 +5612,16 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       emitenteRazaoSocial: currentTenant?.razaoSocial || sefazCeConfig.razaoSocialEmitente,
       emitenteCnpjCpf: currentTenant?.cnpj || sefazCeConfig.cnpjEmitente,
       emitenteInscricaoEstadual: sefazCeConfig.inscricaoEstadual,
-      emitenteMunicipio: currentTenant?.cidade || 'Trairi',
+      emitenteMunicipio: currentTenant?.cidade || '',
       emitenteUf: 'CE',
       emitenteEndereco: currentTenant?.logradouro ? `${currentTenant.logradouro}, ${currentTenant.numero}` : 'Sede da Cooperativa',
 
       // Destinatário: A Escola / Prefeitura Municipal
       destinatarioNome: `${esc.nomeEscola} (PNAE / Alimentação Escolar)`,
-      destinatarioCnpjCpf: '07.418.912/0001-50', // CNPJ da Prefeitura / FNDE responsável
+      destinatarioCnpjCpf: esc.cnpj || '',
       destinatarioInscricaoEstadual: 'ISENTO',
       destinatarioEndereco: esc.endereco,
-      destinatarioMunicipio: 'Trairi',
+      destinatarioMunicipio: esc.municipio || '',
       destinatarioUf: 'CE',
       destinatarioTelefone: esc.telefone,
 
@@ -5969,6 +5799,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         pagarReceberConta,
         extratoBancario: tenantExtratoBancario,
         addLancamentoExtrato,
+        registrarMovimentoManual,
         solicitacoesCompra: tenantSolicitacoesCompra,
         addSolicitacaoCompra,
         updateSolicitacaoCompra,
