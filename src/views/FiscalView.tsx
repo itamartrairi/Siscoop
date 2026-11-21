@@ -427,7 +427,7 @@ export const FiscalView: React.FC = () => {
               className="px-3.5 py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-bold rounded-xl shadow-lg transition-all flex items-center gap-2 text-sm"
               title="Exportar Movimento Fiscal, SPED EFD e Lote de XMLs para o Fortes Total Contador"
             >
-              <Building2 className="w-4 h-4" /> Exportar Fortes Fiscal
+              <Building2 className="w-4 h-4" /> Exportar arquivo fiscal
             </button>
             <button
               onClick={abrirNovaNota}

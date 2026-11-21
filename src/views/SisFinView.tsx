@@ -24,7 +24,7 @@ import {
   PieChart as PieChartIcon,
   Printer
 } from 'lucide-react';
-import type { ContaPagarReceber } from '../types';
+import type { ContaBancaria, ContaPagarReceber, ExtratoBancario } from '../types';
 import { DataGrid, GridStatus } from '../components/ui/DataGrid';
 import { CheckCircle2 } from 'lucide-react';
 import { playActionCompleteSound } from '../utils/actionSound';
@@ -123,6 +123,159 @@ function LinhaExpansivel({ linha, nivel = 0 }: {
         <LinhaExpansivel key={filho.id ?? filho.nome} linha={filho} nivel={nivel + 1} />
       ))}
     </>
+  );
+}
+
+type MovimentoConciliacao = { data: string; centavos: number; historico: string };
+type ArquivoConciliacao = { nome: string; inicio: string; fim: string; movimentos: MovimentoConciliacao[] };
+
+function lerExtratoOfx(conteudo: string, nome: string): ArquivoConciliacao {
+  const listas = [...conteudo.matchAll(/<BANKTRANLIST\s*>([\s\S]*?)<\/BANKTRANLIST\s*>/gi)];
+  if (listas.length !== 1) throw new Error('Selecione um arquivo OFX com o extrato de uma única conta.');
+  const secao = listas[0][1];
+  const campo = (texto: string, tag: string) => texto.match(new RegExp(`<${tag}\\s*>([^<\\r\\n]*)`, 'i'))?.[1].trim();
+  const moedaArquivo = campo(conteudo, 'CURDEF');
+  if (moedaArquivo && moedaArquivo.toUpperCase() !== 'BRL') throw new Error('Importe um extrato em reais (BRL).');
+  const lerData = (valor?: string) => {
+    const partes = valor?.match(/^(\d{4})(\d{2})(\d{2})/);
+    if (!partes) throw new Error('O arquivo OFX contém uma data ausente ou inválida.');
+    const iso = `${partes[1]}-${partes[2]}-${partes[3]}`;
+    const data = new Date(`${iso}T00:00:00Z`);
+    if (!Number.isFinite(data.getTime()) || data.toISOString().slice(0, 10) !== iso) {
+      throw new Error('O arquivo OFX contém uma data inválida.');
+    }
+    return iso;
+  };
+  const lancamentos = secao.split(/<STMTTRN\s*>/i).slice(1);
+  const vistos = new Set<string>();
+  const movimentos = lancamentos.map(texto => {
+    const id = campo(texto, 'FITID');
+    if (id && vistos.has(id)) throw new Error('O arquivo OFX contém identificadores de lançamento repetidos.');
+    if (id) vistos.add(id);
+    const valor = campo(texto, 'TRNAMT')?.replace(',', '.');
+    const centavos = valor && /^[+-]?\d+(?:\.\d{1,2})?$/.test(valor) ? Math.round(Number(valor) * 100) : NaN;
+    if (!Number.isSafeInteger(centavos) || centavos === 0) throw new Error('O arquivo OFX contém um valor de transação inválido.');
+    return { data: lerData(campo(texto, 'DTPOSTED')), centavos, historico: campo(texto, 'MEMO') || campo(texto, 'NAME') || '—' };
+  }).sort((a, b) => a.data.localeCompare(b.data));
+  const inicio = campo(secao, 'DTSTART') ? lerData(campo(secao, 'DTSTART')) : movimentos[0]?.data;
+  const fim = campo(secao, 'DTEND') ? lerData(campo(secao, 'DTEND')) : movimentos.at(-1)?.data;
+  if (!inicio || !fim || inicio > fim || movimentos.some(movimento => movimento.data < inicio || movimento.data > fim)) {
+    throw new Error('O período do arquivo OFX não corresponde às datas dos lançamentos.');
+  }
+  return { nome, inicio, fim, movimentos };
+}
+
+function compararExtratos(banco: MovimentoConciliacao[], sistema: MovimentoConciliacao[]) {
+  const chave = ({ data, centavos }: MovimentoConciliacao) => `${data}|${centavos}`;
+  const pendentes = new Map<string, MovimentoConciliacao[]>();
+  for (const movimento of sistema) {
+    const id = chave(movimento);
+    const grupo = pendentes.get(id);
+    if (grupo) grupo.push(movimento);
+    else pendentes.set(id, [movimento]);
+  }
+  const soBanco = banco.filter(movimento => {
+    const grupo = pendentes.get(chave(movimento));
+    return !grupo?.pop();
+  });
+  return { iguais: banco.length - soBanco.length, soBanco, soSistema: [...pendentes.values()].flat() };
+}
+
+function ComparacaoExtratoBancario({ contas, lancamentos, contaInicial }: {
+  contas: ContaBancaria[];
+  lancamentos: NonNullable<ExtratoBancario['lancamentos']>;
+  contaInicial: string;
+}) {
+  const [contaId, setContaId] = useState(contas.some(item => item.id === contaInicial) ? contaInicial : '');
+  const [arquivo, setArquivo] = useState<ArquivoConciliacao | null>(null);
+  const [erro, setErro] = useState('');
+  const [carregando, setCarregando] = useState(false);
+  const [confirmacao, setConfirmacao] = useState<string | null>(null);
+  const conta = contas.find(item => item.id === contaId);
+  const sistema = arquivo && conta ? lancamentos
+    .filter(item => item.contaBancariaId === conta.id && item.data?.slice(0, 10) >= arquivo.inicio && item.data?.slice(0, 10) <= arquivo.fim)
+    .map(item => ({ data: item.data.slice(0, 10), centavos: Math.round(Math.abs(item.valor) * 100) * (item.tipo === 'CREDITO' ? 1 : -1), historico: item.historico }))
+    : [];
+  const resultado = arquivo && conta ? compararExtratos(arquivo.movimentos, sistema) : null;
+  const bate = resultado && resultado.soBanco.length === 0 && resultado.soSistema.length === 0;
+  const assinatura = bate ? JSON.stringify([contaId, sistema]) : null;
+  const total = (movimentos: MovimentoConciliacao[]) => formatarValor(movimentos.reduce((soma, movimento) => soma + movimento.centavos, 0) / 100);
+
+  const importar = async (evento: React.ChangeEvent<HTMLInputElement>) => {
+    const arquivoSelecionado = evento.currentTarget.files?.[0];
+    evento.currentTarget.value = '';
+    if (!arquivoSelecionado) return;
+    setCarregando(true);
+    setArquivo(null);
+    setErro('');
+    setConfirmacao(null);
+    try {
+      if (!/\.ofx$/i.test(arquivoSelecionado.name) || arquivoSelecionado.size > 5 * 1024 * 1024) {
+        throw new Error('Selecione um arquivo OFX de até 5 MB.');
+      }
+      const dados = await arquivoSelecionado.arrayBuffer();
+      const utf8 = new TextDecoder().decode(dados);
+      const conteudo = utf8.includes('\uFFFD') ? new TextDecoder('windows-1252').decode(dados) : utf8;
+      setArquivo(lerExtratoOfx(conteudo, arquivoSelecionado.name));
+    } catch (falha) {
+      setErro(falha instanceof Error ? falha.message : 'Não foi possível ler o extrato.');
+    } finally {
+      setCarregando(false);
+    }
+  };
+
+  return (
+    <section aria-label="Comparação de extratos" className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <fieldset disabled={carregando} className="flex min-w-0 flex-wrap items-end gap-3 text-xs">
+        <label className="min-w-0 space-y-1 font-bold text-slate-700">
+          <span className="block">Conta para conciliar</span>
+          <SelectContaBancaria value={contaId} onChange={id => { setContaId(id); setArquivo(null); setErro(''); setConfirmacao(null); }}
+            className="block w-full max-w-full rounded-lg border border-slate-200 p-2" contas={contas} vazioLabel="Selecione a conta bancária" />
+        </label>
+        <label className="space-y-1 font-bold text-slate-700">
+          <span className="block">Importar extrato bancário (OFX)</span>
+          <input type="file" accept=".ofx" disabled={!conta || carregando} onChange={importar}
+            className="block w-full max-w-72 rounded-lg border border-slate-200 p-2 disabled:opacity-50" />
+        </label>
+      </fieldset>
+      {carregando && <p role="status" className="text-xs">Lendo o extrato…</p>}
+      {erro && <p role="alert" className="text-xs text-rose-700">{erro}</p>}
+      {arquivo && resultado && (
+        <>
+          <p className="break-words text-xs text-slate-600">
+            {arquivo.nome} · {formatarData(arquivo.inicio)} a {formatarData(arquivo.fim)} · Comparação por data, crédito ou débito e valor.
+          </p>
+          <p role="status" className={`text-sm font-semibold ${bate ? 'text-emerald-800' : 'text-amber-800'}`}>
+            {bate ? 'Os lançamentos conferem.' : 'Há divergências nos lançamentos.'} {resultado.iguais} correspondências ·
+            Banco {total(arquivo.movimentos)} · SISCOOP {total(sistema)}
+          </p>
+          {bate ? (
+            <button type="button" disabled={confirmacao === assinatura}
+              className="rounded-lg bg-emerald-700 px-4 py-2 text-xs font-bold text-white disabled:opacity-70"
+              onClick={() => setConfirmacao(assinatura)}>
+              {confirmacao === assinatura ? 'Conciliação confirmada nesta sessão' : 'Confirmar conciliação'}
+            </button>
+          ) : (
+            <div className="grid gap-3 lg:grid-cols-2">
+              {([{ nome: 'Somente no banco', movimentos: resultado.soBanco }, { nome: 'Somente no SISCOOP', movimentos: resultado.soSistema }]).map(grupo => (
+                <details key={grupo.nome} className="min-w-0 rounded-lg border border-slate-200 bg-white p-3 text-xs" open>
+                  <summary className="cursor-pointer font-semibold">{grupo.nome} ({grupo.movimentos.length})</summary>
+                  <ul className="mt-2 max-h-60 space-y-2 overflow-y-auto">
+                    {grupo.movimentos.map((movimento, indice) => (
+                      <li key={indice} className="flex flex-wrap gap-x-2 border-t border-slate-100 pt-2">
+                        <span>{formatarData(movimento.data)}</span>
+                        <strong>{formatarValor(movimento.centavos / 100)}</strong>
+                        <span className="min-w-0 break-words">{movimento.historico}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </section>
   );
 }
 
@@ -546,7 +699,7 @@ if (c) {
       <NavegacaoSecoes selecionada={activeTab !== null} voltar={() => setActiveTab(null)} secoes={[
         { titulo: <>Contas a Pagar e Receber ({contasPagarReceber.length})</>, descricao: "Acompanhe pagamentos e recebimentos.", icone: CircleDollarSign, abrir: () => setActiveTab('contas') },
         { titulo: <>Relatórios PDF</>, descricao: "Consulte e exporte relatórios em PDF.", icone: FileText, abrir: () => setActiveTab('relatorios') },
-        { titulo: <>Extrato Conciliado ({extratoBancario?.bancoNome || 'Sicoob Credi'})</>, descricao: "Confira as movimentações bancárias conciliadas.", icone: Landmark, abrir: () => setActiveTab('extrato') },
+        { titulo: 'Conciliação bancária', descricao: '', icone: Landmark, abrir: () => setActiveTab('extrato') },
         { titulo: <>Contas Bancárias</>, descricao: "Gerencie as contas bancárias.", icone: Landmark, abrir: () => setActiveTab('bancos') },
         { titulo: <>Balanço Financeiro</>, descricao: "Consulte a posição patrimonial e financeira.", icone: BarChart3, abrir: () => setActiveTab('balanco') },
         { titulo: 'Dashboard', descricao: 'Acompanhe os indicadores financeiros.', icone: BarChart3, abrir: () => setActiveTab('dashboard') },
@@ -1031,10 +1184,7 @@ if (c) {
       {/* Tab Extrato */}
       {activeTab === 'extrato' && (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-4">
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex justify-between text-xs font-bold">
-            <span>Agência / Conta: {extratoBancario?.agenciaConta || '0001 / 12345-6'}</span>
-            <span className="text-emerald-700">Saldo Atual: R$ {(extratoBancario?.saldoAtual || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-          </div>
+          <ComparacaoExtratoBancario contas={contasBancarias} lancamentos={lancamentosExtrato} contaInicial={filtroBanco} />
 
           <div className="mb-3 flex flex-wrap items-center gap-3 text-xs">
             <div className="flex items-center gap-2">
