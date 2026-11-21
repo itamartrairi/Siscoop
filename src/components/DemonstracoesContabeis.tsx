@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { FileDown, AlertTriangle, CheckCircle2, Scale } from 'lucide-react';
+import { FileDown, ChevronRight, AlertTriangle, CheckCircle2, Scale } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { useCoop } from '../context/CoopContext';
 import { PlanoContaContabil } from '../types';
-import { montarResultadoCooperativa, type RegimeResultado } from '../data/rubricasCooperativa';
+import { montarResultadoCooperativa, rubricasResultado, type RegimeResultado } from '../data/rubricasCooperativa';
 
 /**
  * Demonstrações do SisCont calculadas a partir dos lançamentos contábeis:
@@ -151,6 +151,7 @@ export function exportarPdf(titulo: string, subtitulo: string, colunas: string[]
 export const DemonstracoesContabeis: React.FC<{ modo: Modo }> = ({ modo }) => {
   const { planoContas, lancamentosContabeis, contasPagarReceber, currentTenant } = useCoop();
   const [regime, setRegime] = useState<RegimeResultado>('competencia');
+  const [gruposAbertos, setGruposAbertos] = useState<Record<string, boolean>>({});
   const [simularTributos, setSimularTributos] = useState(false);
   const [percentualOutrosFundos, setPercentualOutrosFundos] = useState(0);
   const [dataFim, setDataFim] = useState(hoje());
@@ -460,6 +461,21 @@ export const DemonstracoesContabeis: React.FC<{ modo: Modo }> = ({ modo }) => {
   }
 
   const demonstrativo = montarResultadoCooperativa(planoContas, lancamentosContabeis, contasPagarReceber, dataInicio, dataFim, regime, simularTributos, percentualOutrosFundos);
+  type LinhaDsp = (typeof demonstrativo.linhas)[number];
+  const gruposDsp: { principal: LinhaDsp; subitens: LinhaDsp[] }[] = [];
+  const ajustesAntesDosTributos: LinhaDsp[] = [];
+  for (const linha of demonstrativo.linhas) {
+    if (!linha.detalhe) {
+      gruposDsp.push({
+        principal: linha,
+        subitens: linha.rotulo.startsWith('8.') ? ajustesAntesDosTributos : [],
+      });
+    } else if (linha.rotulo === rubricasResultado.naoOperacional || linha.rotulo === rubricasResultado.outros) {
+      ajustesAntesDosTributos.push(linha);
+    } else {
+      gruposDsp.at(-1)?.subitens.push(linha);
+    }
+  }
   const colunasDsp = ['Conta / Rubrica', 'Ato Cooperativo (R$)', 'Ato Não Cooperativo (R$)', 'Total Consolidado (R$)', '% Receita Líquida'];
   const percentual = (valor: number | null) => valor === null ? '—' : `${moeda(demonstrativo.receitaLiquida > 0 ? 100 * valor / demonstrativo.receitaLiquida : 0)}%`;
   const formatarDsp = (valor: number | null) => valor === null ? '—' : valor < 0 ? `(${moeda(-valor)})` : moeda(valor);
@@ -513,15 +529,30 @@ export const DemonstracoesContabeis: React.FC<{ modo: Modo }> = ({ modo }) => {
             <tr>{colunasDsp.map((coluna, indice) => <th key={coluna} scope="col" className={indice === 0 ? 'text-left' : 'text-right'}>{coluna}</th>)}</tr>
           </thead>
           <tbody>
-            {demonstrativo.linhas.map(linha => (
-              <tr key={linha.rotulo} className={linha.detalhe ? 'border-t border-slate-100' : 'border-t border-slate-100 font-bold bg-slate-50'}>
-                <th scope="row" className={linha.detalhe ? 'text-left font-normal !pl-6' : 'text-left'}>{linha.rotulo}</th>
-                {linha.valores.map((valor, indice) => (
-                  <td key={indice} className={`text-right whitespace-nowrap tabular-nums ${(valor ?? 0) < 0 ? 'text-rose-700' : ''}`}>{formatarDsp(valor)}</td>
-                ))}
-                <td className="text-right whitespace-nowrap tabular-nums">{percentual(linha.valores[2])}</td>
-              </tr>
-            ))}
+            {gruposDsp.flatMap(({ principal, subitens }) => {
+              const aberto = gruposAbertos[principal.rotulo] ?? false;
+              return [principal, ...(aberto ? subitens : [])].map(linha => (
+                <tr key={linha.rotulo} className={linha.detalhe ? 'border-t border-slate-100' : 'border-t border-slate-100 font-bold bg-slate-50'}>
+                  <th scope="row" className={linha.detalhe ? 'text-left font-normal !pl-8' : 'text-left'}>
+                    {!linha.detalhe && subitens.length > 0 ? (
+                      <button
+                        type="button"
+                        aria-expanded={aberto}
+                        onClick={() => setGruposAbertos(anteriores => ({ ...anteriores, [principal.rotulo]: !anteriores[principal.rotulo] }))}
+                        className="flex w-full items-center gap-2 rounded text-left hover:text-emerald-700 focus-visible:outline-2 focus-visible:outline-emerald-600"
+                      >
+                        <ChevronRight aria-hidden="true" className={`h-4 w-4 shrink-0 ${aberto ? 'rotate-90' : ''}`} />
+                        <span>{linha.rotulo}</span>
+                      </button>
+                    ) : linha.rotulo}
+                  </th>
+                  {linha.valores.map((valor, indice) => (
+                    <td key={indice} className={`text-right whitespace-nowrap tabular-nums ${(valor ?? 0) < 0 ? 'text-rose-700' : ''}`}>{formatarDsp(valor)}</td>
+                  ))}
+                  <td className="text-right whitespace-nowrap tabular-nums">{percentual(linha.valores[2])}</td>
+                </tr>
+              ));
+            })}
           </tbody>
         </table>
       </div>
