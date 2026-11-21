@@ -325,31 +325,31 @@ export const Sidebar: React.FC<Props> = ({
       {activeSection && (
         <>
           <div
-            className="absolute top-0 bottom-0 left-full w-[calc(100vw-5rem)] bg-slate-900/20"
+            className="absolute top-0 bottom-0 left-full w-[calc(100dvw-5rem)] bg-slate-900/20"
             onClick={() => setOpenSection(null)}
             aria-hidden="true"
           />
           <div
             role="dialog"
             aria-label={activeSection.title}
-            className="absolute top-0 bottom-0 left-full w-[calc(100vw-5rem)] max-w-[1400px] bg-white text-slate-800 shadow-2xl overflow-y-auto"
+            className="absolute top-0 bottom-0 left-full w-[calc(100dvw-5rem)] overflow-x-hidden overflow-y-auto bg-white text-slate-800 shadow-2xl"
           >
             {/* Aba com o nome do grupo */}
-            <div className="sticky top-0 bg-white z-10 border-b-2 border-orange-500 flex items-end justify-between pl-6 pr-3 pt-3">
-              <span className="bg-orange-500 text-white text-sm font-semibold px-5 py-2.5 rounded-t-xl">
+            <div className="sticky top-0 bg-white z-10 border-b-2 border-orange-500 flex items-end justify-between gap-2 pl-3 pr-2 pt-3 sm:pl-6 sm:pr-3">
+              <span className="bg-orange-500 text-white min-w-0 break-words px-3 py-2.5 text-sm font-semibold rounded-t-xl sm:px-5">
                 {activeSection.title}
               </span>
               <button
                 type="button"
                 onClick={() => setOpenSection(null)}
-                className="mb-1.5 p-2 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
+                className="mb-1.5 shrink-0 p-2 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
                 title="Fechar (Esc)"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr_280px] gap-8 p-6 lg:p-10">
+            <div className="grid min-w-0 grid-cols-1 gap-4 p-3 sm:gap-6 sm:p-6 lg:grid-cols-[minmax(0,13.75rem)_minmax(0,1fr)_minmax(0,17.5rem)] xl:gap-8 xl:p-10">
               {/* Coluna esquerda: título do grupo */}
               <div className="text-center lg:pt-2">
                 <div className="mx-auto h-24 w-24 rounded-full bg-orange-50 flex items-center justify-center mb-4">
@@ -360,18 +360,18 @@ export const Sidebar: React.FC<Props> = ({
               </div>
 
               {/* Coluna central: passos numerados */}
-              <ol className="relative">
+              <ol className="relative min-w-0">
                 {activeSection.items.map((item, idx) => {
                   const Icon = item.icon;
                   const isActive = currentActive === item.id;
                   const isLast = idx === activeSection.items.length - 1;
                   return (
-                    <li key={item.id} className="relative flex gap-5 pb-8">
+                    <li key={item.id} className="relative flex min-w-0 gap-3 pb-8 sm:gap-5">
                       {!isLast && <span className="absolute left-7 top-14 bottom-0 w-px bg-slate-200" aria-hidden="true" />}
                       <div className={`relative h-14 w-14 shrink-0 rounded-full border flex items-center justify-center bg-white ${isActive ? 'border-orange-400' : 'border-slate-200'}`}>
                         <Icon className={`w-6 h-6 ${isActive ? 'text-orange-500' : 'text-slate-600'}`} />
                       </div>
-                      <div className="flex-1 pt-1">
+                      <div className="min-w-0 flex-1 break-words pt-1">
                         <h3 className="text-lg font-medium text-slate-800 flex items-center gap-2 flex-wrap">
                           {idx + 1}. {item.label}
                           {item.badge && (
@@ -385,7 +385,7 @@ export const Sidebar: React.FC<Props> = ({
                           <button
                             type="button"
                             onClick={() => handleSelect(item.id)}
-                            className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium px-6 py-2.5 rounded-full transition-colors cursor-pointer"
+                            className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium px-3 py-2.5 rounded-full sm:px-6 transition-colors cursor-pointer"
                           >
                             {item.action}
                             <ArrowRight className="w-4 h-4" />
