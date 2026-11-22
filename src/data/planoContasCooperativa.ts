@@ -148,7 +148,7 @@ const CONTAS_PLANILHA: LinhaPlano[] = [
   ['31103.1999', "Outras Receitas Operacionais"],
   ['316', "CUSTO DOS PRODUTOS VENDIDOS NO MERCADO INTERNO"],
   ['31601', "CUSTO DOS PRODUTOS VENDIDOS NO MERCADO INTERNO"],
-  ['31601.0009', "Custo das Mercadorias Revendidas"],
+  ['31601.0009', "Repasse da Produção Vendida aos Cooperados"],
   ['319', "DISPÊNDIOS E DESPESAS OPERACIONAIS"],
   ['31901', "DISPÊNDIOS E DESPESAS DE ADMINISTRAÇÃO"],
   ['31901.0001', "Ordenados, Salários, Gratificações e Outras Remunerações"],
@@ -238,6 +238,7 @@ const CONTAS_INCLUIDAS: LinhaPlano[] = [
   ['21401.0320', 'ICMS a Recolher'],
   ['21401.0321', 'Simples Nacional (DAS) a Recolher'],
   ['21401.0322', 'IRPJ a Recolher'],
+  ['35902', 'DESPESAS DE VENDAS – ATO NÃO COOPERATIVO'],
   ['35903', 'DESPESAS TRIBUTÁRIAS – ATO NÃO COOPERATIVO'],
   ['35903.0001', 'ICMS sobre Vendas – Ato Não Cooperativo'],
   ['35903.0002', 'PIS sobre Vendas – Ato Não Cooperativo'],
@@ -277,6 +278,7 @@ function tipoDe(codigo: string): PlanoContaContabil['tipo'] {
 
 /** Contas redutoras ("contra") têm natureza invertida em relação ao grupo. */
 function naturezaDe(codigo: string, tipo: PlanoContaContabil['tipo']): PlanoContaContabil['natureza'] {
+  if (codigo === '31901.0099') return 'CREDORA'; // Conta redutora do rateio
   if (codigo.startsWith('12309')) return 'CREDORA'; // (-) Depreciações
   if (codigo.startsWith('24102') || codigo === '24501.0002') return 'DEVEDORA'; // (-) Capital a integralizar, (-) Perdas
   return tipo === 'ATIVO' || tipo === 'CUSTO' || tipo === 'DESPESA' ? 'DEVEDORA' : 'CREDORA';

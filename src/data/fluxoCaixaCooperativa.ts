@@ -140,6 +140,10 @@ export const TIPOS_ENTRADA_CAIXA: TipoCaixa[] = [
   { atividade: 'financiamento', nome: '(+) Liberação de Crédito Rural / Capital de Giro (Pronaf / Bancos)', padrao: /credito rural|capital de giro|emprestimo|financiamento|pronaf/ },
   { atividade: 'operacional', nome: '(+) Recebimento de Vendas Institucionais (PNAE / PAA / Prefeituras)', padrao: /venda.*(pnae|paa|instituc)|chamada publica/ },
   { atividade: 'operacional', nome: '(+) Recebimento de Insumos/Embalagens Vendidos aos Cooperados', padrao: /insumos|embalagens/ },
+  { atividade: 'operacional', nome: '(+) Serviços Prestados a Terceiros', padrao: /servicos? (a|prestados a) (nao cooperados|terceiros)/ },
+  { atividade: 'operacional', nome: '(+) Venda de Mercadorias a Terceiros', padrao: /vendas? de mercadorias a terceiros|vendas? revenda/ },
+  { atividade: 'operacional', nome: '(+) Rendimentos de Aplicações Financeiras', padrao: /rendimentos?.*aplicac/ },
+  { atividade: 'operacional', nome: '(+) Juros Recebidos de Cooperados', padrao: /juros recebidos de cooperados/ },
   { atividade: 'operacional', nome: '(+) Receitas de Prestação de Serviços (Beneficiamento / Frete)', padrao: /servico|beneficiamento|frete|locacao/ },
   { atividade: 'operacional', nome: '(+) Recebimento de Vendas Comerciais (Atacado / Indústria / Feiras)', padrao: /venda|revenda/ },
   { atividade: 'operacional', nome: '(+) Outras Entradas Operacionais', padrao: /taxa administrativa|rendimento|receita financeira/ },
@@ -152,7 +156,12 @@ export const TIPOS_SAIDA_CAIXA: TipoCaixa[] = [
   { atividade: 'investimento', nome: '(-) Aquisição de Máquinas, Câmaras Frias, Balanças e Benfeitorias', padrao: /imobilizado|aquisicao.*(maquina|maquinario|camara fria|balanca|implemento|equipamento|veiculo)/ },
   { atividade: 'financiamento', nome: '(-) Distribuição de Sobras Líquidas Aprovadas em Assembleia (AGO)', padrao: /distribuicao.*sobra|sobras.*assembleia/ },
   { atividade: 'financiamento', nome: '(-) Devolução de Capital Social a Cooperados Desligados', padrao: /capital social|devolucao.*quota|restituicao de capital/ },
-  { atividade: 'financiamento', nome: '(-) Amortização de Empréstimos, Financiamentos e Juros', padrao: /amortizacao|emprestimo|financiamento|pronaf|juros/ },
+  { atividade: 'financiamento', nome: '(-) Amortização de Empréstimos e Financiamentos', padrao: /amortizacao|emprestimo|financiamento|pronaf/ },
+  { atividade: 'operacional', nome: '(-) Juros Pagos e Tarifas Bancárias', padrao: /juros|tarifa/ },
+  { atividade: 'operacional', nome: '(-) Devoluções e Abatimentos Pagos', padrao: /devolu[cç][aã]o|devolucoes|abatimento/ },
+  { atividade: 'operacional', nome: '(-) Despesas Administrativas Comuns', padrao: /administrativ[oa]s? comu(m|ns)|telecomunicacoes comuns|auditoria e juridico comuns/ },
+  { atividade: 'operacional', nome: '(-) Dispêndios com Assembleias e Conselhos', padrao: /assembleias e conselhos/ },
+  { atividade: 'operacional', nome: '(-) Comissões sobre Vendas a Terceiros', padrao: /comissoes? sobre vendas a terceiros/ },
   { atividade: 'operacional', nome: '(-) Adiantamentos de Safra Concedidos aos Cooperados', padrao: /adiantamento.*(safra|cooperado)/ },
   { atividade: 'operacional', nome: '(-) Pagamento / Repasse da Produção aos Cooperados', padrao: /repasse|produtores rurais|pagamento por producao/ },
   { atividade: 'operacional', nome: '(-) Aquisições de Produtos de Terceiros (Não Cooperados)', padrao: /compra.*revenda|mercadorias para revenda|produtos de terceiros/ },
@@ -160,7 +169,8 @@ export const TIPOS_SAIDA_CAIXA: TipoCaixa[] = [
   { atividade: 'operacional', nome: '(-) Custos Diretos de Beneficiamento, Armazenagem e Transporte', padrao: /beneficiamento|armazenagem|logistica|frete|transporte|combustivel/ },
   { atividade: 'operacional', nome: '(-) Pagamento de Folha Administrativa, Pró-labore e Encargos', padrao: /pessoal|folha|salario|encargo|pro.labore/ },
   { atividade: 'operacional', nome: '(-) Pagamento de Assistência Técnica (ATER) e Capacitações', padrao: /assistencia tecnica|\bater\b|capacitac/ },
-  { atividade: 'operacional', nome: '(-) Pagamento de Tributos e Taxas (Funrural, ICMS, PIS/COFINS, IRPJ/CSLL)', padrao: /imposto|tributo|retenc|funrural|icms|pis|cofins|irpj|csll|\bdas\b/ },
+  { atividade: 'operacional', nome: '(-) Pagamento de IRPJ e CSLL', padrao: /irpj|csll/ },
+  { atividade: 'operacional', nome: '(-) Pagamento de Tributos e Taxas (Funrural, ICMS, PIS/COFINS)', padrao: /imposto|tributo|retenc|funrural|icms|pis|cofins|\bdas\b/ },
   { atividade: 'operacional', nome: '(-) Despesas Gerais e Administrativas (Energia, Água, Contabilidade)', padrao: /administrativ|aluguel|energia|agua|internet|contabilidade|software|assinatura|tarifa/ },
   { atividade: 'operacional', nome: '(-) Outras Saídas Operacionais', padrao: /compra|fornecedor|revenda|mercadoria/ },
   { atividade: 'ajuste', nome: 'Saídas a classificar' },
@@ -169,7 +179,11 @@ export const TIPOS_SAIDA_CAIXA: TipoCaixa[] = [
 function tipoMovimentoCaixa(nome: string, entrada: boolean) {
   const tipos = entrada ? TIPOS_ENTRADA_CAIXA : TIPOS_SAIDA_CAIXA;
   const chave = nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  return tipos.find(tipo => tipo.nome === nome) ?? tipos.find(tipo => tipo.padrao?.test(chave)) ?? tipos[tipos.length - 1];
+  const legado = entrada ? undefined
+    : nome === '(-) Amortização de Empréstimos, Financiamentos e Juros' ? tipos.find(tipo => tipo.nome === '(-) Amortização de Empréstimos e Financiamentos')
+    : nome === '(-) Pagamento de Tributos e Taxas (Funrural, ICMS, PIS/COFINS, IRPJ/CSLL)' ? tipos.find(tipo => tipo.nome.startsWith('(-) Pagamento de Tributos e Taxas'))
+    : undefined;
+  return tipos.find(tipo => tipo.nome === nome) ?? legado ?? tipos.find(tipo => tipo.padrao?.test(chave)) ?? tipos[tipos.length - 1];
 }
 
 export function linhasDoFluxo(fluxo: ReturnType<typeof montarFluxoCaixa>): LinhaDemonstrativo[] {

@@ -3,7 +3,7 @@ import { FileDown, ChevronRight, AlertTriangle, CheckCircle2, Scale } from 'luci
 import jsPDF from 'jspdf';
 import { useCoop } from '../context/CoopContext';
 import { PlanoContaContabil } from '../types';
-import { montarResultadoCooperativa, rubricasResultado, type RegimeResultado } from '../data/rubricasCooperativa';
+import { montarResultadoCooperativa, type RegimeResultado } from '../data/rubricasCooperativa';
 
 /**
  * Demonstrações do SisCont calculadas a partir dos lançamentos contábeis:
@@ -463,30 +463,26 @@ export const DemonstracoesContabeis: React.FC<{ modo: Modo }> = ({ modo }) => {
   const demonstrativo = montarResultadoCooperativa(planoContas, lancamentosContabeis, contasPagarReceber, dataInicio, dataFim, regime, simularTributos, percentualOutrosFundos);
   type LinhaDsp = (typeof demonstrativo.linhas)[number];
   const gruposDsp: { principal: LinhaDsp; subitens: LinhaDsp[] }[] = [];
-  const ajustesAntesDosTributos: LinhaDsp[] = [];
   for (const linha of demonstrativo.linhas) {
     if (!linha.detalhe) {
       gruposDsp.push({
         principal: linha,
-        subitens: linha.rotulo.startsWith('8.') ? ajustesAntesDosTributos : [],
+        subitens: [],
       });
-    } else if (linha.rotulo === rubricasResultado.naoOperacional || linha.rotulo === rubricasResultado.outros) {
-      ajustesAntesDosTributos.push(linha);
     } else {
       gruposDsp.at(-1)?.subitens.push(linha);
     }
   }
-  const colunasDsp = ['Conta / Rubrica', 'Ato Cooperativo (R$)', 'Ato Não Cooperativo (R$)', 'Total Consolidado (R$)', '% Receita Líquida'];
-  const percentual = (valor: number | null) => valor === null ? '—' : `${moeda(demonstrativo.receitaLiquida > 0 ? 100 * valor / demonstrativo.receitaLiquida : 0)}%`;
+  const colunasDsp = ['Descrição das Contas', 'Atos Cooperativos (R$)', 'Atos Não Cooperativos (R$)', 'Total (R$)'];
   const formatarDsp = (valor: number | null) => valor === null ? '—' : valor < 0 ? `(${moeda(-valor)})` : moeda(valor);
   const nomeRegime = regime === 'caixa' ? 'Caixa' : 'Competência';
   const pdfDsp = () => exportarPdf(
     'Demonstração de Sobras ou Perdas',
     `${nomeRegime} | ${dataBR(dataInicio)} a ${dataBR(dataFim)}${regime === 'competencia' ? ' | Destinações indicativas' : ''}`,
     colunasDsp,
-    [129, 34, 45, 39, 30],
+    [142, 42, 51, 42],
     demonstrativo.linhas.map(linha => ({
-      cels: [linha.rotulo, ...linha.valores.map(formatarDsp), percentual(linha.valores[2])],
+      cels: [linha.rotulo, ...linha.valores.map(formatarDsp)],
       negrito: !linha.detalhe,
       recuo: linha.detalhe ? 1 : 0,
     })),
@@ -498,7 +494,10 @@ export const DemonstracoesContabeis: React.FC<{ modo: Modo }> = ({ modo }) => {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        {filtros}
+        <div className="space-y-2">
+          <h2 className="text-lg font-bold">Demonstração de Sobras ou Perdas</h2>
+          {filtros}
+        </div>
         <button type="button" onClick={pdfDsp} className="px-4 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold flex items-center gap-1.5">
           <FileDown className="w-4 h-4" /> Exportar PDF
         </button>
@@ -518,6 +517,11 @@ export const DemonstracoesContabeis: React.FC<{ modo: Modo }> = ({ modo }) => {
         </div>
       )}
       {avisoNaoEncontradas(periodo.naoEncontradas)}
+      {demonstrativo.despesasComunsSemBase && (
+        <p role="status" className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900">
+          Sem ingressos ou receitas brutas positivas no período para calcular o rateio. As despesas comuns seguem a classificação dos lançamentos.
+        </p>
+      )}
       {demonstrativo.semAto.length > 0 && (
         <p role="status" className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900">
           Classifique o ato das contas para incluí-las no resultado: {demonstrativo.semAto.join(', ')}.
@@ -549,13 +553,15 @@ export const DemonstracoesContabeis: React.FC<{ modo: Modo }> = ({ modo }) => {
                   {linha.valores.map((valor, indice) => (
                     <td key={indice} className={`text-right whitespace-nowrap tabular-nums ${(valor ?? 0) < 0 ? 'text-rose-700' : ''}`}>{formatarDsp(valor)}</td>
                   ))}
-                  <td className="text-right whitespace-nowrap tabular-nums">{percentual(linha.valores[2])}</td>
                 </tr>
               ));
             })}
           </tbody>
         </table>
       </div>
+      <p className="text-xs text-slate-600">
+        O demonstrativo usa os rateios contabilizados no período. Sem rateio contabilizado, usa a participação de cada ato nas receitas e nos ingressos brutos.
+      </p>
       <p className="text-xs text-slate-600">
         {regime === 'competencia'
           ? 'Os tributos sobre o lucro vêm da escrituração. As destinações indicativas usam os mínimos legais da Reserva (10%) e do FATES (5%) sobre as sobras do ato cooperativo. O FATES inclui o resultado positivo do ato não cooperativo. A destinação efetiva é definida no encerramento do exercício.'

@@ -1,4 +1,4 @@
-import { rubricaDaConta } from '../data/rubricasCooperativa';
+import { codigoDoModelo, rubricaDaConta } from '../data/rubricasCooperativa';
 import { NavegacaoSecoes } from '../components/ui/NavegacaoSecoes';
 import { formatarData } from '../utils/dateHelpers';
 import React, { useState } from 'react';
@@ -426,6 +426,7 @@ if (p) {
           !filterPlanoContas ||
           pc.codigo.includes(filterPlanoContas) ||
           pc.nome.toLowerCase().includes(filterPlanoContas.toLowerCase()) ||
+          codigoDoModelo(pc).includes(filterPlanoContas.trim()) ||
           rubricaDaConta(pc).toLowerCase().includes(filterPlanoContas.toLowerCase())
         );
         return (
@@ -435,7 +436,7 @@ if (p) {
               type="text"
               value={filterPlanoContas}
               onChange={e => setFilterPlanoContas(e.target.value)}
-              placeholder="Buscar por código, conta ou rubrica do DRE..."
+              placeholder="Buscar por código, conta ou rubrica do demonstrativo…"
               className="w-full max-w-sm p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
             />
             <span className="text-[11px] text-slate-400 whitespace-nowrap">{contasFiltradas.length} de {planoContas.length} contas</span>
@@ -456,7 +457,8 @@ if (p) {
                   },
                   { key: 'nome', header: 'Descrição da Conta', width: 300, render: pc => <span style={{ fontWeight: pc.nivel === 1 || pc.tipoConta === 'SINTETICA' ? 600 : undefined }}>{pc.nome}</span> },
                   { key: 'tipo', header: 'Grupo Contábil', width: 140 },
-                  { key: 'rubricaDre', header: 'Rubrica do DRE', width: 230, value: pc => rubricaDaConta(pc) || '—' },
+                  { key: 'codigoModelo', header: 'Código no modelo', width: 130, value: pc => codigoDoModelo(pc) || '—' },
+                  { key: 'rubricaDre', header: 'Rubrica do demonstrativo', width: 230, value: pc => rubricaDaConta(pc) || '—' },
                   { key: 'natureza', header: 'Natureza', width: 110, value: pc => (pc.natureza === 'DEVEDORA' ? 'Devedora' : 'Credora') },
                   { key: 'nivel', header: 'Nível', width: 80, align: 'center' },
                   { key: 'tipoConta', header: 'Tipo', width: 110, value: pc => (pc.tipoConta === 'ANALITICA' ? 'Analítica' : 'Sintética') },

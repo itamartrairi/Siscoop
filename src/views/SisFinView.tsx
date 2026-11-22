@@ -75,6 +75,15 @@ const CATEGORIAS_FINANCEIRAS: { categoria: string; subcategoria: string; classif
   { categoria: 'Pessoal', subcategoria: 'Pró-labore e gestão', classificacao: 'FIXA' },
   { categoria: 'Receitas', subcategoria: 'Taxa Administrativa', classificacao: 'VARIAVEL' },
   { categoria: 'Receitas', subcategoria: 'Capital Social', classificacao: 'FIXA' },
+  { categoria: 'Receitas', subcategoria: 'Venda de Mercadorias a Terceiros', classificacao: 'VARIAVEL' },
+  { categoria: 'Receitas', subcategoria: 'Rendimentos de Aplicações Financeiras', classificacao: 'VARIAVEL' },
+  { categoria: 'Receitas', subcategoria: 'Juros Recebidos de Cooperados', classificacao: 'VARIAVEL' },
+  { categoria: 'Administrativo', subcategoria: 'Despesas Administrativas Comuns', classificacao: 'FIXA' },
+  { categoria: 'Pessoal', subcategoria: 'Pessoal Administrativo Comum', classificacao: 'FIXA' },
+  { categoria: 'Administrativo', subcategoria: 'Energia, Água e Telecomunicações Comuns', classificacao: 'FIXA' },
+  { categoria: 'Administrativo', subcategoria: 'Contabilidade, Auditoria e Jurídico Comuns', classificacao: 'FIXA' },
+  { categoria: 'Administrativo', subcategoria: 'Assembleias e Conselhos', classificacao: 'VARIAVEL' },
+  { categoria: 'Logística', subcategoria: 'Comissões sobre Vendas a Terceiros', classificacao: 'VARIAVEL' },
   { categoria: 'Outros', subcategoria: 'Diversos', classificacao: 'VARIAVEL' }
 ];
 
@@ -703,7 +712,7 @@ if (c) {
         { titulo: <>Contas Bancárias</>, descricao: "Gerencie as contas bancárias.", icone: Landmark, abrir: () => setActiveTab('bancos') },
         { titulo: <>Balanço Financeiro</>, descricao: "Consulte a posição patrimonial e financeira.", icone: BarChart3, abrir: () => setActiveTab('balanco') },
         { titulo: 'Dashboard', descricao: 'Acompanhe os indicadores financeiros.', icone: BarChart3, abrir: () => setActiveTab('dashboard') },
-        { titulo: 'DRE', descricao: 'Consulte o resultado do exercício.', icone: BarChart3, abrir: () => setActiveTab('dre') },
+        { titulo: 'Demonstração de Sobras ou Perdas', descricao: 'Consulte o resultado do exercício.', icone: BarChart3, abrir: () => setActiveTab('dre') },
         { titulo: 'Resumo e Conciliação', descricao: 'Compare competência e caixa no mesmo período.', icone: Scale, abrir: () => setActiveTab('conciliacao') },
         { titulo: 'Fluxo de Caixa', descricao: 'Acompanhe as entradas e saídas de caixa.', icone: BarChart3, abrir: () => setActiveTab('fluxo') },
         { titulo: 'Estoque', descricao: 'Consulte os saldos de estoque.', icone: BarChart3, abrir: () => setActiveTab('estoque') },
@@ -750,7 +759,7 @@ if (c) {
           {activeTab === 'dashboard' && <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               {[
-                ['Resultado DRE por competência', resultadoDashboard, resultadoDashboard >= 0 ? 'text-emerald-700' : 'text-rose-700', resultadoDashboard >= 0 ? 'bg-emerald-50' : 'bg-rose-50'],
+                ['Sobras ou perdas por competência', resultadoDashboard, resultadoDashboard >= 0 ? 'text-emerald-700' : 'text-rose-700', resultadoDashboard >= 0 ? 'bg-emerald-50' : 'bg-rose-50'],
                 ['Saldo de caixa', (extratoBancario?.saldoInicial || 0) + periodoEntradas - periodoSaidas, 'text-blue-700', 'bg-blue-50'],
                 ['Contas a pagar', contasFiltradas.filter(c => c.tipo === 'PAGAR' && c.status !== 'CANCELADO').reduce((s, c) => s + c.valor, 0), 'text-rose-700', 'bg-rose-50/80'],
                 ['Contas a receber', contasFiltradas.filter(c => c.tipo === 'RECEBER' && c.status !== 'CANCELADO').reduce((s, c) => s + c.valor, 0), 'text-emerald-700', 'bg-emerald-50/80'],
@@ -861,7 +870,7 @@ if (c) {
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
-                  <thead><tr>{['Resumo do DRE', 'Ato Cooperativo', 'Ato Não Cooperativo', 'Consolidado'].map(nome => <th key={nome}>{nome}</th>)}</tr></thead>
+                  <thead><tr>{['Demonstração de Sobras ou Perdas', 'Ato Cooperativo', 'Ato Não Cooperativo', 'Consolidado'].map(nome => <th key={nome}>{nome}</th>)}</tr></thead>
                   <tbody>{conciliacao.linhas.filter(linha => !linha.detalhe).map(linha => (
                     <tr key={linha.rotulo}><th scope="row" className="text-left">{linha.rotulo}</th>
                       {linha.valores.map((valor, indice) => <td key={indice} className="whitespace-nowrap text-right">{valor === null ? '—' : formatarValor(valor)}</td>)}
