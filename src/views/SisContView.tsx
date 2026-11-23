@@ -275,9 +275,9 @@ if (p) {
           <button
             onClick={() => setShowFortesModal(true)}
             className="px-4 py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2 cursor-pointer"
-            title="Exportar Lançamentos, Plano de Contas e SPED ECD para o Fortes Total Contador"
+            title="Exportar Lançamentos, Plano de Contas e SPED ECD"
           >
-            <Building2 className="w-4 h-4" /> Exportar Fortes Contábil
+            <Building2 className="w-4 h-4" /> Exportar arquivos
           </button>
 
           {activeTab === 'plano' && (
@@ -876,7 +876,7 @@ if (p) {
         </div>
       )}
 
-      {/* Modal de Exportação para o Fortes Tecnologia - Total Contador */}
+      {/* Modal de exportação de arquivos */}
       <FortesExportModal
         isOpen={showFortesModal}
         onClose={() => setShowFortesModal(false)}

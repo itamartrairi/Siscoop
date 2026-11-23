@@ -1792,12 +1792,12 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
               <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 font-bold">Ativo</span>
             </div>
 
-            {/* Fortes Tecnologia Card */}
+            {/* Exportação de arquivos */}
             <div className="p-4 bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-transparent rounded-xl border border-orange-300 dark:border-orange-800/60 flex items-center justify-between gap-3">
               <div className="space-y-0.5">
                 <div className="flex items-center gap-2">
                   <Building className="w-4 h-4 text-orange-600" />
-                  <span className="font-bold text-slate-900 dark:text-white text-xs">Fortes Tecnologia — Sistema Total Contador</span>
+                  <span className="font-bold text-slate-900 dark:text-white text-xs">Exportação de arquivos</span>
                   <span className="px-2 py-0.2 rounded-full bg-orange-100 dark:bg-orange-950 text-orange-700 dark:text-orange-300 font-bold text-[9px] uppercase">
                     Contábil &amp; Fiscal
                   </span>
@@ -1812,7 +1812,7 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
                 onClick={() => setShowFortesModal(true)}
                 className="px-3.5 py-2 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 shrink-0 text-xs cursor-pointer"
               >
-                <Download className="w-3.5 h-3.5" /> Abrir Exportador Fortes
+                <Download className="w-3.5 h-3.5" /> Exportar arquivos
               </button>
             </div>
 
@@ -2972,7 +2972,7 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
         </div>
       )}
 
-      {/* Modal de Integração Fortes Tecnologia */}
+      {/* Modal de exportação de arquivos */}
       <FortesExportModal
         isOpen={showFortesModal}
         onClose={() => setShowFortesModal(false)}

@@ -12,7 +12,6 @@ import {
   Layers,
   FileCode,
   HelpCircle,
-  ExternalLink,
   Receipt,
   X,
   FileCheck2,
@@ -102,34 +101,21 @@ export const FortesExportModal: React.FC<Props> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="bg-white dark:bg-slate-900 w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[92vh] overflow-hidden">
         
-        {/* Header com Branding Fortes Tecnologia */}
+        {/* Cabeçalho */}
         <div className="p-5 bg-gradient-to-r from-orange-600 via-orange-500 to-amber-600 text-white flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-xl bg-white/20 backdrop-blur-xs flex items-center justify-center border border-white/30 shrink-0">
               <Building2 className="w-6 h-6 text-white" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-lg font-black tracking-tight">Exportador Fortes Tecnologia</h3>
-                <span className="px-2 py-0.5 rounded-full bg-white/20 text-xs font-bold uppercase tracking-wider">
-                  Total Contador
-                </span>
-              </div>
+              <h3 className="text-lg font-black tracking-tight">Exportar arquivos</h3>
               <p className="text-xs text-orange-100">
-                Geração de arquivos contábeis, fiscais e SPED compatíveis com o ecossistema Fortes.
+                Gere arquivos contábeis, fiscais e financeiros, incluindo SPED.
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <a
-              href="https://www.fortestecnologia.com.br/gestao-contabil/sistema-total-contador/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition-all border border-white/20"
-            >
-              Portal Fortes <ExternalLink className="w-3.5 h-3.5" />
-            </a>
             <button
               onClick={onClose}
               className="p-2 rounded-lg bg-black/10 hover:bg-black/20 text-white transition-all"
@@ -192,24 +178,24 @@ export const FortesExportModal: React.FC<Props> = ({
         <div className="p-6 overflow-y-auto space-y-6 flex-1 bg-slate-50/50 dark:bg-slate-900/50">
 
           <NavegacaoSecoes selecionada={activeTab !== null} voltar={() => setActiveTab(null)} secoes={[
-                  { titulo: "Fortes Contábil", descricao: "Exporte os lançamentos contábeis.", icone: FileSpreadsheet, abrir: () => setActiveTab('contabil') },
-                  { titulo: "Fortes Fiscal", descricao: "Exporte as notas fiscais do período.", icone: Receipt, abrir: () => setActiveTab('fiscal') },
-                  { titulo: "Fortes Financeiro", descricao: "Exporte as contas a pagar e receber.", icone: Database, abrir: () => setActiveTab('financeiro') },
+                  { titulo: "Contábil", descricao: "Exporte os lançamentos contábeis.", icone: FileSpreadsheet, abrir: () => setActiveTab('contabil') },
+                  { titulo: "Fiscal", descricao: "Exporte as notas fiscais do período.", icone: Receipt, abrir: () => setActiveTab('fiscal') },
+                  { titulo: "Financeiro", descricao: "Exporte as contas a pagar e receber.", icone: Database, abrir: () => setActiveTab('financeiro') },
                   { titulo: "Manual do Contador", descricao: "Consulte as instruções para exportar.", icone: HelpCircle, abrir: () => setActiveTab('ajuda') }
           ]} />
           {/* ============================================================== */}
-          {/* ABA 1: FORTES CONTÁBIL                                         */}
+          {/* ABA 1: CONTÁBIL                                         */}
           {/* ============================================================== */}
           {activeTab === 'contabil' && (
             <div className="space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 
-                {/* Card 1: Layout Lançamentos Fortes */}
+                {/* Card 1: Layout Lançamentos */}
                 <div className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs flex flex-col justify-between space-y-4 hover:border-orange-400 transition-all">
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <span className="px-2 py-0.5 rounded-md bg-orange-100 dark:bg-orange-950 text-orange-700 dark:text-orange-300 font-bold text-[10px] uppercase">
-                        Layout Fortes Delimitado
+                        Leiaute delimitado
                       </span>
                       <FileText className="w-5 h-5 text-orange-600" />
                     </div>
@@ -217,7 +203,7 @@ export const FortesExportModal: React.FC<Props> = ({
                       Lançamentos Contábeis (.TXT / .CSV)
                     </h4>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      Arquivo de partidas dobradas com débito, crédito, valor, histórico e documento. Importação rápida no Fortes Contábil.
+                      Arquivo de partidas dobradas com débito, crédito, valor, histórico e documento.
                     </p>
                   </div>
 
@@ -225,11 +211,11 @@ export const FortesExportModal: React.FC<Props> = ({
                     <button
                       onClick={() => {
                         const txt = gerarLayoutFortesContabilTXT(lancamentosContabeis, planoContas, filterOptions);
-                        downloadArquivoFortes(txt, `Fortes_Lancamentos_${competencia.replace('/', '_') || 'Geral'}.txt`);
+                        downloadArquivoFortes(txt, `Lancamentos_Contabeis_${competencia.replace('/', '_') || 'Geral'}.txt`);
                       }}
                       className="w-full py-2 px-3 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all"
                     >
-                      <Download className="w-3.5 h-3.5" /> Baixar Arquivo Fortes (.TXT)
+                      <Download className="w-3.5 h-3.5" /> Baixar lançamentos (.TXT)
                     </button>
 
                     <button
@@ -299,7 +285,7 @@ export const FortesExportModal: React.FC<Props> = ({
                       Plano de Contas Cooperativo
                     </h4>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      Exporta as {planoContas.length} contas contábeis (Ativo, Passivo, PL, Sobras/Perdas e Atos Cooperativos) para o Fortes.
+                      Exporta as {planoContas.length} contas contábeis (Ativo, Passivo, PL, Sobras/Perdas e Atos Cooperativos).
                     </p>
                   </div>
 
@@ -307,7 +293,7 @@ export const FortesExportModal: React.FC<Props> = ({
                     <button
                       onClick={() => {
                         const txt = gerarPlanoContasFortesTXT(planoContas);
-                        downloadArquivoFortes(txt, `PlanoContas_Fortes_${currentTenant.cnpj || 'Cooperativa'}.csv`);
+                        downloadArquivoFortes(txt, `PlanoContas_${currentTenant.cnpj || 'Cooperativa'}.csv`);
                       }}
                       className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all"
                     >
@@ -379,7 +365,7 @@ export const FortesExportModal: React.FC<Props> = ({
           )}
 
           {/* ============================================================== */}
-          {/* ABA 2: FORTES FISCAL                                           */}
+          {/* ABA 2: FISCAL                                           */}
           {/* ============================================================== */}
           {activeTab === 'fiscal' && (
             <div className="space-y-5">
@@ -414,12 +400,12 @@ export const FortesExportModal: React.FC<Props> = ({
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 
-                {/* Card 1: Layout Fortes Fiscal TXT */}
+                {/* Card 1: Leiaute fiscal TXT */}
                 <div className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs flex flex-col justify-between space-y-4 hover:border-orange-400 transition-all">
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <span className="px-2 py-0.5 rounded-md bg-orange-100 dark:bg-orange-950 text-orange-700 dark:text-orange-300 font-bold text-[10px] uppercase">
-                        Layout Fortes Fiscal
+                        Leiaute fiscal
                       </span>
                       <Receipt className="w-5 h-5 text-orange-600" />
                     </div>
@@ -435,7 +421,7 @@ export const FortesExportModal: React.FC<Props> = ({
                     <button
                       onClick={() => {
                         const txt = gerarLayoutFortesFiscalTXT(notasFiscais, currentTenant, filterOptions);
-                        downloadArquivoFortes(txt, `Fortes_Fiscal_${competencia.replace('/', '_') || 'Geral'}.txt`);
+                        downloadArquivoFortes(txt, `Movimento_Fiscal_${competencia.replace('/', '_') || 'Geral'}.txt`);
                       }}
                       className="w-full py-2 px-3 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all"
                     >
@@ -468,7 +454,7 @@ export const FortesExportModal: React.FC<Props> = ({
                       SPED Fiscal Oficial (Bloco C)
                     </h4>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      Estrutura oficial com Registro C100 (Notas), C170 (Itens com tributação) e C190 (Analítico). Importação direta no Fortes Fiscal.
+                      Estrutura oficial com Registro C100 (Notas), C170 (Itens com tributação) e C190 (Analítico).
                     </p>
                   </div>
 
@@ -496,12 +482,12 @@ export const FortesExportModal: React.FC<Props> = ({
                   </div>
                 </div>
 
-                {/* Card 3: Lote XML Fortes */}
+                {/* Card 3: Lote XML */}
                 <div className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs flex flex-col justify-between space-y-4 hover:border-orange-400 transition-all">
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <span className="px-2 py-0.5 rounded-md bg-teal-100 dark:bg-teal-950 text-teal-700 dark:text-teal-300 font-bold text-[10px] uppercase">
-                        Importador XML Fortes
+                        Exportação de XML
                       </span>
                       <FileCode className="w-5 h-5 text-teal-600" />
                     </div>
@@ -509,7 +495,7 @@ export const FortesExportModal: React.FC<Props> = ({
                       Lote de XMLs de NF-e (.XML)
                     </h4>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      Arquivo contendo os XMLs no padrão NF-e 4.00 com protocolo de autorização para o módulo de leitura de XMLs do Fortes Fiscal.
+                      Arquivo contendo os XMLs no padrão NF-e 4.00 com protocolo de autorização.
                     </p>
                   </div>
 
@@ -517,7 +503,7 @@ export const FortesExportModal: React.FC<Props> = ({
                     <button
                       onClick={() => {
                         const xml = gerarLoteXmlFortesFiscal(notasFiscais, currentTenant, filterOptions);
-                        downloadArquivoFortes(xml, `Lote_XML_NFe_Fortes_${competencia.replace('/', '_') || '2026'}.xml`, 'application/xml;charset=utf-8');
+                        downloadArquivoFortes(xml, `Lote_XML_NFe_${competencia.replace('/', '_') || '2026'}.xml`, 'application/xml;charset=utf-8');
                       }}
                       className="w-full py-2 px-3 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all"
                     >
@@ -599,17 +585,17 @@ export const FortesExportModal: React.FC<Props> = ({
           )}
 
           {/* ============================================================== */}
-          {/* ABA 3: FORTES FINANCEIRO                                       */}
+          {/* ABA 3: FINANCEIRO                                       */}
           {/* ============================================================== */}
           {activeTab === 'financeiro' && (
             <div className="space-y-5">
               <div className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
                 <div className="space-y-1">
                   <h4 className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-2">
-                    <Database className="w-4 h-4 text-orange-500" /> Títulos a Pagar e Receber para Conciliação Fortes
+                    <Database className="w-4 h-4 text-orange-500" /> Títulos a pagar e a receber para conciliação
                   </h4>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Exporta todos os títulos operacionais, contratos de repasse aos cooperados e recebimentos do PAA/PNAE para o Fortes Financeiro.
+                    Exporta todos os títulos operacionais, contratos de repasse aos cooperados e recebimentos do PAA/PNAE.
                   </p>
                 </div>
 
@@ -617,7 +603,7 @@ export const FortesExportModal: React.FC<Props> = ({
                   <button
                     onClick={() => {
                       const txt = gerarLayoutFortesFinanceiroTXT(contasPagarReceber, filterOptions);
-                      downloadArquivoFortes(txt, `Fortes_Financeiro_Titulos_${competencia.replace('/', '_') || 'Geral'}.csv`);
+                      downloadArquivoFortes(txt, `Titulos_Financeiros_${competencia.replace('/', '_') || 'Geral'}.csv`);
                     }}
                     className="py-2.5 px-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold text-xs flex items-center gap-2 shadow-xs transition-all"
                   >
@@ -694,7 +680,7 @@ export const FortesExportModal: React.FC<Props> = ({
           )}
 
           {/* ============================================================== */}
-          {/* ABA 4: MANUAL DO CONTADOR / PASSO A PASSO NO FORTES            */}
+          {/* ABA 4: MANUAL DO CONTADOR / PASSO A PASSO NO            */}
           {/* ============================================================== */}
           {activeTab === 'ajuda' && (
             <div className="space-y-6 text-slate-700 dark:text-slate-300 text-xs">
@@ -702,74 +688,26 @@ export const FortesExportModal: React.FC<Props> = ({
                 <AlertCircle className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
                 <div>
                   <h4 className="font-bold text-orange-950 dark:text-orange-200 text-sm mb-1">
-                    Como importar os arquivos gerados pelo Siscoop no Sistema Fortes Total Contador
+                    Como exportar arquivos do SISCOOP
                   </h4>
                   <p className="text-orange-800 dark:text-orange-300">
-                    O Siscoop gera arquivos pré-validados especificamente para a suíte de softwares da Fortes Tecnologia. Siga o passo a passo abaixo para importar cada módulo.
+                    Selecione a competência ou o intervalo de datas e abra a seção correspondente ao arquivo que deseja baixar.
                   </p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                
-                {/* Passo a Passo Fortes Contábil */}
-                <div className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
-                  <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-sm border-b border-slate-100 dark:border-slate-700 pb-2">
-                    <FileSpreadsheet className="w-4 h-4 text-orange-600" /> No Fortes Contábil:
-                  </h4>
-                  <ol className="space-y-2 list-decimal list-inside text-slate-600 dark:text-slate-400">
-                    <li>Abra o aplicativo <strong>Fortes Contábil</strong> e selecione a cooperativa.</li>
-                    <li>
-                      <strong>Opção A (Lançamentos Delimitados):</strong> Vá em <span className="font-semibold text-slate-800 dark:text-slate-200">Movimentos &gt; Importações &gt; Lançamentos Contábeis</span>.
-                      Selecione o arquivo <code className="bg-slate-100 dark:bg-slate-900 px-1 rounded">Fortes_Lancamentos.txt</code> gerado pelo Siscoop com separador ponto-e-vírgula (<code className="bg-slate-100 dark:bg-slate-900 px-1 rounded">;</code>).
-                    </li>
-                    <li>
-                      <strong>Opção B (SPED ECD):</strong> Acesse o menu <span className="font-semibold text-slate-800 dark:text-slate-200">Utilitários &gt; Importação &gt; SPED ECD</span> e aponte para o arquivo <code className="bg-slate-100 dark:bg-slate-900 px-1 rounded">SPED_ECD_...txt</code>.
-                    </li>
-                    <li>O Fortes efetuará o cruzamento das contas de débito e crédito e gravará os lotes de diário automaticamente.</li>
-                  </ol>
-                </div>
-
-                {/* Passo a Passo Fortes Fiscal */}
-                <div className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
-                  <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-sm border-b border-slate-100 dark:border-slate-700 pb-2">
-                    <Receipt className="w-4 h-4 text-purple-600" /> No Fortes Fiscal:
-                  </h4>
-                  <ol className="space-y-2 list-decimal list-inside text-slate-600 dark:text-slate-400">
-                    <li>Abra o aplicativo <strong>Fortes Fiscal</strong> na cooperativa desejada.</li>
-                    <li>
-                      <strong>Opção A (Lote de XMLs):</strong> Vá em <span className="font-semibold text-slate-800 dark:text-slate-200">Movimentos &gt; Importação de XMLs &gt; NF-e / NFC-e</span> e aponte o arquivo XML exportado. O Fortes lê diretamente todas as chaves e produtos.
-                    </li>
-                    <li>
-                      <strong>Opção B (SPED Fiscal):</strong> Acesse <span className="font-semibold text-slate-800 dark:text-slate-200">Movimentos &gt; Importações &gt; SPED Fiscal (EFD ICMS/IPI)</span> e selecione o arquivo <code className="bg-slate-100 dark:bg-slate-900 px-1 rounded">SPED_Fiscal_EFD.txt</code>.
-                    </li>
-                    <li>
-                      <strong>Opção C (Movimento Texto):</strong> Em <span className="font-semibold text-slate-800 dark:text-slate-200">Movimentos &gt; Importação de Documentos Fiscais</span>, escolha o layout CSV Fortes.
-                    </li>
-                  </ol>
-                </div>
-
-              </div>
-
-              <div className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
-                <h4 className="font-bold text-slate-900 dark:text-white text-xs">Suporte e Dúvidas com o Suporte Fortes:</h4>
-                <p className="text-slate-500 dark:text-slate-400 text-[11px]">
-                  Os arquivos foram estruturados em conformidade com o <em>Guia de Integrações Fortes Tecnologia v2026</em> e o <em>Manual de Orientação do Leiaute da ECD/EFD da Receita Federal</em>. Caso o seu contador utilize máscara personalizada de contas contábeis no Fortes, exporte primeiro o <strong>Plano de Contas Cooperativo (.CSV)</strong> para alinhar as classificações.
-                </p>
-              </div>
-
+              <ul className="space-y-2 list-disc list-inside">
+                <li><strong>Contábil</strong> — lançamentos em TXT, plano de contas em CSV e SPED ECD.</li>
+                <li><strong>Fiscal</strong> — movimento fiscal, SPED EFD e lote de XMLs de NF-e e NFC-e.</li>
+                <li><strong>Financeiro</strong> — títulos a pagar e a receber em CSV.</li>
+              </ul>
             </div>
           )}
 
         </div>
 
         {/* Footer */}
-        <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-            Formatos validados para <strong>Fortes Total Contador</strong> (Desktop &amp; Nuvem)
-          </div>
-
+        <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end">
           <button
             onClick={onClose}
             className="px-5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 font-bold text-xs text-slate-700 dark:text-slate-200 transition-all"
