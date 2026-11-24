@@ -3,16 +3,16 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // Funções auxiliares
+    // O painel administrativo e os vínculos da equipe exigem uma sessão Google.
     function isSignedIn() {
-      return request.auth != null;
+      return request.auth != null &&
+        request.auth.token.firebase.sign_in_provider == 'google.com' &&
+        request.auth.token.email_verified == true;
     }
 
+    // Os portais externos usam um aplicativo Firebase separado e link por e-mail.
     function isEmailVerified() {
-      return isSignedIn() && (
-        request.auth.token.email_verified == true ||
-        request.auth.token.firebase.sign_in_provider == 'google.com' ||
-        request.auth.token.firebase.sign_in_provider == 'password'
-        );
+      return request.auth != null && request.auth.token.email_verified == true;
     }
 
     function isCurrentUser(userId) {
@@ -87,7 +87,7 @@ service cloud.firestore {
 
     // Portal do Cooperado
     match /portalCooperados/{docId} {
-      allow read: if (isSignedIn() && request.auth.token.email_verified == true &&
+      allow read: if (isEmailVerified() &&
         resource.data.cooperadoEmail == request.auth.token.email.lower()) ||
         isAdmin() || belongsToTenant(resource.data.tenantId);
       allow create, update: if (isAdmin() || belongsToTenant(request.resource.data.tenantId)) &&
@@ -97,7 +97,7 @@ service cloud.firestore {
 
     // App do Produtor
     match /portalProdutores/{docId} {
-      allow read: if (isSignedIn() && request.auth.token.email_verified == true &&
+      allow read: if (isEmailVerified() &&
         resource.data.produtorEmail == request.auth.token.email.lower()) ||
         isAdmin() || belongsToTenant(resource.data.tenantId);
       allow create, update: if (isAdmin() || belongsToTenant(request.resource.data.tenantId)) &&
@@ -107,7 +107,7 @@ service cloud.firestore {
 
     // Ofertas feitas pelo produtor
     match /portalProdutoresOfertas/{docId} {
-      allow create: if isSignedIn() && request.auth.token.email_verified == true &&
+      allow create: if isEmailVerified() &&
         request.resource.data.keys().hasOnly(['tenantId', 'produtorId', 'produtorEmail', 'tipo', 'ofertaId', 'dados', 'criadoEm']) &&
         request.resource.data.produtorEmail == request.auth.token.email.lower() &&
         get(/databases/$(database)/documents/portalProdutores/$(request.resource.data.tenantId + '__' + request.resource.data.produtorId)).data.produtorEmail == request.auth.token.email.lower() &&
@@ -119,7 +119,7 @@ service cloud.firestore {
 
     // Portal do Motorista
     match /portalMotoristas/{docId} {
-      allow read: if (isSignedIn() && request.auth.token.email_verified == true &&
+      allow read: if (isEmailVerified() &&
         resource.data.motoristaEmail == request.auth.token.email.lower()) ||
         isAdmin() || belongsToTenant(resource.data.tenantId);
       allow create, update: if (isAdmin() || belongsToTenant(request.resource.data.tenantId)) &&
@@ -129,7 +129,7 @@ service cloud.firestore {
 
     // Entregas confirmadas pelo motorista
     match /portalMotoristasAtualizacoes/{docId} {
-      allow create: if isSignedIn() && request.auth.token.email_verified == true &&
+      allow create: if isEmailVerified() &&
         request.resource.data.keys().hasOnly(['tenantId', 'motoristaId', 'motoristaEmail', 'programacaoId', 'alteracoes', 'criadoEm']) &&
         request.resource.data.motoristaEmail == request.auth.token.email.lower() &&
         get(/databases/$(database)/documents/portalMotoristas/$(request.resource.data.tenantId + '__' + request.resource.data.motoristaId)).data.motoristaEmail == request.auth.token.email.lower() &&
@@ -140,7 +140,7 @@ service cloud.firestore {
 
     // Portal da Escola
     match /portalEscolas/{docId} {
-      allow read: if (isSignedIn() && request.auth.token.email_verified == true &&
+      allow read: if (isEmailVerified() &&
         resource.data.escolaEmail == request.auth.token.email.lower()) ||
         isAdmin() || belongsToTenant(resource.data.tenantId);
       allow create, update: if (isAdmin() || belongsToTenant(request.resource.data.tenantId)) &&
@@ -150,7 +150,7 @@ service cloud.firestore {
 
     match /portalEscolas/{portalId}/propostas/{propostaId} {
       function escolaAutorizada() {
-        return isEmailVerified() && request.auth.token.email_verified == true &&
+        return isEmailVerified() &&
           get(/databases/$(database)/documents/portalEscolas/$(portalId)).data.escolaEmail == request.auth.token.email.lower();
       }
       allow read: if escolaAutorizada() || isAdmin() ||
@@ -164,7 +164,7 @@ service cloud.firestore {
 
     // Comprovantes de entrega registrados pela escola
     match /portalEscolasComprovantes/{docId} {
-      allow create: if isSignedIn() && request.auth.token.email_verified == true &&
+      allow create: if isEmailVerified() &&
         request.resource.data.keys().hasOnly(['tenantId', 'escolaId', 'escolaEmail', 'entrega', 'criadoEm']) &&
         request.resource.data.escolaEmail == request.auth.token.email.lower() &&
         get(/databases/$(database)/documents/portalEscolas/$(request.resource.data.tenantId + '__' + request.resource.data.escolaId)).data.escolaEmail == request.auth.token.email.lower();

@@ -107,17 +107,13 @@ import { consultarAssinatura, validarLicencaNoServidor } from '../services/licen
 import { aptidaoCooperado, sanitizeCooperado } from '../utils/cooperadoSanitizer';
 import {
   auth,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  sendPasswordResetEmail,
+
   signOut,
-  updateProfile,
+
   onAuthStateChanged,
   signInWithPopup,
   googleProvider,
-  updatePassword,
-  reauthenticateWithCredential,
-  EmailAuthProvider,
+
   traduzirErroAuth
   } from '../services/firebase';
   import type { FirebaseUser } from '../services/firebase';
@@ -524,11 +520,7 @@ interface CoopContextType {
   setIsAuthenticated: (auth: boolean) => void;
   isPendingCooperativeSetup: boolean;
   setIsPendingCooperativeSetup: (pending: boolean) => void;
-  loginWithEmail: (email: string, pass: string) => Promise<{ success: boolean; requiresCooperativeSetup: boolean; error?: string }>;
   loginWithGoogle: () => Promise<{ success: boolean; requiresCooperativeSetup: boolean; error?: string }>;
-  registerUser: (name: string, email: string, pass: string, role: UserRole) => Promise<{ user: User | null; requiresCooperativeSetup: boolean; error?: string }>;
-  recoverPassword: (email: string) => Promise<{ success: boolean; message: string }>;
-  changeUserPassword: (newPassword: string, currentPassword?: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void> | void;
   /** false até o Firebase Auth informar se existe uma sessão salva no navegador. */
   authReady: boolean;
@@ -1699,7 +1691,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
    */
   const montarSessaoFirebase = async (
     fbUser: FirebaseUser,
-    origem: 'Google' | 'e-mail/senha' | 'sessão salva'
+    origem: 'Google' | 'sessão salva'
   ): Promise<{ success: boolean; requiresCooperativeSetup: boolean; error?: string }> => {
     const email = (fbUser.email || '').toLowerCase().trim();
     const negarEntrada = async (error: string) => {
@@ -1709,6 +1701,15 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       return { success: false, requiresCooperativeSetup: false, error };
     };
+
+    try {
+      const credencial = await fbUser.getIdTokenResult();
+      if (credencial.signInProvider !== 'google.com' || !fbUser.emailVerified) {
+        return negarEntrada('Entre com uma conta Google verificada para acessar o SISCOOP.');
+      }
+    } catch {
+      return negarEntrada('Não foi possível validar a sessão Google. Entre novamente.');
+    }
 
     let vinculo: Awaited<ReturnType<typeof lerVinculoDeLogin>>;
     try {
@@ -1907,22 +1908,6 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   }, [isAuthenticated, currentUser.tenantId, currentTenant?.id]);
 
-  const loginWithEmail = async (email: string, pass: string) => {
-    let erroFirebase: unknown = null;
-    try {
-      const userCredential = await signInWithEmailAndPassword(auth, email.trim(), pass);
-      if (userCredential?.user) {
-        return await montarSessaoFirebase(userCredential.user, 'e-mail/senha');
-      }
-    } catch (error: any) {
-      erroFirebase = error;
-      console.warn('Tentativa de login Firebase Auth:', error?.code || error?.message);
-    }
-
-    return { success: false, requiresCooperativeSetup: false,
-      error: erroFirebase ? traduzirErroAuth(erroFirebase) : 'Credenciais inválidas. Use uma conta cadastrada.' };
-  };
-
   const loginWithGoogle = async () => {
     try {
       const userCredential = await signInWithPopup(auth, googleProvider);
@@ -1934,135 +1919,6 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, requiresCooperativeSetup: false, error: traduzirErroAuth(error) };
     }
     return { success: false, requiresCooperativeSetup: false, error: 'O login via Google não retornou usuário.' };
-  };
-
-  const registerUser = async (name: string, email: string, pass: string, role: UserRole) => {
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
-      if (userCredential?.user) {
-        await updateProfile(userCredential.user, {
-          displayName: name || email.split('@')[0]
-        });
-
-        const newUser: User = {
-          id: userCredential.user.uid,
-          name: name || email.split('@')[0],
-          email: userCredential.user.email || email,
-          role: role || 'ADMIN',
-          avatar: `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100`,
-          tenantId: '',
-          active: true,
-          lastLogin: new Date().toISOString()
-        };
-        setCurrentUser(newUser);
-        setIsAuthenticated(true);
-        setIsPendingCooperativeSetup(true);
-        addAuditLog('AUTH', 'INCLUSAO', `Novo cadastro de usuário ${newUser.name} (${newUser.role}) no Firebase Auth`);
-
-        return { user: newUser, requiresCooperativeSetup: true };
-      }
-    } catch (err: any) {
-      // O provedor Email/Senha pode estar desativado no Firebase. Nesse caso,
-      // continue pelo modo local de contingência já suportado pelo aplicativo,
-      // em vez de interromper o onboarding com auth/operation-not-allowed.
-      if (err?.code === 'auth/operation-not-allowed') {
-        console.info('Firebase Auth Email/Senha indisponível; usando cadastro local de contingência.');
-      } else {
-        console.warn('Erro ao registrar usuário no Firebase Auth:', err);
-        let userMsg = err?.message || 'Erro ao registrar no Firebase.';
-        if (err?.code === 'auth/email-already-in-use') {
-          userMsg = 'Este e-mail já está cadastrado no Firebase. Faça login com suas credenciais.';
-        } else if (err?.code === 'auth/weak-password') {
-          userMsg = 'A senha deve ter pelo menos 6 caracteres no Firebase.';
-        }
-        return { user: null, requiresCooperativeSetup: false, error: userMsg };
-      }
-    }
-
-    const newUser: User = {
-      id: `usr-reg-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
-      name: name || email.split('@')[0],
-      email: email,
-      role: role || 'ADMIN',
-      avatar: `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100`,
-      tenantId: '',
-      active: true,
-      lastLogin: new Date().toISOString()
-    };
-    setCurrentUser(newUser);
-    setIsAuthenticated(true);
-
-    setIsPendingCooperativeSetup(true);
-    addAuditLog('AUTH', 'INCLUSAO', `Novo cadastro de usuário ${newUser.name} (${newUser.role}) com e-mail/senha`);
-    return { user: newUser, requiresCooperativeSetup: true };
-  };
-
-  const recoverPassword = async (email: string): Promise<{ success: boolean; message: string }> => {
-    if (!email || !email.includes('@')) {
-      return { success: false, message: 'Por favor, informe um endereço de e-mail válido.' };
-    }
-
-    try {
-      await sendPasswordResetEmail(auth, email);
-      addAuditLog('AUTH', 'ALTERACAO', `Solicitação de recuperação de senha enviada para: ${email}`);
-      return { success: true, message: 'Instruções e link de redefinição de senha foram enviados para o seu e-mail pelo Firebase Auth!' };
-    } catch (err: any) {
-      console.warn('Erro ao solicitar redefinição de senha no Firebase Auth:', err);
-    }
-
-    addAuditLog('AUTH', 'ALTERACAO', `Solicitação de recuperação de senha processada para: ${email}`);
-    return {
-      success: true,
-      message: `Enviamos as instruções de redefinição de senha para o e-mail ${email}. Por favor, verifique sua caixa de entrada e spam.`
-    };
-  };
-
-  const changeUserPassword = async (newPassword: string, currentPassword?: string): Promise<{ success: boolean; error?: string }> => {
-    try {
-      const fbUser = auth.currentUser;
-      if (fbUser) {
-        // Se a senha atual foi informada e o usuário tem e-mail, faz reautenticação preventiva para evitar 'auth/requires-recent-login'
-        if (currentPassword && fbUser.email) {
-          try {
-            const credential = EmailAuthProvider.credential(fbUser.email, currentPassword);
-            await reauthenticateWithCredential(fbUser, credential);
-          } catch (reauthErr: any) {
-            console.warn('Falha na reautenticação com senha atual:', reauthErr);
-            if (reauthErr?.code === 'auth/wrong-password' || reauthErr?.code === 'auth/invalid-credential') {
-              return { success: false, error: 'A senha atual informada está incorreta.' };
-            }
-          }
-        }
-
-        // Atualiza a credencial diretamente no Firebase Authentication
-        await updatePassword(fbUser, newPassword);
-      }
-
-      // Atualiza também os registros locais do usuário e da sessão
-      if (currentUser) {
-        const updatedUser = { ...currentUser, password: newPassword };
-        setCurrentUser(updatedUser);
-        setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, password: newPassword } : u));
-        addAuditLog('AUTH', 'ALTERACAO', `Senha do usuário ${currentUser.name} atualizada com sucesso`);
-      }
-
-      return { success: true };
-    } catch (err: any) {
-      console.error('Erro ao atualizar senha no Firebase Auth:', err);
-      if (err?.code === 'auth/requires-recent-login') {
-        return {
-          success: false,
-          error: 'Por exigência de segurança do Firebase, informe a sua Senha Atual para autorizar a troca (ou faça login novamente antes de prosseguir).'
-        };
-      }
-      if (err?.code === 'auth/weak-password') {
-        return { success: false, error: 'A nova senha deve possuir pelo menos 6 caracteres no Firebase.' };
-      }
-      if (err?.code === 'auth/wrong-password' || err?.code === 'auth/invalid-credential') {
-        return { success: false, error: 'A senha atual informada está incorreta.' };
-      }
-      return { success: false, error: err?.message || 'Não foi possível atualizar a senha no serviço de autenticação.' };
-    }
   };
 
   const logout = async () => {
@@ -5689,11 +5545,9 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsAuthenticated,
         isPendingCooperativeSetup,
         setIsPendingCooperativeSetup,
-        loginWithEmail,
+
         loginWithGoogle,
-        registerUser,
-        recoverPassword,
-        changeUserPassword,
+
         logout,
         authReady,
         cooperados: tenantCooperados,

@@ -1,8 +1,6 @@
-import { NavegacaoSecoes } from '../components/ui/NavegacaoSecoes';
 import React, { useState } from 'react';
 import { useCoop } from '../context/CoopContext';
-import { UserRole } from '../types';
-import { Shield, Mail, Lock, User, ArrowRight, CheckCircle2, AlertCircle, Building2, Database, KeyRound } from 'lucide-react';
+import { Shield, CheckCircle2, AlertCircle } from 'lucide-react';
 import './LoginView.css';
 
 interface Props {
@@ -11,52 +9,11 @@ interface Props {
 }
 
 export const LoginView: React.FC<Props> = ({ onLoginSuccess, onOpenCooperativeSetup }) => {
-  const { loginWithEmail, loginWithGoogle, registerUser, recoverPassword } = useCoop();
+  const { loginWithGoogle } = useCoop();
 
-  const [activeTab, setActiveTab] = useState<'login' | 'register' | 'forgot' | null>(null);
-  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-
-  // Form states for Login
-  const [loginEmail, setLoginEmail] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
-
-  // Form states for Registration
-  const [regName, setRegName] = useState('');
-  const [regEmail, setRegEmail] = useState('');
-  const [regPassword, setRegPassword] = useState('');
-  const [regRole, setRegRole] = useState<UserRole>('ADMIN');
-
-  // Form state for Password Recovery
-  const [recoveryEmail, setRecoveryEmail] = useState('');
-
-  const handleEmailLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setErrorMessage(null);
-    setSuccessMessage(null);
-
-    try {
-      const res = await loginWithEmail(loginEmail, loginPassword);
-      setIsLoading(false);
-
-      if (res.success) {
-        setSuccessMessage('Autenticação realizada com sucesso!');
-        if (res.requiresCooperativeSetup) {
-          if (onOpenCooperativeSetup) onOpenCooperativeSetup();
-        } else {
-          if (onLoginSuccess) onLoginSuccess();
-        }
-      } else {
-        setErrorMessage(res.error || 'Não foi possível autenticar.');
-      }
-    } catch (err: any) {
-      setIsLoading(false);
-      setErrorMessage(err?.message || 'Erro ao conectar ao serviço de autenticação.');
-    }
-  };
 
   const handleGoogleLogin = async () => {
     setIsLoading(true);
@@ -86,59 +43,6 @@ export const LoginView: React.FC<Props> = ({ onLoginSuccess, onOpenCooperativeSe
     }
   };
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!regEmail || !regPassword) {
-      setErrorMessage('Preencha o e-mail e a senha desejada.');
-      return;
-    }
-    setIsLoading(true);
-    setErrorMessage(null);
-
-    try {
-      const res = await registerUser(regName, regEmail, regPassword, regRole);
-      setIsLoading(false);
-
-      if (res.user) {
-        setSuccessMessage('Conta de usuário cadastrada com sucesso!');
-        if (res.requiresCooperativeSetup) {
-          if (onOpenCooperativeSetup) onOpenCooperativeSetup();
-        } else {
-          if (onLoginSuccess) onLoginSuccess();
-        }
-      } else {
-        setErrorMessage(res.error || 'Erro ao criar conta de usuário.');
-      }
-    } catch (err: any) {
-      setIsLoading(false);
-      setErrorMessage(err?.message || 'Erro ao criar conta no Firebase.');
-    }
-  };
-
-  const handleRecoverPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!recoveryEmail) {
-      setErrorMessage('Informe seu e-mail cadastrado para solicitar a redefinição de senha.');
-      return;
-    }
-    setIsLoading(true);
-    setErrorMessage(null);
-    setSuccessMessage(null);
-
-    try {
-      const res = await recoverPassword(recoveryEmail);
-      setIsLoading(false);
-      if (res.success) {
-        setSuccessMessage(res.message);
-      } else {
-        setErrorMessage(res.message);
-      }
-    } catch (err: any) {
-      setIsLoading(false);
-      setErrorMessage('Erro ao solicitar recuperação de senha.');
-    }
-  };
-
   return (
     <div className="login-wrapper">
       <div className="login-card">
@@ -154,17 +58,6 @@ export const LoginView: React.FC<Props> = ({ onLoginSuccess, onOpenCooperativeSe
           </h2>
           <p className="login-subtitle">Plataforma Integrada de Gestão Cooperativa</p>
 
-          <div className="login-db-status">
-            <Database size={12} />
-            Firebase Auth Ativo • Segurança Aprimorada
-          </div>
-
-          <div className="mt-4 text-left">
-            <NavegacaoSecoes selecionada={activeTab !== null} voltar={() => { setActiveTab(null); setErrorMessage(null); setSuccessMessage(null); }} secoes={[
-              { titulo: 'Entrar', descricao: 'Acesse sua conta do Siscoop.', icone: Lock, abrir: () => { setActiveTab('login'); setErrorMessage(null); setSuccessMessage(null); } },
-              { titulo: 'Cadastrar-se', descricao: 'Crie uma conta para acessar o sistema.', icone: User, abrir: () => { setActiveTab('register'); setErrorMessage(null); setSuccessMessage(null); } }
-            ]} />
-          </div>
         </div>
 
         <div className="login-body">
@@ -182,8 +75,8 @@ export const LoginView: React.FC<Props> = ({ onLoginSuccess, onOpenCooperativeSe
             </div>
           )}
 
-          {activeTab === 'login' && (
-            <div className="login-form">
+          <div className="login-form">
+            <p className="login-subtitle">Use a conta Google do e-mail cadastrado na sua cooperativa.</p>
               <button
                 type="button"
                 onClick={handleGoogleLogin}
@@ -198,198 +91,7 @@ export const LoginView: React.FC<Props> = ({ onLoginSuccess, onOpenCooperativeSe
                 </svg>
                 {isLoading ? 'Autenticando...' : 'Continuar com o Google'}
                 </button>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '4px 0', fontSize: '11px', color: '#94a3b8', fontWeight: 600 }}>
-                  <span style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
-                  ou entre com e-mail e senha
-                  <span style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
-                </div>
-
-                <form onSubmit={handleEmailLogin} className="login-form">
-                  <div className="login-field-group">
-                    <label className="login-label">E-mail</label>
-                    <div className="login-input-wrap">
-                      <Mail className="login-input-icon" />
-                      <input
-                        type="email"
-                        required
-                        autoComplete="username"
-                        value={loginEmail}
-                        onChange={e => setLoginEmail(e.target.value)}
-                        placeholder="seu.email@cooperativa.com.br"
-                        className="login-input"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="login-field-group">
-                    <label className="login-label">Senha</label>
-                    <div className="login-input-wrap">
-                      <Lock className="login-input-icon" />
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        required
-                        autoComplete="current-password"
-                        value={loginPassword}
-                        onChange={e => setLoginPassword(e.target.value)}
-                        placeholder="Sua senha"
-                        className="login-input"
-                      />
-                    </div>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#64748b', marginTop: 6, cursor: 'pointer' }}>
-                      <input type="checkbox" checked={showPassword} onChange={e => setShowPassword(e.target.checked)} />
-                      Mostrar senha
-                    </label>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={isLoading}
-                    className="login-submit-btn"
-                  >
-                    <span>{isLoading ? 'Entrando...' : 'Entrar com e-mail e senha'}</span>
-                    <ArrowRight size={16} />
-                  </button>
-
-                  <div className="login-back-link">
-                    <button
-                      type="button"
-                      onClick={() => { setActiveTab('forgot'); setRecoveryEmail(loginEmail); setErrorMessage(null); setSuccessMessage(null); }}
-                      className="login-back-btn"
-                    >
-                      Esqueci minha senha
-                    </button>
-                  </div>
-                </form>
-                </div>
-                )}
-
-          {activeTab === 'forgot' && (
-            <form onSubmit={handleRecoverPassword} className="login-form">
-              <div className="login-info-box">
-                <KeyRound size={16} style={{ marginTop: '2px', flexShrink: 0 }} />
-                <span>Informe seu e-mail cadastrado para receber o link de redefinição e recuperação de senha.</span>
-              </div>
-
-              <div className="login-field-group">
-                <label className="login-label">E-mail do Usuário</label>
-                <div className="login-input-wrap">
-                  <Mail className="login-input-icon" />
-                  <input
-                    type="email"
-                    required
-                    value={recoveryEmail}
-                    onChange={e => setRecoveryEmail(e.target.value)}
-                    placeholder="seu.email@cooperativa.com.br"
-                    className="login-input"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="login-submit-btn"
-              >
-                <span>{isLoading ? 'Enviando...' : 'Enviar Link de Recuperação'}</span>
-                <ArrowRight size={16} />
-              </button>
-
-              <div className="login-back-link">
-                <button
-                  type="button"
-                  onClick={() => { setActiveTab('login'); setErrorMessage(null); setSuccessMessage(null); }}
-                  className="login-back-btn"
-                >
-                  Voltar para a Tela de Login
-                </button>
-              </div>
-            </form>
-          )}
-
-          {activeTab === 'register' && (
-            <form onSubmit={handleRegister} className="login-form">
-              <div className="login-field-group">
-                <label className="login-label">Nome Completo</label>
-                <div className="login-input-wrap">
-                  <User className="login-input-icon" />
-                  <input
-                    type="text"
-                    required
-                    value={regName}
-                    onChange={e => setRegName(e.target.value)}
-                    placeholder="Ex: Carlos Alberto Silva"
-                    className="login-input"
-                  />
-                </div>
-              </div>
-
-              <div className="login-field-group">
-                <label className="login-label">E-mail Corporativo</label>
-                <div className="login-input-wrap">
-                  <Mail className="login-input-icon" />
-                  <input
-                    type="email"
-                    required
-                    value={regEmail}
-                    onChange={e => setRegEmail(e.target.value)}
-                    placeholder="carlos@cooperativa.com.br"
-                    className="login-input"
-                  />
-                </div>
-              </div>
-
-              <div className="login-field-group">
-                <label className="login-label">Criar Senha</label>
-                <div className="login-input-wrap">
-                  <Lock className="login-input-icon" />
-                  <input
-                    type="password"
-                    required
-                    value={regPassword}
-                    onChange={e => setRegPassword(e.target.value)}
-                    placeholder="Mínimo 6 caracteres"
-                    className="login-input"
-                  />
-                </div>
-              </div>
-
-              <div className="login-field-group">
-                <label className="login-label">Perfil Inicial de Acesso</label>
-                <select
-                  value={regRole}
-                  onChange={e => setRegRole(e.target.value as UserRole)}
-                  className="login-input"
-                  style={{ paddingLeft: '14px' }}
-                >
-                  <option value="ADMIN">Administrador (Presidente / TI / Direção)</option>
-                  <option value="GERENTE">Gerente de Operações</option>
-                  <option value="SECRETARIA">Secretaria Cooperativa</option>
-                  <option value="FINANCEIRO">Financeiro & Tesouraria</option>
-                  <option value="AUDITORIA">Conselho Fiscal & Auditoria</option>
-                  <option value="CONSULTA">Consulta Apenas Leitura</option>
-                </select>
-              </div>
-
-              {regRole === 'ADMIN' && (
-                <div className="login-info-box">
-                  <Building2 size={16} style={{ marginTop: '2px', flexShrink: 0 }} />
-                  <span>
-                    <strong>Novo Cadastro:</strong> Como Administrador, após o cadastro você registrará a Cooperativa.
-                  </span>
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="login-submit-btn"
-              >
-                <span>{isLoading ? 'Cadastrando...' : 'Criar Conta Admin'}</span>
-                <ArrowRight size={16} />
-              </button>
-            </form>
-          )}
+          </div>
         </div>
       </div>
     </div>

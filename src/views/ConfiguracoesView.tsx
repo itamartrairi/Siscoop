@@ -27,7 +27,6 @@ import { PickedGoogleFile } from '../services/googlePickerService';
 import { FortesExportModal } from '../components/FortesExportModal';
 import { useCargosDepartamentos } from '../hooks/useCargosDepartamentos';
 import { CargoSelect, DepartamentoSelect } from '../components/CargoDepartamentoSelect';
-import { criarContaFirebaseAuth } from '../services/firebase';
 import {
   Settings,
   Users,
@@ -170,7 +169,6 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
     updateUser,
     deleteUser,
     updateCurrentUserProfile,
-    changeUserPassword,
     rolePermissions,
     updateRolePermission,
     resetDefaultPermissions,
@@ -201,7 +199,6 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
   const canWrite = canWriteModule('configuracoes');
   // Listas de Cargos e Departamentos (Firestore) para os campos de seleção.
   const { cargos: cadastroCargos, departamentos: cadastroDepartamentos } = useCargosDepartamentos();
-  const { recoverPassword } = useCoop();
   const [isSavingUser, setIsSavingUser] = useState(false);
   const blockWriteAction = () => {
     alert('Seu perfil de acesso tem permissão apenas de leitura neste módulo. Fale com um administrador para solicitar permissão de edição.');
@@ -217,10 +214,6 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
 
   // Meu Perfil State & Form
   const [profileMsg, setProfileMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [passMsg, setPassMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   const [profileForm, setProfileForm] = useState({
     name: currentUser?.name || '',
@@ -231,12 +224,6 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
     departamento: currentUser?.departamento || 'Administração Central',
     bio: currentUser?.bio || 'Responsável pela gestão técnica e administrativa da cooperativa.',
     avatar: currentUser?.avatar || PRESET_AVATARS[0]
-  });
-
-  const [passwordForm, setPasswordForm] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: ''
   });
 
   useEffect(() => {
@@ -270,34 +257,6 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
     setTimeout(() => setProfileMsg(null), 4000);
   };
 
-  const handleSavePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!passwordForm.newPassword || passwordForm.newPassword.length < 6) {
-      setPassMsg({ type: 'error', text: 'A nova senha deve possuir pelo menos 6 caracteres.' });
-      return;
-    }
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setPassMsg({ type: 'error', text: 'A confirmação de senha não corresponde à nova senha.' });
-      return;
-    }
-    setIsChangingPassword(true);
-    setPassMsg(null);
-    try {
-      const res = await changeUserPassword(passwordForm.newPassword, passwordForm.currentPassword);
-      setIsChangingPassword(false);
-      if (res.success) {
-        setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
-        setPassMsg({ type: 'success', text: 'Sua senha de login foi atualizada com sucesso no sistema!' });
-        setTimeout(() => setPassMsg(null), 5000);
-      } else {
-        setPassMsg({ type: 'error', text: res.error || 'Não foi possível atualizar a senha.' });
-      }
-    } catch (err: any) {
-      setIsChangingPassword(false);
-      setPassMsg({ type: 'error', text: err?.message || 'Erro inesperado ao atualizar a senha.' });
-    }
-  };
-
   // User Management State
   const [userSearchTerm, setUserSearchTerm] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState<'TODOS' | UserRole>('TODOS');
@@ -315,7 +274,7 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
     phone: string;
     cpf: string;
     active: boolean;
-    password: string;
+
     avatar: string;
     customPermissions: Partial<Record<SystemToolModule, PermissionLevel>>;
   }>({
@@ -327,7 +286,7 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
     phone: '',
     cpf: '',
     active: true,
-    password: '',
+
     avatar: PRESET_AVATARS[0],
     customPermissions: {}
   });
@@ -344,7 +303,7 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
       phone: '',
       cpf: '',
       active: true,
-      password: '',
+
       avatar: PRESET_AVATARS[Math.floor(Math.random() * PRESET_AVATARS.length)],
       customPermissions: {}
     });
@@ -364,7 +323,7 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
       cpf: u.cpf || '',
       active: u.active ?? true,
       // Em branco = manter a senha atual (ela fica no Firebase Authentication).
-      password: '',
+
       avatar: u.avatar || PRESET_AVATARS[0],
       customPermissions: u.customPermissions || {}
     });
@@ -390,36 +349,8 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
       return;
     }
 
-    // Senha preenchida = criar o acesso por e-mail/senha no Firebase
-    // Authentication. Em branco na edição = manter a senha atual.
-    const senha = userForm.password;
-    if (senha && senha.length < 6) {
-      alert('A senha precisa ter pelo menos 6 caracteres (exigência do Firebase Authentication).');
-      setUserModalTab('dados');
-      return;
-    }
-
     setIsSavingUser(true);
-    let authUid: string | undefined = editingUser?.authUid;
-    const avisos: string[] = [];
     try {
-      if (senha) {
-        const r = await criarContaFirebaseAuth(email, senha, nome);
-        if (r.ok) {
-          authUid = r.uid;
-          avisos.push(`Acesso criado no Firebase Authentication: ${email} já pode entrar com e-mail e senha (ou com a conta Google desse e-mail).`);
-        } else if (r.code === 'auth/email-already-in-use') {
-          avisos.push(`O e-mail ${email} já tem conta no Firebase Authentication, então a senha não foi alterada. Ele pode entrar com a senha que já usa, com o Google, ou usar "Esqueci minha senha" na tela de login.`);
-        } else if (r.code === 'auth/operation-not-allowed') {
-          avisos.push('O login por e-mail/senha está desativado no Firebase (Authentication → Sign-in method → E-mail/senha). O usuário foi salvo, mas só conseguirá entrar com Google até esse método ser ativado.');
-        } else {
-          alert(`Não foi possível criar o acesso no Firebase Authentication: ${r.message}`);
-          return;
-        }
-      } else if (!editingUser) {
-        avisos.push('Usuário salvo sem senha: ele entra com a conta Google deste e-mail. Para liberar também o login por e-mail e senha, edite o usuário e defina uma senha.');
-      }
-
       const dados = {
         name: nome,
         email,
@@ -429,14 +360,13 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
         phone: userForm.phone,
         cpf: userForm.cpf,
         active: userForm.active,
-        authUid,
+        authUid: editingUser?.authUid,
         avatar: userForm.avatar,
         customPermissions: userForm.customPermissions
       };
       const salvo = editingUser ? await updateUser(editingUser.id, dados) : await addUser(dados);
       if (!salvo) return;
       setIsUserModalOpen(false);
-      if (avisos.length) alert(avisos.join('\n\n'));
     } finally {
       setIsSavingUser(false);
     }
@@ -1066,108 +996,6 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
               </form>
             </div>
 
-            {/* Form de Alteração de Senha */}
-            <div className="p-6 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-xs space-y-4 flex flex-col justify-between">
-              <div>
-                <h4 className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-2 border-b border-slate-100 dark:border-slate-700 pb-3 mb-3">
-                  <Lock className="w-4 h-4 text-indigo-600" /> Alterar Senha de Acesso
-                </h4>
-
-                {passMsg && (
-                  <div className={`p-3 rounded-lg text-[11px] font-bold mb-3 flex items-center gap-2 ${
-                    passMsg.type === 'success' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
-                  }`}>
-                    {passMsg.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
-                    <span>{passMsg.text}</span>
-                  </div>
-                )}
-
-                <form onSubmit={handleSavePassword} className="space-y-3">
-                  <div>
-                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1 text-xs">
-                      Senha Atual (para confirmação no login)
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showCurrentPassword ? 'text' : 'password'}
-                        value={passwordForm.currentPassword}
-                        onChange={e => setPasswordForm(p => ({ ...p, currentPassword: e.target.value }))}
-                        placeholder="Sua senha atual de login"
-                        className="w-full px-3 py-2 pr-10 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                        className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
-                      >
-                        {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1 text-xs">
-                      Nova Senha
-                    </label>
-
-                    <div className="relative">
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        value={passwordForm.newPassword}
-                        onChange={e => setPasswordForm(p => ({ ...p, newPassword: e.target.value }))}
-                        placeholder="Mínimo 6 caracteres"
-                        className="w-full px-3 py-2 pr-10 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1 text-xs">
-                      Confirmar Nova Senha
-                    </label>
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={passwordForm.confirmPassword}
-                      onChange={e => setPasswordForm(p => ({ ...p, confirmPassword: e.target.value }))}
-                      placeholder="Repita a nova senha"
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                      required
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={isChangingPassword}
-                    className="w-full mt-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 text-sm"
-                  >
-                    {isChangingPassword ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" /> Atualizando no Firebase...
-                      </>
-                    ) : (
-                      <>
-                        <Key className="w-4 h-4" /> Atualizar Minha Senha de Login
-                      </>
-                    )}
-                  </button>
-                </form>
-              </div>
-
-              <div className="p-3 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200/60 dark:border-slate-700 text-[11px] text-slate-500 dark:text-slate-400 space-y-1">
-                <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Dica de Segurança
-                </span>
-                <p>Sua senha criptografada protege todas as movimentações fiscais, bancárias e dados de sócios da cooperativa.</p>
-              </div>
-            </div>
           </div>
         </div>
       )}
@@ -1604,32 +1432,9 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
                       </select>
                     </div>
 
-                    <div>
-                      <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Senha de Acesso (login por e-mail)</label>
-                      <input
-                        type="password"
-                        autoComplete="new-password"
-                        value={userForm.password}
-                        onChange={e => setUserForm(p => ({ ...p, password: e.target.value }))}
-                        placeholder={editingUser ? 'Em branco = manter a senha atual' : 'Mínimo 6 caracteres (opcional)'}
-                        className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                      />
-                      <p className="text-[10px] text-slate-400 mt-1">
-                        Ao salvar, a conta é criada no Firebase Authentication. O usuário também pode entrar com a conta Google do mesmo e-mail.
-                      </p>
-                      {editingUser && (
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            const r = await recoverPassword(userForm.email.trim());
-                            alert(r.message);
-                          }}
-                          className="mt-1 text-[10px] font-bold text-blue-600 hover:underline"
-                        >
-                          Enviar e-mail de redefinição de senha
-                        </button>
-                      )}
-                    </div>
+                    <p className="text-xs text-slate-600 md:col-span-2">
+                      O acesso é feito com a conta Google do e-mail cadastrado.
+                    </p>
 
                     <div>
                       <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Departamento / Setor</label>

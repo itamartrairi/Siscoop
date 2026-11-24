@@ -2,16 +2,9 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
   getAuth,
   GoogleAuthProvider,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  sendPasswordResetEmail,
   signOut,
-  updateProfile,
   onAuthStateChanged,
   signInWithPopup,
-  updatePassword,
-  reauthenticateWithCredential,
-  EmailAuthProvider,
   User as FirebaseUser
 } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
@@ -28,11 +21,6 @@ export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 // Sempre deixa escolher a conta Google (útil em computadores compartilhados).
 googleProvider.setCustomParameters({ prompt: 'select_account' });
-export {
-  updatePassword,
-  reauthenticateWithCredential,
-  EmailAuthProvider
-};
 
 export enum OperationType {
   CREATE = 'create',
@@ -106,11 +94,7 @@ if (typeof window !== 'undefined') {
 }
 
 export {
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  sendPasswordResetEmail,
   signOut,
-  updateProfile,
   onAuthStateChanged,
   signInWithPopup
 };
@@ -154,35 +138,5 @@ export function traduzirErroAuth(err: unknown): string {
       return 'Já existe uma conta com este e-mail usando outro método de login. Entre com e-mail e senha.';
     default:
       return (err as Error)?.message || 'Falha na autenticação.';
-  }
-}
-
-/**
- * Cria a conta de login (e-mail/senha) de OUTRO usuário no Firebase
- * Authentication sem derrubar a sessão de quem está cadastrando.
- *
- * createUserWithEmailAndPassword sempre deixa logada a conta recém-criada
- * na instância de Auth usada. Por isso o cadastro usa uma instância
- * secundária do app Firebase, cuja sessão é encerrada logo em seguida — o
- * administrador continua logado na instância principal.
- */
-export async function criarContaFirebaseAuth(
-  email: string,
-  senha: string,
-  nome?: string
-): Promise<{ ok: boolean; uid?: string; code?: string; message?: string }> {
-  const NOME_APP = 'siscoop-cadastro-usuarios';
-  const appSecundario = getApps().find(a => a.name === NOME_APP) || initializeApp(firebaseConfig, NOME_APP);
-  const authSecundario = getAuth(appSecundario);
-  try {
-    const cred = await createUserWithEmailAndPassword(authSecundario, email.trim(), senha);
-    if (nome) {
-      await updateProfile(cred.user, { displayName: nome }).catch(() => undefined);
-    }
-    return { ok: true, uid: cred.user.uid };
-  } catch (err) {
-    return { ok: false, code: (err as { code?: string })?.code || 'desconhecido', message: traduzirErroAuth(err) };
-  } finally {
-    await signOut(authSecundario).catch(() => undefined);
   }
 }
