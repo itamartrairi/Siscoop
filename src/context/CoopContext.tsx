@@ -563,8 +563,9 @@ interface CoopContextType {
   dispararConvocacoes: (assembleiaId: string, canais: ('EMAIL' | 'WHATSAPP' | 'SMS')[]) => Promise<boolean>;
 
   // Diretoria Actions
-  addMandato: (mandato: Omit<Mandato, 'id' | 'tenantId'>) => void;
-  updateMandato: (id: string, data: Partial<Mandato>) => void;
+  addMandato: (mandato: Omit<Mandato, 'id' | 'tenantId'>) => string;
+  updateMandato: (id: string, data: Partial<Mandato>) => boolean;
+  anexarDocumentoAssembleia: (id: string, documento: NonNullable<Assembleia['documentosExercicio']>[number]) => boolean;
 
   // System Settings & Licensing
   updateConfig: (newConfig: Partial<SistemaConfig>) => void;
@@ -2890,6 +2891,21 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
   };
 
+  const anexarDocumentoAssembleia: CoopContextType['anexarDocumentoAssembleia'] = (id, documento) => {
+    const assembleia = assembleias.find(a => a.id === id && pertenceAoTenant(a, currentTenant.id));
+    if (!assembleia || !canWriteModule('assembleias')) return false;
+    const atualizar = (a: Assembleia) => ({
+      ...a, documentosExercicio: [...(a.documentosExercicio ?? []), documento],
+    });
+    if (new TextEncoder().encode(JSON.stringify(atualizar(assembleia))).byteLength > 850_000) {
+      alert('O arquivo ultrapassa o espaço disponível para esta assembleia. Envie um PDF menor.');
+      return false;
+    }
+    setAssembleias(prev => prev.map(a => a.id === id ? atualizar(a) : a));
+    addAuditLog('ASSEMBLEIAS', 'ALTERACAO', `Anexou documento de ${documento.exercicio} à assembleia "${assembleia.titulo}"`);
+    return true;
+  };
+
   const registrarPresenca = (assembleiaId: string, cooperadoId: string, tipoCheckin: 'QRCODE' | 'MANUAL' | 'CPF' | 'BIOMETRIA') => {
     setAssembleias(prev => prev.map(ass => {
       if (ass.id === assembleiaId) {
@@ -2988,13 +3004,15 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     setMandatos(prev => [newMandato, ...prev]);
     addAuditLog('DIRETORIA', 'INCLUSAO', `Cadastrou mandato "${mandatoData.gestaoTitulo}"`);
+    return newMandato.id;
   };
 
   const updateMandato = (id: string, data: Partial<Mandato>) => {
-    const alvo = mandatos.find(m => m.id === id);
-    if (bloqueadoPorStatusFinal(alvo, 'mandato da diretoria')) return;
+    const alvo = mandatos.find(m => m.id === id && pertenceAoTenant(m, currentTenant.id));
+    if (!alvo || !canWriteModule('diretoria') || bloqueadoPorStatusFinal(alvo, 'mandato da diretoria')) return false;
     setMandatos(prev => prev.map(m => m.id === id ? { ...m, ...data } : m));
     addAuditLog('DIRETORIA', 'ALTERACAO', `Atualizou dados do mandato da diretoria`);
+    return true;
   };
 
   // Settings update
@@ -5712,6 +5730,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         dispararConvocacoes,
         addMandato,
         updateMandato,
+        anexarDocumentoAssembleia,
         updateConfig,
         restoreDefaultData,
         exportBackupJson,

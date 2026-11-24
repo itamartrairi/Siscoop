@@ -46,6 +46,7 @@ export const CapitalSocialView: React.FC = () => {
   };
 
   // Search & Filters
+  const [cooperadoAnaliseId, setCooperadoAnaliseId] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterTipo, setFilterTipo] = useState<string>('TODOS');
   const [activeSubTab, setActiveSubTab] = useState<'extrato' | 'parcelamento'>('extrato');
@@ -91,12 +92,17 @@ export const CapitalSocialView: React.FC = () => {
   const [formData, setFormData] = useState(transacaoVazia);
 
   // Calculate Totals
-  const totalSubscrito = (cooperados || []).reduce((acc, c) => acc + (Number(c?.capitalSubscrito) || 0), 0);
-  const totalIntegralizado = (cooperados || []).reduce((acc, c) => acc + (Number(c?.capitalIntegralizado) || 0), 0);
+  const cooperadoAnalise = cooperados.find(c => c.id === cooperadoAnaliseId);
+  const cooperadosDaAnalise = cooperadoAnalise ? [cooperadoAnalise] : cooperados;
+  const transacoesDaAnalise = cooperadoAnalise
+    ? transacoesCapital.filter(tx => tx.cooperadoId === cooperadoAnalise.id || tx.cooperadoDestinoId === cooperadoAnalise.id)
+    : transacoesCapital;
+  const totalSubscrito = cooperadosDaAnalise.reduce((acc, c) => acc + (Number(c?.capitalSubscrito) || 0), 0);
+  const totalIntegralizado = cooperadosDaAnalise.reduce((acc, c) => acc + (Number(c?.capitalIntegralizado) || 0), 0);
   const totalAIntegralizar = Math.max(0, totalSubscrito - totalIntegralizado);
 
   // Filtered transactions
-  const filteredTx = (transacoesCapital || []).filter(tx => {
+  const filteredTx = transacoesDaAnalise.filter(tx => {
     if (!tx) return false;
     const nome = (tx.cooperadoNome || '').toLowerCase();
     const mat = (tx.cooperadoMatricula || '').toLowerCase();
@@ -110,7 +116,7 @@ export const CapitalSocialView: React.FC = () => {
   });
 
   // Collect all parcelas across transactions
-  const allParcelas = (transacoesCapital || []).flatMap(tx =>
+  const allParcelas = transacoesDaAnalise.flatMap(tx =>
     (tx?.parcelas || []).map(p => ({
       ...p,
       cooperadoNome: tx?.cooperadoNome || '',
@@ -222,10 +228,19 @@ export const CapitalSocialView: React.FC = () => {
           )}
         </div>
 
+        <label className="flex flex-wrap items-center gap-3 text-sm font-semibold">
+          Análise por cooperado
+          <select value={cooperadoAnalise?.id ?? ''} onChange={e => setCooperadoAnaliseId(e.target.value)}
+            className="w-full rounded-xl border border-slate-200 p-2 sm:w-auto">
+            <option value="">Todos os cooperados</option>
+            {cooperados.map(c => <option key={c.id} value={c.id}>{c.nome} · {c.matricula}</option>)}
+          </select>
+        </label>
+
         {/* KPI Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-4">
           <div className="p-5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-xs">
-            <div className="text-xs font-bold uppercase text-slate-400">Capital Subscrito Total</div>
+            <div className="text-xs font-bold uppercase text-slate-400">Capital Subscrito</div>
             <div className="text-2xl font-black text-slate-900 dark:text-white font-mono mt-2">
               R$ {totalSubscrito.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </div>

@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 
 export const DiretoriaView: React.FC = () => {
-  const { mandatos, addMandato, updateMandato, cooperados, currentUser, canWriteModule } = useCoop();
+  const { mandatos, addMandato, updateMandato, cooperados, canWriteModule } = useCoop();
 
   const canWrite = canWriteModule('diretoria');
   const blockWriteAction = () => {
@@ -35,12 +35,13 @@ export const DiretoriaView: React.FC = () => {
     gestaoTitulo: '',
     periodoInicio: '',
     periodoFim: '',
-    status: 'VIGENTE' as 'VIGENTE' | 'ENCERRADO' | 'ELEICAO_EM_ANDAMENTO'
+    status: 'VIGENTE' as 'VIGENTE' | 'ENCERRADO' | 'FUTURO'
   });
 
   const [newMandatoForm, setNewMandatoForm] = useState(mandatoVazio);
 
   const abrirNovoMandato = () => {
+    if (!canWrite) { blockWriteAction(); return; }
     setNewMandatoForm(mandatoVazio());
     setIsNewMandatoOpen(true);
   };
@@ -49,10 +50,15 @@ export const DiretoriaView: React.FC = () => {
     e.preventDefault();
     if (!canWrite) { blockWriteAction(); return; }
     if (!newMandatoForm.gestaoTitulo) return;
-    addMandato({
+    if (newMandatoForm.periodoFim < newMandatoForm.periodoInicio) {
+      alert('O fim do mandato deve ser igual ou posterior ao início.');
+      return;
+    }
+    const id = addMandato({
       ...newMandatoForm,
       membros: []
     });
+    setSelectedMandatoId(id);
     setIsNewMandatoOpen(false);
   };
 
@@ -83,23 +89,32 @@ export const DiretoriaView: React.FC = () => {
     e.preventDefault();
     if (!canWrite) { blockWriteAction(); return; }
     const coop = cooperados.find(c => c.id === selectedCoopId);
-    if (!coop || !activeMandato) return;
+    if (!coop || !activeMandato) {
+      alert('Selecione um mandato e um cooperado para nomear o dirigente.');
+      return;
+    }
+    if (fimMandatoDate < posseDate) {
+      alert('O fim do mandato deve ser igual ou posterior à data da posse.');
+      return;
+    }
+    const membros = activeMandato.membros ?? [];
+    if (membros.some(membro => membro.cooperadoId === coop.id && membro.cargo === selectedCargo && membro.status === 'ATIVO')) {
+      alert('Este cooperado já está ativo neste cargo e mandato.');
+      return;
+    }
 
     const newMembro: MembroDiretoria = {
       id: `membro-${Date.now()}`,
       cooperadoId: coop.id,
       cooperadoNome: coop.nome,
       cooperadoCpf: coop.cpf,
-      cooperadoFotoUrl: coop.fotoUrl,
       cargo: selectedCargo,
       dataPosse: posseDate,
       dataFimMandato: fimMandatoDate,
       status: 'ATIVO'
     };
 
-    updateMandato(activeMandato.id, {
-      membros: [...activeMandato.membros, newMembro]
-    });
+    if (!updateMandato(activeMandato.id, { membros: [...membros, newMembro] })) return;
 
     setIsNewMemberOpen(false);
   };
@@ -114,7 +129,7 @@ export const DiretoriaView: React.FC = () => {
             Estrutura organizacional, controle de mandatos, eleições e vigência dos dirigentes
           </p>
         </div>
-        {currentUser.role !== 'CONSULTA' && (
+        {canWrite && (
           <div className="flex items-center gap-2">
             <button
               onClick={abrirNovoMandato}
@@ -124,11 +139,20 @@ export const DiretoriaView: React.FC = () => {
             </button>
             <button
               onClick={() => {
+                if (!activeMandato) { abrirNovoMandato(); return; }
+                if (activeMandato.status === 'ENCERRADO') {
+                  alert('Selecione um mandato vigente ou futuro para nomear um dirigente.');
+                  return;
+                }
+                if (!cooperados.length) {
+                  alert('Cadastre um cooperado antes de nomear um dirigente.');
+                  return;
+                }
                 setModalSearchCoop('');
                 setSelectedCoopId('');
                 setSelectedCargo('CONSELHEIRO_ADMIN');
-                setPosseDate('');
-                setFimMandatoDate('');
+                setPosseDate(activeMandato.periodoInicio || '');
+                setFimMandatoDate(activeMandato.periodoFim || '');
                 setIsNewMemberOpen(true);
               }}
               className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
@@ -176,7 +200,7 @@ export const DiretoriaView: React.FC = () => {
 
           {/* Top Officers Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {activeMandato.membros.map(membro => (
+            {(activeMandato.membros ?? []).map(membro => (
               <div
                 key={membro.id}
                 className="p-5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-xs hover:shadow-md transition-all relative overflow-hidden group"
@@ -188,7 +212,7 @@ export const DiretoriaView: React.FC = () => {
                   </span>
                   <div className="flex items-center gap-3 mt-3">
                     <img
-                      src={membro.cooperadoFotoUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100'}
+                      src={cooperados.find(c => c.id === membro.cooperadoId)?.fotoUrl || membro.cooperadoFotoUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100'}
                       alt={membro.cooperadoNome}
                       className="w-12 h-12 rounded-full object-cover ring-2 ring-amber-500/30 shrink-0"
                     />
@@ -288,9 +312,9 @@ export const DiretoriaView: React.FC = () => {
                   {cooperados
                     .filter(c =>
                       !modalSearchCoop ||
-                      c.nome.toLowerCase().includes(modalSearchCoop.toLowerCase()) ||
-                      c.matricula.toLowerCase().includes(modalSearchCoop.toLowerCase()) ||
-                      c.cpf.includes(modalSearchCoop)
+                      String(c.nome ?? '').toLowerCase().includes(modalSearchCoop.toLowerCase()) ||
+                      String(c.matricula ?? '').toLowerCase().includes(modalSearchCoop.toLowerCase()) ||
+                      String(c.cpf ?? '').includes(modalSearchCoop)
                     )
                     .map(c => (
                       <option key={c.id} value={c.id} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white py-1">
@@ -445,7 +469,7 @@ export const DiretoriaView: React.FC = () => {
                   className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-amber-500"
                 >
                   <option value="VIGENTE">VIGENTE</option>
-                  <option value="ELEICAO_EM_ANDAMENTO">ELEIÇÃO EM ANDAMENTO</option>
+                  <option value="FUTURO">FUTURO</option>
                   <option value="ENCERRADO">ENCERRADO</option>
                 </select>
               </div>

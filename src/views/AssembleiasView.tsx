@@ -42,7 +42,8 @@ export const AssembleiasView: React.FC = () => {
     cooperados,
     currentUser,
     config,
-    canWriteModule
+    canWriteModule,
+    anexarDocumentoAssembleia
   } = useCoop();
 
   const canWrite = canWriteModule('assembleias');
@@ -117,7 +118,42 @@ export const AssembleiasView: React.FC = () => {
   });
 
   // Active Selected Assembly
+  const [exercicioDocumento, setExercicioDocumento] = useState('');
+  const [arquivoEmLeitura, setArquivoEmLeitura] = useState(false);
   const selectedAss = assembleias.find(a => a.id === selectedAssId) || assembleias[0];
+  const importarDocumento = async (evento: React.ChangeEvent<HTMLInputElement>, tipo: 'ATA' | 'PARECER_FISCAL') => {
+    const arquivo = evento.currentTarget.files?.[0];
+    evento.currentTarget.value = '';
+    if (!arquivo || !selectedAss || !canWrite) return;
+    const exercicio = Number(exercicioDocumento);
+    if (!Number.isInteger(exercicio) || exercicio < 1900 || exercicio > 9999) {
+      alert('Informe o ano do exercício.');
+      return;
+    }
+    if (!/\.pdf$/i.test(arquivo.name) || arquivo.size > 600_000 || await arquivo.slice(0, 5).text() !== '%PDF-') {
+      alert('Selecione um PDF válido de até 600 KB.');
+      return;
+    }
+    setArquivoEmLeitura(true);
+    const leitor = new FileReader();
+    leitor.onload = () => {
+      try {
+        if (typeof leitor.result !== 'string') return;
+        const dados = leitor.result.split(',')[1];
+        anexarDocumentoAssembleia(selectedAss.id, {
+          id: crypto.randomUUID(), tipo, exercicio, nome: arquivo.name, dataUrl: `data:application/pdf;base64,${dados}`,
+        });
+      } finally {
+        setArquivoEmLeitura(false);
+      }
+    };
+    leitor.onerror = leitor.onabort = () => {
+      setArquivoEmLeitura(false);
+      alert('Não foi possível ler o arquivo.');
+    };
+    leitor.readAsDataURL(arquivo);
+  };
+
 
   // Quorum Calculations
   const totalAtivos = cooperados.filter(c => c.situacao === 'ATIVO').length;
@@ -855,6 +891,35 @@ ${secretarioNome} - Secretário ad-hoc`;
                     </button>
                   </div>
                 </div>
+
+                <section className="space-y-3 rounded-2xl border border-slate-200 p-4">
+                  <h4 className="text-sm font-bold">Documentos do exercício</h4>
+                  {canWrite && (
+                    <fieldset disabled={arquivoEmLeitura} className="grid min-w-0 gap-3 md:grid-cols-3">
+                      <label className="min-w-0 space-y-1">
+                        <span className="block font-semibold">Ano do exercício</span>
+                        <input type="number" min="1900" max="9999" value={exercicioDocumento}
+                          onChange={e => setExercicioDocumento(e.target.value)} className="w-full rounded-lg border p-2" />
+                      </label>
+                      {(['ATA', 'PARECER_FISCAL'] as const).map(tipo => (
+                        <label key={tipo} className="min-w-0 space-y-1">
+                          <span className="block font-semibold">{tipo === 'ATA' ? 'Anexar ata' : 'Anexar parecer do conselho fiscal'}</span>
+                          <input type="file" accept=".pdf,application/pdf" disabled={!exercicioDocumento}
+                            onChange={e => void importarDocumento(e, tipo)} className="block w-full rounded-lg border p-2" />
+                        </label>
+                      ))}
+                      <p className="text-slate-500 md:col-span-3">PDF de até 600 KB por arquivo, sujeito ao espaço da assembleia.</p>
+                    </fieldset>
+                  )}
+                  {arquivoEmLeitura && <p role="status">Lendo PDF…</p>}
+                  {(selectedAss.documentosExercicio ?? []).map(doc => (
+                    <div key={doc.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 p-2">
+                      <span>{doc.exercicio} · {doc.tipo === 'ATA' ? 'Ata' : 'Parecer do conselho fiscal'} · {doc.nome}</span>
+                      <a href={doc.dataUrl} download={doc.nome} className="font-semibold text-emerald-800 underline">Baixar PDF</a>
+                    </div>
+                  ))}
+                  {!selectedAss.documentosExercicio?.length && <p className="text-slate-500">Nenhum documento anexado.</p>}
+                </section>
 
                 {/* President and Secretary Form Inputs */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

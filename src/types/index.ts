@@ -249,6 +249,14 @@ export interface ParticipanteAssembleia {
   presente: boolean;
 }
 
+export interface DocumentoAssembleia {
+  id: string;
+  tipo: 'ATA' | 'PARECER_FISCAL';
+  exercicio: number;
+  nome: string;
+  dataUrl: string;
+}
+
 export interface Assembleia {
   id: string;
   tenantId: string;
@@ -264,6 +272,7 @@ export interface Assembleia {
   participantes: ParticipanteAssembleia[];
   ataTexto?: string;
   ataAssinadaUrl?: string;
+  documentosExercicio?: DocumentoAssembleia[];
   anexos?: string[];
 }
 
