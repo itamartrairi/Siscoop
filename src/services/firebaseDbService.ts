@@ -5,6 +5,7 @@ import {
   getDocs,
   deleteDoc,
   writeBatch,
+  runTransaction,
   getDoc,
   getDocFromServer,
   onSnapshot,
@@ -625,6 +626,8 @@ export interface TenantMember {
   cargo?: string;
   departamento?: string;
   phone?: string;
+  cpf?: string;
+  avatar?: string;
   authUid?: string;
   // Permissões personalizadas do usuário (JSON), para valerem em qualquer computador.
   customPermissionsJson?: string;
@@ -644,14 +647,25 @@ export function lerPermissoesMembro(json?: string): Record<string, any> | undefi
   }
 }
 
-export async function saveTenantMemberToFirestore(member: TenantMember): Promise<{ ok: boolean; error?: string }> {
+export async function saveTenantMemberToFirestore(member: TenantMember, modo: 'criar' | 'editar' = 'editar'): Promise<{ ok: boolean; error?: string }> {
   const id = chaveMembro(member.email);
   if (!id || !member.tenantId || !auth.currentUser) return { ok: false, error: 'Sem sessão no Firebase Auth.' };
   try {
     const dados = Object.fromEntries(
       Object.entries({ ...member, email: id, updatedAt: new Date().toISOString() }).filter(([, v]) => v !== undefined)
     );
-    await setDoc(doc(db, 'tenantMembers', id), dados, { merge: true });
+    const ref = doc(db, 'tenantMembers', id);
+    if (modo === 'criar') {
+      await setDoc(ref, dados, { merge: true });
+    } else {
+      await runTransaction(db, async transacao => {
+        const atual = await transacao.get(ref);
+        if (!atual.exists() || atual.data()?.tenantId !== member.tenantId) {
+          throw new Error('O vínculo deste usuário mudou na nuvem. Atualize a tela antes de editar.');
+        }
+        transacao.set(ref, dados, { merge: true });
+      });
+    }
     return { ok: true };
   } catch (error: any) {
     console.warn('Erro ao gravar tenantMembers no Firestore:', error);
@@ -666,12 +680,8 @@ export async function saveTenantMemberToFirestore(member: TenantMember): Promise
 
 export async function deleteTenantMemberFromFirestore(email: string): Promise<void> {
   const id = chaveMembro(email);
-  if (!id || !auth.currentUser) return;
-  try {
-    await deleteDoc(doc(db, 'tenantMembers', id));
-  } catch (error) {
-    console.warn('Erro ao remover tenantMembers no Firestore:', error);
-  }
+  if (!id || !auth.currentUser) throw new Error('Sem sessão no Firebase.');
+  await deleteDoc(doc(db, 'tenantMembers', id));
 }
 
 export async function lerVinculoDeLogin(uid: string, email: string) {
@@ -707,13 +717,18 @@ export async function getTenantMemberFromFirestore(email: string): Promise<Tenan
   }
 }
 
-export function subscribeTenantMembers(tenantId: string, onChange: (members: TenantMember[]) => void): Unsubscribe {
+export function subscribeTenantMembers(
+  tenantId: string,
+  onChange: (members: TenantMember[]) => void,
+  onError: (mensagem: string) => void,
+): Unsubscribe {
   const alvo = query(collection(db, 'tenantMembers'), where('tenantId', '==', tenantId));
-  return onSnapshot(
-    alvo,
-    snap => onChange(snap.docs.map(d => d.data() as TenantMember)),
-    error => console.warn('Erro ao ouvir tenantMembers no Firestore:', error)
-  );
+  return onSnapshot(alvo, { includeMetadataChanges: true }, snap => {
+    if (snap.metadata.fromCache || snap.metadata.hasPendingWrites) return;
+    onChange(snap.docs.map(d => d.data() as TenantMember));
+  }, error => onError(error.code === 'permission-denied'
+    ? 'O Firebase recusou a leitura da equipe desta cooperativa.'
+    : 'A lista de usuários não pôde ser atualizada na nuvem.'));
 }
 
 export async function fetchTenantFromFirestore(tenantId: string): Promise<Record<string, any> | null> {

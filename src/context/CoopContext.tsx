@@ -502,9 +502,12 @@ interface CoopContextType {
   currentUser: User;
   setCurrentUser: (user: User) => void;
   users: User[];
-  addUser: (userData: Omit<User, 'id' | 'tenantId'>) => User;
-  updateUser: (id: string, userData: Partial<User>) => void;
-  deleteUser: (id: string) => void;
+  usuariosPendentes: User[];
+  estadoEquipe: 'carregando' | 'pronta' | string;
+  recuperarUsuarioLocal: (id: string) => Promise<boolean>;
+  addUser: (userData: Omit<User, 'id' | 'tenantId'>) => Promise<boolean>;
+  updateUser: (id: string, userData: Partial<User>) => Promise<boolean>;
+  deleteUser: (id: string) => Promise<boolean>;
   updateCurrentUserProfile: (profileData: Partial<User>) => void;
   rolePermissions: RolePermissionsMap;
   updateRolePermission: (role: UserRole, module: SystemToolModule, level: PermissionLevel) => void;
@@ -1486,45 +1489,30 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => { cancelado = true; };
   }, [isAuthenticated, currentUser?.id, currentUser?.tenantId, currentUser?.role, currentTenant, currentUser?.email]);
 
-  // Equipe da cooperativa gravada no Firestore (tenantMembers) → lista de
-  // usuários de Configurações. Assim um usuário cadastrado em um computador
-  // aparece nos demais.
+  const [equipeNuvem, setEquipeNuvem] = useState<{ tenantId: string; usuarios: User[]; erro?: string } | null>(null);
+  const equipeAtual = equipeNuvem?.tenantId === currentTenant.id ? equipeNuvem : null;
+  const usuariosDaEquipe = equipeAtual?.usuarios ?? [];
+  const emailNormalizado = (email?: string) => (email ?? '').trim().toLowerCase();
+  const emailsDaEquipe = new Set(usuariosDaEquipe.map(u => emailNormalizado(u.email)));
+  const usuariosPendentes = equipeAtual && !equipeAtual.erro
+    ? users.filter(u => u.tenantId === currentTenant.id && emailNormalizado(u.email)
+      && !emailsDaEquipe.has(emailNormalizado(u.email)))
+    : [];
+
   useEffect(() => {
     const tenantId = currentTenant?.id;
+    setEquipeNuvem(null);
     if (!isAuthenticated || !tenantId || currentUser.tenantId !== tenantId || !auth.currentUser) return;
+    const usuarioLogado = auth.currentUser;
     return subscribeTenantMembers(tenantId, membros => {
-      setUsers(prev => {
-        let mudou = false;
-        const proxima = [...prev];
-        membros.forEach(m => {
-          const email = (m.email || '').toLowerCase().trim();
-          if (!email) return;
-          const idx = proxima.findIndex(u => (u.email || '').toLowerCase().trim() === email);
-          const dados: Partial<User> = {
-            name: m.name,
-            role: m.role as UserRole,
-            active: m.active !== false,
-            cargo: m.cargo,
-            departamento: m.departamento,
-            phone: m.phone,
-            authUid: m.authUid,
-            ...(m.customPermissionsJson !== undefined ? { customPermissions: lerPermissoesMembro(m.customPermissionsJson) } : {}),
-            tenantId
-          };
-          if (idx < 0) {
-            proxima.push({ ...dados, id: m.authUid || `usr-${email}`, email, lastLogin: 'Nunca acessou' } as User);
-            mudou = true;
-          } else {
-            const atual = proxima[idx];
-            const diferente = (Object.keys(dados) as (keyof User)[]).some(k => JSON.stringify(dados[k] ?? null) !== JSON.stringify(atual[k] ?? null));
-            if (diferente) {
-              proxima[idx] = { ...atual, ...dados };
-              mudou = true;
-            }
-          }
-        });
-        return mudou ? proxima : prev;
-      });
+      if (auth.currentUser?.uid !== usuarioLogado.uid) return;
+      const lista: User[] = membros.filter(m => m.email && m.tenantId === tenantId).map(m => ({
+        id: emailNormalizado(m.email) === emailNormalizado(usuarioLogado.email ?? '') ? usuarioLogado.uid : m.authUid || `usr-${emailNormalizado(m.email)}`,
+        email: emailNormalizado(m.email), name: m.name, tenantId, role: m.role as UserRole, active: m.active !== false,
+        cargo: m.cargo, departamento: m.departamento, phone: m.phone, cpf: m.cpf, avatar: m.avatar ?? '',
+        authUid: m.authUid, customPermissions: lerPermissoesMembro(m.customPermissionsJson), lastLogin: '',
+      }));
+      setEquipeNuvem({ tenantId, usuarios: lista });
       // O cadastro no Firestore é a fonte da verdade: se o gestor mudar o perfil,
       // as permissões ou desativar este usuário, a sessão aberta acompanha.
       const meuEmail = (auth.currentUser?.email || '').toLowerCase().trim();
@@ -1543,7 +1531,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (role === prev.role && JSON.stringify(customPermissions ?? null) === JSON.stringify(prev.customPermissions ?? null)) return prev;
         return { ...prev, role, customPermissions };
       });
-    });
+    }, erro => setEquipeNuvem({ tenantId, usuarios: [], erro }));
   }, [isAuthenticated, currentUser.tenantId, currentTenant?.id, currentUser?.id]);
 
   // Automatic Weekly Firebase CSV Backup Check
@@ -2091,57 +2079,46 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Grava no Firestore o vínculo do usuário com a cooperativa
   // (tenantMembers/{email}), para ele conseguir entrar com Google ou com
   // e-mail/senha em qualquer computador. Só funciona com sessão no Firebase.
-  const sincronizarMembroNoFirestore = (u: User) => {
-    const tenantId = u.tenantId || currentTenant?.id;
-    if (!auth.currentUser || !u.email || !tenantId) return;
-    saveTenantMemberToFirestore({
-      email: u.email,
-      tenantId,
-      name: u.name,
-      role: u.role,
-      active: u.active !== false,
-      cargo: u.cargo || undefined,
-      departamento: u.departamento || undefined,
-      phone: u.phone || undefined,
+  const sincronizarMembroNoFirestore = async (u: User, modo: 'criar' | 'editar'): Promise<boolean> => {
+    if (!canWriteModule('configuracoes') || currentUser.tenantId !== currentTenant.id || u.tenantId !== currentTenant.id) return false;
+    const resultado = await saveTenantMemberToFirestore({
+      email: u.email, tenantId: u.tenantId, name: u.name, role: u.role,
+      active: u.active !== false, cargo: u.cargo ?? '', departamento: u.departamento ?? '',
+      phone: u.phone ?? '', cpf: u.cpf ?? '', avatar: u.avatar?.startsWith('data:') && u.avatar.length > 700_000 ? undefined : u.avatar ?? '',
       authUid: u.authUid || undefined,
       customPermissionsJson: JSON.stringify(u.customPermissions || {})
-    }).then(r => {
-      if (!r.ok) {
-        console.warn('tenantMembers:', r.error);
-        alert('O cadastro local foi salvo, mas o vínculo de acesso à cooperativa não foi gravado na nuvem. ' + (r.error || 'Tente novamente.'));
-      }
-    });
+    }, modo);
+    if (!resultado.ok) alert(resultado.error || 'Não foi possível gravar o usuário na nuvem.');
+    return resultado.ok;
   };
 
-  // User Management & Access Permissions CRUD
-  const addUser = (userData: Omit<User, 'id' | 'tenantId'> & { id?: string }): User => {
-    const newUser: User = {
-      ...userData,
-      id: userData.id || `usr-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
-      tenantId: currentTenant.id,
-      active: userData.active ?? true,
-      lastLogin: 'Nunca acessou'
-    };
-    setUsers(prev => [newUser, ...prev]);
-    sincronizarMembroNoFirestore(newUser);
-    addAuditLog('CONFIGURACOES', 'INCLUSAO', `Novo usuário cadastrado: ${newUser.name} (${newUser.email}) - Perfil: ${newUser.role}`);
-    return newUser;
+  const addUser = async (dados: Omit<User, 'id' | 'tenantId'>) => {
+    const email = emailNormalizado(dados.email);
+    if (!equipeAtual || equipeAtual.erro || !email || emailsDaEquipe.has(email)) return false;
+    const novo: User = { ...dados, email, id: dados.authUid || `usr-${email}`, tenantId: currentTenant.id };
+    if (!await sincronizarMembroNoFirestore(novo, 'criar')) return false;
+    addAuditLog('CONFIGURACOES', 'INCLUSAO', `Cadastrou usuário ${novo.name}`);
+    return true;
   };
 
-  const updateUser = (id: string, userData: Partial<User>) => {
-    const anterior = users.find(u => u.id === id);
-    setUsers(prev => prev.map(u => u.id === id ? { ...u, ...userData } : u));
-    if (currentUser.id === id) {
-      setCurrentUser(prev => ({ ...prev, ...userData }));
+  const updateUser = async (id: string, dados: Partial<User>) => {
+    const anterior = usuariosDaEquipe.find(u => u.id === id);
+    if (!anterior) return false;
+    if (dados.email !== undefined && emailNormalizado(dados.email) !== emailNormalizado(anterior.email)) {
+      alert('O e-mail identifica a conta de acesso. Para usar outro e-mail, cadastre um novo usuário.');
+      return false;
     }
-    if (anterior) {
-      const atualizado = { ...anterior, ...userData };
-      if (anterior.email && atualizado.email && anterior.email.toLowerCase().trim() !== atualizado.email.toLowerCase().trim()) {
-        deleteTenantMemberFromFirestore(anterior.email);
-      }
-      sincronizarMembroNoFirestore(atualizado);
-    }
-    addAuditLog('CONFIGURACOES', 'ALTERACAO', `Cadastro/Permissões do usuário ID ${id} atualizados`);
+    if (!await sincronizarMembroNoFirestore({ ...anterior, ...dados, email: anterior.email, tenantId: anterior.tenantId }, 'editar')) return false;
+    addAuditLog('CONFIGURACOES', 'ALTERACAO', `Atualizou usuário ${anterior.name}`);
+    return true;
+  };
+
+  const recuperarUsuarioLocal = async (id: string) => {
+    const usuario = usuariosPendentes.find(u => u.id === id);
+    if (!usuario) return false;
+    if (!await addUser(usuario)) return false;
+    setUsers(prev => prev.filter(u => u.tenantId !== usuario.tenantId || emailNormalizado(u.email) !== emailNormalizado(usuario.email)));
+    return true;
   };
 
   // ---------------------------------------------------------------------------
@@ -2201,15 +2178,22 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return !!produtor && encontrarVinculos('produtor', produtor.id, listas).length > 0;
   };
 
-  const deleteUser = (id: string) => {
-    if (id === currentUser.id) {
+  const deleteUser = async (id: string) => {
+    const removido = usuariosDaEquipe.find(u => u.id === id);
+    if (!removido || !canWriteModule('configuracoes') || currentUser.tenantId !== currentTenant.id) return false;
+    if (emailNormalizado(removido.email) === emailNormalizado(currentUser.email)) {
       alert('Não é possível excluir o próprio usuário logado na sessão ativa.');
-      return;
+      return false;
     }
-    const removido = users.find(u => u.id === id);
-    setUsers(prev => prev.filter(u => u.id !== id));
-    if (removido?.email) deleteTenantMemberFromFirestore(removido.email);
-    addAuditLog('CONFIGURACOES', 'EXCLUSAO', `Usuário ID ${id} foi removido do sistema`);
+    try {
+      await deleteTenantMemberFromFirestore(removido.email);
+      setUsers(prev => prev.filter(u => u.tenantId !== removido.tenantId || emailNormalizado(u.email) !== emailNormalizado(removido.email)));
+      addAuditLog('CONFIGURACOES', 'EXCLUSAO', `Removeu usuário ${removido.name}`);
+      return true;
+    } catch {
+      alert('A nuvem recusou a exclusão. O usuário continua cadastrado.');
+      return false;
+    }
   };
 
   const updateCurrentUserProfile = (profileData: Partial<User>) => {
@@ -5682,7 +5666,10 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         currentUser,
         setCurrentUser,
-        users,
+        users: usuariosDaEquipe,
+        usuariosPendentes,
+        estadoEquipe: equipeAtual?.erro ?? (equipeAtual ? 'pronta' : 'carregando'),
+        recuperarUsuarioLocal,
         addUser,
         updateUser,
         deleteUser,

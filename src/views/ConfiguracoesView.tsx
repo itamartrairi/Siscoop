@@ -163,6 +163,9 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
     addAuditLog,
     currentUser,
     users,
+    usuariosPendentes,
+    estadoEquipe,
+    recuperarUsuarioLocal,
     addUser,
     updateUser,
     deleteUser,
@@ -368,10 +371,12 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
     setIsUserModalOpen(true);
   };
 
+  const [recuperandoUsuario, setRecuperandoUsuario] = useState<string | null>(null);
+
   const handleSaveUserModal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canWrite) { blockWriteAction(); return; }
-    if (isSavingUser) return;
+    if (isSavingUser || estadoEquipe !== 'pronta') return;
     const nome = userForm.name.trim();
     const email = userForm.email.trim().toLowerCase();
     if (!nome || !email) {
@@ -396,20 +401,16 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
 
     setIsSavingUser(true);
     let authUid: string | undefined = editingUser?.authUid;
-    let senhaLocal: string | undefined = editingUser?.password;
     const avisos: string[] = [];
     try {
       if (senha) {
         const r = await criarContaFirebaseAuth(email, senha, nome);
         if (r.ok) {
           authUid = r.uid;
-          senhaLocal = undefined; // a senha fica só no Firebase Authentication
           avisos.push(`Acesso criado no Firebase Authentication: ${email} já pode entrar com e-mail e senha (ou com a conta Google desse e-mail).`);
         } else if (r.code === 'auth/email-already-in-use') {
-          senhaLocal = undefined;
           avisos.push(`O e-mail ${email} já tem conta no Firebase Authentication, então a senha não foi alterada. Ele pode entrar com a senha que já usa, com o Google, ou usar "Esqueci minha senha" na tela de login.`);
         } else if (r.code === 'auth/operation-not-allowed') {
-          senhaLocal = senha;
           avisos.push('O login por e-mail/senha está desativado no Firebase (Authentication → Sign-in method → E-mail/senha). O usuário foi salvo, mas só conseguirá entrar com Google até esse método ser ativado.');
         } else {
           alert(`Não foi possível criar o acesso no Firebase Authentication: ${r.message}`);
@@ -428,16 +429,12 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
         phone: userForm.phone,
         cpf: userForm.cpf,
         active: userForm.active,
-        password: senhaLocal,
         authUid,
         avatar: userForm.avatar,
         customPermissions: userForm.customPermissions
       };
-      if (editingUser) {
-        updateUser(editingUser.id, dados);
-      } else {
-        addUser(dados);
-      }
+      const salvo = editingUser ? await updateUser(editingUser.id, dados) : await addUser(dados);
+      if (!salvo) return;
       setIsUserModalOpen(false);
       if (avisos.length) alert(avisos.join('\n\n'));
     } finally {
@@ -1178,6 +1175,31 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
       {/* TAB 2: USUÁRIOS DO SISTEMA */}
       {activeTab === 'usuarios' && (
         <div className="space-y-4 text-xs">
+          {estadoEquipe === 'carregando' && <p role="status">Aguardando a lista de usuários da nuvem…</p>}
+          {estadoEquipe !== 'pronta' && estadoEquipe !== 'carregando' && <p role="alert" className="text-rose-700">{estadoEquipe}</p>}
+          {canWrite && usuariosPendentes.length > 0 && (
+            <details className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+              <summary className="cursor-pointer font-bold">Cadastros antigos deste navegador ({usuariosPendentes.length})</summary>
+              <p className="mt-2">Revise cada cadastro antes de publicá-lo na equipe da cooperativa atual.</p>
+              <ul className="mt-2 space-y-2">
+                {usuariosPendentes.map(usuario => (
+                  <li key={usuario.id} className="flex flex-wrap items-center justify-between gap-2">
+                    <span>{usuario.name} · {usuario.email}</span>
+                    <button type="button" disabled={recuperandoUsuario !== null}
+                      className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 font-semibold disabled:opacity-50"
+                      onClick={async () => {
+                        if (!confirm(`Publicar o cadastro de ${usuario.email} na equipe de ${currentTenant.name}?`)) return;
+                        setRecuperandoUsuario(usuario.id);
+                        try { await recuperarUsuarioLocal(usuario.id); } finally { setRecuperandoUsuario(null); }
+                      }}>
+                      {recuperandoUsuario === usuario.id ? 'Publicando…' : 'Publicar na nuvem'}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+
           {/* Header & Controls */}
           <div className="p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3 w-full md:w-auto">
@@ -1229,7 +1251,7 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
                 label: u.role,
                 badgeColor: 'bg-slate-100 text-slate-800'
               };
-              const isCurrentUser = u.id === currentUser.id;
+              const isCurrentUser = u.email === currentUser.email?.trim().toLowerCase();
 
               return (
                 <div
@@ -1561,6 +1583,7 @@ export const ConfiguracoesView: React.FC<Props> = ({ initialTab = 'meu-perfil' }
                       <input
                         type="email"
                         value={userForm.email}
+                        readOnly={Boolean(editingUser)}
                         onChange={e => setUserForm(p => ({ ...p, email: e.target.value }))}
                         placeholder="usuario@cooperativa.com.br"
                         className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
