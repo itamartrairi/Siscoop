@@ -165,3 +165,51 @@ export function sanitizeCooperado<T extends Record<string, any>>(record: T): T {
     aptoPaa: record.aptoPaa !== false
   };
 }
+
+export function situacaoCaf(validade?: string, hoje = new Date()): 'VALIDA' | 'VENCIDA' | 'SEM_VALIDADE' {
+  const texto = validade?.trim() || '';
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(texto);
+  const br = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(texto);
+  if (!iso && !br) return 'SEM_VALIDADE';
+
+  const dia = Number(iso?.[3] ?? br?.[1]);
+  const mes = Number(iso?.[2] ?? br?.[2]);
+  const ano = Number(iso?.[1] ?? br?.[3]);
+  const data = new Date(ano, mes - 1, dia);
+  if (data.getFullYear() !== ano || data.getMonth() !== mes - 1 || data.getDate() !== dia) return 'SEM_VALIDADE';
+
+  const inicioDoDia = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+  return data < inicioDoDia ? 'VENCIDA' : 'VALIDA';
+}
+
+type DadosCotas = Pick<Cooperado, 'capitalSubscrito' | 'capitalIntegralizado'>;
+type MinimoCotas = { cotaParteValor?: number; cotaParteMinima?: number };
+
+export function cotasEmDia(cooperado: DadosCotas, minimo: MinimoCotas): boolean {
+  const subscrito = Number(cooperado.capitalSubscrito ?? 0);
+  const integralizado = Number(cooperado.capitalIntegralizado);
+  const valorCota = Number(minimo.cotaParteValor ?? 0);
+  const quantidade = Number(minimo.cotaParteMinima ?? 0);
+  if (![subscrito, integralizado, valorCota, quantidade].every(valor => Number.isFinite(valor) && valor >= 0)) return false;
+  const exigido = Math.round(Math.max(subscrito, valorCota * quantidade) * 100);
+  return exigido > 0 && Math.round(integralizado * 100) >= exigido;
+}
+
+export function aptidaoCooperado(cooperado: Pick<Cooperado, 'situacao' | 'falecido' | 'dapCaf' | 'cafDapValidade' | 'aptoPaa' | 'aptoAVotar'> & DadosCotas, minimo: MinimoCotas) {
+  const ativo = String(cooperado.situacao || 'ATIVO').trim().toUpperCase() === 'ATIVO' && !cooperado.falecido;
+  const cotasOk = cotasEmDia(cooperado, minimo);
+  const caf = situacaoCaf(cooperado.cafDapValidade);
+  const temCaf = /[0-9]/.test(String(cooperado.dapCaf ?? ''));
+  const aptoPaa = ativo && cooperado.aptoPaa !== false && temCaf && caf === 'VALIDA' && cotasOk;
+  const aptoAVotar = ativo && cooperado.aptoAVotar !== false && cotasOk;
+  const motivoPaa = !ativo ? 'Cooperado inativo'
+    : cooperado.aptoPaa === false ? 'Não participa do PAA'
+      : !temCaf ? 'CAF sem número'
+        : caf === 'VENCIDA' ? 'CAF vencido'
+          : caf === 'SEM_VALIDADE' ? 'CAF sem validade informada'
+            : !cotasOk ? 'Cotas pendentes' : 'Apto PAA';
+  const motivoVoto = !ativo ? 'Cooperado inativo'
+    : !cotasOk ? 'Cotas pendentes'
+      : !aptoAVotar ? 'Inapto a votar' : 'Apto a votar';
+  return { caf, aptoPaa, aptoAVotar, cotasOk, motivoPaa, motivoVoto };
+}

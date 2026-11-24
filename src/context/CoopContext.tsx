@@ -104,7 +104,7 @@ import {
   INITIAL_ORDENS_COMPRA
 } from '../data/mockInitialData';
 import { consultarAssinatura, validarLicencaNoServidor } from '../services/licencaApi';
-import { sanitizeCooperado } from '../utils/cooperadoSanitizer';
+import { aptidaoCooperado, sanitizeCooperado } from '../utils/cooperadoSanitizer';
 import {
   auth,
   signInWithEmailAndPassword,
@@ -2496,31 +2496,16 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return total;
   };
 
-  const isCafValida = (validadeStr?: string): boolean => {
-    if (!validadeStr) return true;
-    let d: Date;
-    if (validadeStr.includes('/')) {
-      const parts = validadeStr.split('/');
-      if (parts.length === 3) {
-        d = new Date(`${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`);
-      } else {
-        d = new Date(validadeStr);
-      }
-    } else {
-      d = new Date(validadeStr);
-    }
-    if (isNaN(d.getTime())) return true;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return d >= today;
-  };
-
   const syncCooperadosWithProdutores = (targetCooperados?: Cooperado[]) => {
-    const list = targetCooperados || cooperados;
+    const list = (targetCooperados || cooperados).filter(c => pertenceAoTenant(c, currentTenant.id));
+    const minimo = {
+      cotaParteValor: currentTenant.cotaParteValor ?? config.cotaParteValor,
+      cotaParteMinima: currentTenant.cotaParteMinima ?? config.cotaParteMinima,
+    };
     setProdutores(prevProdutores => {
       const produtorMap = new Map<string, ProdutorRural>();
       prevProdutores.forEach(p => {
-        if (p.cpfCnpj) produtorMap.set(p.cpfCnpj.replace(/\D/g, ''), p);
+        if (p.cpfCnpj && pertenceAoTenant(p, currentTenant.id)) produtorMap.set(p.cpfCnpj.replace(/\D/g, ''), p);
       });
 
       const updatedProdutores = [...prevProdutores];
@@ -2529,14 +2514,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const cleanCpf = c.cpf ? c.cpf.replace(/\D/g, '') : '';
         if (!cleanCpf) return;
 
-        // Condições de sincronização:
-        // 1. Cooperado deve estar ATIVO
-        // 2. Deve estar marcado como Apto PAA (aptoPaa === true ou não ser false por padrão)
-        // 3. Validade da CAF/DAP não deve estar vencida em relação à data atual
-        const isAtivo = c.situacao === 'ATIVO';
-        const isAptoPaa = c.aptoPaa !== false;
-        const cafValida = isCafValida(c.cafDapValidade);
-        const elegivel = isAtivo && isAptoPaa && cafValida;
+        const { caf, aptoPaa: elegivel } = aptidaoCooperado(c, minimo);
 
         const existingP = produtorMap.get(cleanCpf);
 
@@ -2548,8 +2526,8 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
               cooperadoId: c.id,
               nome: c.nome,
               cpfCnpj: c.cpf,
-              cafDapNum: c.dapCaf || 'DAP-TRAIRI-2026',
-              cafDapValidade: c.cafDapValidade || '2028-12-31',
+              cafDapNum: c.dapCaf || '',
+              cafDapValidade: c.cafDapValidade || '',
               statusDap: 'ATIVO',
               nomePropriedade: `Propriedade ${c.nome.split(' ')[0]} - ${c.localidadeComunidade || c.bairro || 'Trairi'}`,
               areaHectares: 5,
@@ -2582,7 +2560,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
             updatedProdutores[idx] = {
               ...updatedProdutores[idx],
               situacao: 'INATIVO',
-              statusDap: !cafValida ? 'EXPIRADA' : 'INATIVO'
+              statusDap: caf === 'VENCIDA' ? 'EXPIRADA' : 'INATIVO'
             };
           }
         }
@@ -2644,6 +2622,14 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const rawMatricula = String(row.matricula || row['Matrícula'] || row['Matricula'] || mapByCpf.get(cpf)?.matricula || `IMP-${Date.now()}-${numero}`).trim();
       const existing = mapByCpf.get(cpf) || mapByMatricula.get(rawMatricula.toLowerCase());
 
+      const lerOpcaoImportada = (opcao: unknown, anterior?: boolean) => {
+        if (typeof opcao === 'boolean') return opcao;
+        const texto = chaveUnica(String(opcao ?? ''));
+        if (['sim', 'true', '1'].includes(texto)) return true;
+        if (['nao', 'false', '0'].includes(texto)) return false;
+        return anterior ?? true;
+      };
+
       const newCoopObj: Cooperado = { ...sanitizeCooperado({
         id: existing ? existing.id : `cop-imp-${Date.now()}-${numero}`,
         tenantId: currentTenant?.id || 'coop-01',
@@ -2692,14 +2678,12 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
             detalhes: 'Cooperado importado via planilha CSV/Excel'
           }
         ],
-        dapCaf: cleanRow.dapCaf || cleanRow['DAP/CAF'] || cleanRow['DAP'] || existing?.dapCaf || 'SIM',
+        dapCaf: cleanRow.dapCaf || cleanRow['DAP/CAF'] || cleanRow['DAP'] || existing?.dapCaf || '',
         cafDapValidade: (cleanRow.cafDapValidade || cleanRow['Validade CAF/DAP'] || cleanRow['Validade CAF'] || cleanRow['Validade DAP'] || existing?.cafDapValidade || '').toString(),
-        aptoPaa: cleanRow.aptoPaa !== undefined
-          ? Boolean(cleanRow.aptoPaa)
-          : (cleanRow['Apto PAA'] === 'SIM' || cleanRow['Apto PAA'] === 'Sim' || cleanRow['Apto PAA'] === 'sim' || cleanRow['Apto PAA'] === true || (existing?.aptoPaa ?? true)),
+        aptoPaa: lerOpcaoImportada(cleanRow.aptoPaa ?? cleanRow['Apto PAA'], existing?.aptoPaa),
         localidadeComunidade: cleanRow.localidadeComunidade || cleanRow['Comunidade/Localidade'] || cleanRow['Comunidade'] || existing?.localidadeComunidade || 'SEDE',
         nomeUsual: cleanRow.nomeUsual || cleanRow['Nome Usual/Apelido'] || cleanRow['Nome Usual'] || existing?.nomeUsual || rawNome,
-        aptoAVotar: cleanRow.aptoAVotar === true || cleanRow['Apto a Votar'] === 'SIM' || cleanRow['Apto Votar'] === 'SIM' || existing?.aptoAVotar || true,
+        aptoAVotar: lerOpcaoImportada(cleanRow.aptoAVotar ?? cleanRow['Apto a Votar'] ?? cleanRow['Apto Votar'], existing?.aptoAVotar),
         falecido: cleanRow.falecido === true || cleanRow['Falecido'] === 'SIM' || existing?.falecido || false
       }), cpf };
 
@@ -2827,7 +2811,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (tx.id === transacaoId && tx.parcelas) {
         let totalPagoParcela = 0;
         const updatedParcelas = tx.parcelas.map(p => {
-          if (p.id === parcelaId) {
+          if (p.id === parcelaId && p.status !== 'PAGO') {
             totalPagoParcela = Number(p.valor) || 0;
             return {
               ...p,

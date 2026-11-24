@@ -5,7 +5,7 @@ import { useCoop } from '../context/CoopContext';
 import { ImportarCsvModal } from '../components/ImportarCsvModal';
 import { PortalShareBanner } from '../components/PortalShareBanner';
 import { DataGrid, GridStatus, normalizeFilterText } from '../components/ui/DataGrid';
-import { sanitizeCooperado } from '../utils/cooperadoSanitizer';
+import { aptidaoCooperado, sanitizeCooperado, situacaoCaf } from '../utils/cooperadoSanitizer';
 import {
   Cooperado,
   SituacaoCooperado,
@@ -443,36 +443,10 @@ const CadastroProducao: React.FC = () => {
 
 const situacaoDoCooperado = (c: Cooperado) => String(c.situacao || 'ATIVO').trim().toUpperCase();
 
-function situacaoCaf(validade?: string): 'VALIDA' | 'VENCIDA' | 'SEM_VALIDADE' {
-  const texto = validade?.trim() || '';
-  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(texto);
-  const br = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(texto);
-  if (!iso && !br) return 'SEM_VALIDADE';
-
-  const dia = Number(iso?.[3] ?? br?.[1]);
-  const mes = Number(iso?.[2] ?? br?.[2]);
-  const ano = Number(iso?.[1] ?? br?.[3]);
-  const data = new Date(ano, mes - 1, dia);
-  if (data.getFullYear() !== ano || data.getMonth() !== mes - 1 || data.getDate() !== dia) return 'SEM_VALIDADE';
-
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0);
-  return data < hoje ? 'VENCIDA' : 'VALIDA';
-}
-
 function filtroCpf(cpf: Cooperado['cpf'], termo: string) {
   const digitos = termo.replace(/\D/g, '');
   return /^[\d.\s-]+$/.test(termo) && digitos.length > 0 &&
     String(cpf ?? '').replace(/\D/g, '').includes(digitos);
-}
-
-function classificacaoPaa(c: Cooperado) {
-  const caf = situacaoCaf(c.cafDapValidade);
-  const apto = c.aptoPaa !== false && caf === 'VALIDA' && situacaoDoCooperado(c) === 'ATIVO';
-  const rotulo = caf === 'VENCIDA' ? 'CAF vencida' :
-    caf === 'SEM_VALIDADE' ? 'CAF sem validade informada' :
-    apto ? 'Apto PAA' : 'Inapto PAA';
-  return { caf, apto, rotulo };
 }
 
 export const CooperadosView: React.FC = () => {
@@ -558,7 +532,7 @@ export const CooperadosView: React.FC = () => {
     categoria: 'EFETIVO',
     dapCaf: '',
     cafDapValidade: '',
-    aptoPaa: false,
+    aptoPaa: true,
     fotoUrl: '',
     assinaturaDigitalUrl: '',
     cep: '',
@@ -601,7 +575,7 @@ export const CooperadosView: React.FC = () => {
       const matchesSituacao = filterSituacao === 'TODOS' || situacaoDoCooperado(c) === filterSituacao;
       const matchesCategoria = filterCategoria === 'TODOS' ||
         String(c.categoria || 'EFETIVO').trim().toUpperCase() === filterCategoria;
-      const { apto, caf } = classificacaoPaa(c);
+      const { aptoPaa: apto, caf } = aptidaoCooperado(c, config);
       const matchesPaa = filterPaa === 'TODOS' ||
         (filterPaa === 'APTO_PAA' && apto) ||
         (filterPaa === 'INAPTO_PAA' && !apto) ||
@@ -610,7 +584,7 @@ export const CooperadosView: React.FC = () => {
 
       return matchesSearch && matchesSituacao && matchesCategoria && matchesPaa;
     });
-  }, [cooperados, searchTerm, filterSituacao, filterCategoria, filterPaa]);
+  }, [cooperados, searchTerm, filterSituacao, filterCategoria, filterPaa, config.cotaParteValor, config.cotaParteMinima]);
 
   // Reset page when filter changes
   React.useEffect(() => {
@@ -886,7 +860,7 @@ export const CooperadosView: React.FC = () => {
               className="px-3 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-slate-200 outline-none font-medium"
             >
               <option value="TODOS">Todos</option>
-              <option value="APTO_PAA">✓ Aptos PAA (CAF Válida)</option>
+              <option value="APTO_PAA">✓ Aptos PAA (CAF e cotas em dia)</option>
               <option value="INAPTO_PAA">✕ Inaptos PAA</option>
               <option value="CAF_EXPIRADA">⚠ CAF Vencida / Expirada</option>
               <option value="CAF_SEM_VALIDADE">CAF sem validade informada</option>
@@ -939,11 +913,21 @@ export const CooperadosView: React.FC = () => {
             key: 'paa',
             header: 'Apto PAA / CAF',
             width: 150,
-            value: c => classificacaoPaa(c).rotulo,
-            matchesFilter: (c, termo) => normalizeFilterText(classificacaoPaa(c).rotulo).startsWith(normalizeFilterText(termo)),
+            value: c => aptidaoCooperado(c, config).motivoPaa,
+            matchesFilter: (c, termo) => normalizeFilterText(aptidaoCooperado(c, config).motivoPaa).startsWith(normalizeFilterText(termo)),
             render: c => {
-              const { caf, apto, rotulo } = classificacaoPaa(c);
+              const { caf, aptoPaa: apto, motivoPaa: rotulo } = aptidaoCooperado(c, config);
               return <GridStatus tone={apto ? 'success' : caf === 'VENCIDA' ? 'danger' : 'neutral'} label={rotulo} />;
+            },
+          },
+          {
+            key: 'votacao',
+            header: 'Apto a votar',
+            width: 155,
+            value: c => aptidaoCooperado(c, config).motivoVoto,
+            render: c => {
+              const { aptoAVotar, motivoVoto } = aptidaoCooperado(c, config);
+              return <GridStatus tone={aptoAVotar ? 'success' : 'warning'} label={motivoVoto} />;
             },
           },
           {
@@ -1202,10 +1186,13 @@ export const CooperadosView: React.FC = () => {
                           onChange={e => setFormData({ ...formData, aptoPaa: e.target.checked })}
                           className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer"
                         />
-                        <span>Apto PAA (Programa de Aquisição de Alimentos)</span>
+                        <span>Participa do PAA</span>
                       </label>
                     </div>
 
+                    <p className="text-xs text-slate-700 dark:text-slate-300">
+                      O PAA exige CAF cadastrado e válido e cotas em dia. A aptidão para votar exige cotas em dia.
+                    </p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                       <div>
                         <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">Número CAF / DAP</label>
