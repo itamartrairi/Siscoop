@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { collection, doc, getDocsFromServer, onSnapshot, runTransaction } from 'firebase/firestore';
 import { dbPortal } from '../services/portalEscolaRemoto';
 import { Upload, FileText, Loader2, CheckCircle2, AlertTriangle, X } from 'lucide-react';
 
@@ -30,21 +30,36 @@ interface PropostaEnviada {
 const chaveHistorico = (escola: EscolaInfo) =>
   `siscoop:propostas-enviadas:${(escola.email || escola.id).toLowerCase()}`;
 
-function lerHistorico(escola: EscolaInfo): PropostaEnviada[] {
+const chaveProposta = (p: PropostaEnviada) => `${p.enviadoEm}|${p.nome}`;
+const chavePendentes = (portalId: string) => `siscoop:propostas-pendentes:${portalId}`;
+
+function lerHistorico(chave: string): PropostaEnviada[] {
   try {
-    const raw = localStorage.getItem(chaveHistorico(escola));
-    return raw ? JSON.parse(raw) : [];
+    const valor: unknown = JSON.parse(localStorage.getItem(chave) || '[]');
+    if (!Array.isArray(valor)) return [];
+    return valor.filter(p => typeof p?.nome === 'string' && p.nome.length > 0 && p.nome.length <= 512 &&
+      typeof p.titulo === 'string' && p.titulo.length <= 512 &&
+      typeof p.enviadoEm === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(p.enviadoEm))
+      .map(({ nome, titulo, enviadoEm }) => ({ nome, titulo, enviadoEm }));
   } catch {
     return [];
   }
 }
 
-function salvarHistorico(escola: EscolaInfo, lista: PropostaEnviada[]) {
+function salvarPendentes(portalId: string, lista: PropostaEnviada[]) {
   try {
-    localStorage.setItem(chaveHistorico(escola), JSON.stringify(lista.slice(0, 50)));
+    if (lista.length) localStorage.setItem(chavePendentes(portalId), JSON.stringify(lista));
+    else localStorage.removeItem(chavePendentes(portalId));
+    return true;
   } catch {
-    // sem localStorage: o histórico fica só nesta sessão
+    return false;
   }
+}
+
+async function idProposta(proposta: PropostaEnviada) {
+  const bytes = new TextEncoder().encode(chaveProposta(proposta));
+  const hash = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
 function lerComoBase64(arquivo: File): Promise<string> {
@@ -93,21 +108,78 @@ export const PropostaCompraEscola: React.FC<{ escola: EscolaInfo; tenantId?: str
   const [observacao, setObservacao] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [mensagem, setMensagem] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
-  const [historico, setHistorico] = useState<PropostaEnviada[]>(() => lerHistorico(escola));
+  const [historico, setHistorico] = useState<PropostaEnviada[]>([]);
+  const [pendentes, setPendentes] = useState<PropostaEnviada[]>([]);
+  const [antigos, setAntigos] = useState<PropostaEnviada[]>([]);
   const [erroNuvem, setErroNuvem] = useState(false);
+  const [sincronizando, setSincronizando] = useState(false);
+  const sincronizandoRef = useRef(false);
+  const filaEmMemoria = useRef(new Map<string, PropostaEnviada[]>());
   const portalId = tenantId ? `${tenantId}__${escola.id}` : '';
+
+  const sincronizar = async (novas: PropostaEnviada[] = []) => {
+    if (!portalId) return false;
+    const fila = new Map([
+      ...lerHistorico(chavePendentes(portalId)), ...(filaEmMemoria.current.get(portalId) ?? []), ...novas,
+    ].map(p => [chaveProposta(p), p]));
+    if (!fila.size) return true;
+    const persistiu = salvarPendentes(portalId, [...fila.values()]);
+    filaEmMemoria.current.set(portalId, [...fila.values()]);
+    setPendentes([...fila.values()]);
+    if (sincronizandoRef.current) return false;
+    sincronizandoRef.current = true;
+    setSincronizando(true);
+    const ref = collection(dbPortal, 'portalEscolas', portalId, 'propostas');
+    try {
+      const nuvem = await getDocsFromServer(ref);
+      const confirmadas = new Set(nuvem.docs.map(d => chaveProposta(d.data() as PropostaEnviada)));
+      for (const [chave, proposta] of fila) {
+        if (!confirmadas.has(chave)) {
+          const destino = doc(ref, await idProposta(proposta));
+          await runTransaction(dbPortal, async transacao => {
+            if (!(await transacao.get(destino)).exists()) transacao.set(destino, proposta);
+          });
+        }
+        fila.delete(chave);
+        const restantes = new Map([...(filaEmMemoria.current.get(portalId) ?? []), ...lerHistorico(chavePendentes(portalId))].map(p => [chaveProposta(p), p]));
+        restantes.delete(chave);
+        filaEmMemoria.current.set(portalId, [...restantes.values()]);
+        salvarPendentes(portalId, [...restantes.values()]);
+        setPendentes([...restantes.values()]);
+      }
+      return true;
+    } catch {
+      setMensagem({ tipo: 'erro', texto: persistiu
+        ? 'O histórico está pendente. Tente sincronizar novamente nesta tela.'
+        : 'O histórico está pendente e o navegador recusou armazená-lo. Mantenha a tela aberta e tente sincronizar novamente.' });
+      return false;
+    } finally {
+      sincronizandoRef.current = false;
+      setSincronizando(false);
+    }
+  };
+
   useEffect(() => {
-    setHistorico(lerHistorico(escola));
+    setHistorico([]);
+    setPendentes(portalId ? lerHistorico(chavePendentes(portalId)) : []);
+    setAntigos(portalId ? lerHistorico(chaveHistorico(escola)) : []);
     setErroNuvem(false);
     if (!portalId) return;
     const ref = collection(dbPortal, 'portalEscolas', portalId, 'propostas');
-    return onSnapshot(ref, snap => {
+    const cancelar = onSnapshot(ref, { includeMetadataChanges: true }, snap => {
+      if (snap.metadata.fromCache || snap.metadata.hasPendingWrites) return;
       const remoto = snap.docs.map(item => item.data() as PropostaEnviada);
-      const registros = [...remoto, ...lerHistorico(escola)];
-      const unicos = new Map(registros.map(item => [item.enviadoEm + '|' + item.nome, item]));
+      const unicos = new Map(remoto.map(item => [chaveProposta(item), item]));
       setHistorico([...unicos.values()].sort((a, b) => b.enviadoEm.localeCompare(a.enviadoEm)));
       setErroNuvem(false);
     }, () => setErroNuvem(true));
+    const tentarPendentes = () => { if (!sincronizandoRef.current) void sincronizar(); };
+    tentarPendentes();
+    window.addEventListener('online', tentarPendentes);
+    return () => {
+      cancelar();
+      window.removeEventListener('online', tentarPendentes);
+    };
   }, [portalId, escola.id, escola.email]);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -141,25 +213,22 @@ export const PropostaCompraEscola: React.FC<{ escola: EscolaInfo; tenantId?: str
       setMensagem({ tipo: 'erro', texto: 'Selecione o PDF da proposta de compra.' });
       return;
     }
+    if (!portalId || sincronizandoRef.current || enviando) return;
     setEnviando(true);
     setMensagem(null);
     try {
       const r = await enviarParaDrive({ arquivo, titulo: titulo.trim(), observacao: observacao.trim(), escola });
-      const novo: PropostaEnviada = { nome: r.nome, titulo: titulo.trim() || arquivo.name, enviadoEm: new Date().toISOString() };
-      const lista = [novo, ...historico];
-      setHistorico(lista);
-      salvarHistorico(escola, lista);
+      const novo: PropostaEnviada = {
+        nome: r.nome.slice(0, 512),
+        titulo: (titulo.trim() || arquivo.name).slice(0, 512),
+        enviadoEm: new Date().toISOString(),
+      };
       limpar();
-      if (portalId) {
-        try {
-          const ref = doc(collection(dbPortal, 'portalEscolas', portalId, 'propostas'));
-          await setDoc(ref, { ...novo });
-        } catch {
-          setMensagem({ tipo: 'erro', texto: 'PDF enviado ao Drive. O histórico ficou salvo neste navegador porque a gravação na nuvem falhou.' });
-          return;
-        }
+      if (await sincronizar([novo])) {
+        setMensagem({ tipo: 'ok', texto: 'PDF enviado ao Drive e histórico confirmado na nuvem.' });
+      } else if (sincronizandoRef.current) {
+        setMensagem({ tipo: 'erro', texto: 'PDF enviado ao Drive. O histórico ficou na fila de sincronização.' });
       }
-      setMensagem({ tipo: 'ok', texto: 'Proposta enviada para a cooperativa com sucesso.' });
     } catch (err: any) {
       setMensagem({ tipo: 'erro', texto: err?.message || 'Falha ao enviar a proposta. Tente novamente.' });
     } finally {
@@ -255,7 +324,7 @@ export const PropostaCompraEscola: React.FC<{ escola: EscolaInfo; tenantId?: str
 
           <button
             type="submit"
-            disabled={enviando || !arquivo}
+            disabled={!portalId || sincronizando || enviando || !arquivo}
             className="w-full md:w-auto px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-black flex items-center justify-center gap-2 transition-colors"
           >
             {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
@@ -264,6 +333,30 @@ export const PropostaCompraEscola: React.FC<{ escola: EscolaInfo; tenantId?: str
         </form>
       )}
 
+      {!portalId && <p role="status" className="text-xs text-amber-800">Entre pelo Portal da Escola com o e-mail verificado para enviar e sincronizar propostas.</p>}
+      {portalId && (pendentes.length > 0 || antigos.length > 0) && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs">
+          {pendentes.length > 0 && (
+            <button type="button" disabled={sincronizando || enviando} className="font-bold text-amber-900 underline"
+              onClick={async () => {
+                setMensagem(null);
+                if (await sincronizar()) setMensagem({ tipo: 'ok', texto: 'Histórico confirmado na nuvem.' });
+              }}>Sincronizar pendentes ({pendentes.length})</button>
+          )}
+          {antigos.length > 0 && (
+            <button type="button" disabled={sincronizando || enviando} className="font-bold text-amber-900 underline"
+              onClick={async () => {
+                if (!confirm(`Recuperar o histórico deste navegador para a escola ${escola.nomeEscola} no portal atual?`)) return;
+                setMensagem(null);
+                if (await sincronizar(antigos)) {
+                  try { localStorage.removeItem(chaveHistorico(escola)); } catch { /* A chave não é necessária após a confirmação. */ }
+                  setAntigos([]);
+                  setMensagem({ tipo: 'ok', texto: 'Histórico antigo confirmado na nuvem.' });
+                }
+              }}>Recuperar histórico antigo ({antigos.length})</button>
+          )}
+        </div>
+      )}
       {erroNuvem && <p role="status">Não foi possível carregar o histórico de propostas da nuvem.</p>}
       {mensagem && (
         <div
@@ -280,10 +373,10 @@ export const PropostaCompraEscola: React.FC<{ escola: EscolaInfo; tenantId?: str
 
       {historico.length > 0 && (
         <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
-          <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 mb-2">Enviadas por este dispositivo</h4>
+          <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 mb-2">Histórico de propostas na nuvem</h4>
           <ul className="space-y-2">
-            {historico.map((p, i) => (
-              <li key={i} className="flex items-center justify-between gap-3 text-sm p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50">
+            {historico.map(p => (
+              <li key={chaveProposta(p)} className="flex items-center justify-between gap-3 text-sm p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50">
                 <span className="flex items-center gap-2 min-w-0">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   <span className="truncate text-slate-700 dark:text-slate-200">{p.titulo}</span>
