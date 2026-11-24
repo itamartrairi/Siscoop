@@ -1,13 +1,9 @@
 {
-  "projectId": "sicoopplatform",
-  "appId": "1:919634096112:web:506bc6c4ae48cf472d7735",
-  "apiKey": "AIzaSyBF3UUcRsaynrDFlFMJldQg3NjIe1W274g",
-  "authDomain": "sicoopplatform.firebaseapp.com",
-  "databaseURL": "https://sicoopplatform-default-rtdb.firebaseio.com",
-  "storageBucket": "sicoopplatform.firebasestorage.app",
-  "messagingSenderId": "919634096112",
-  "firestoreDatabaseId": "",
-  "measurementId": "",
-  "oAuthClientId": "",
-  "recaptchaSiteKey": ""
+  "apiKey": "AIzaSyCSgRYhlc0RTu046O7vfa20uBoeIEijBCk",
+  "authDomain": "siscoop-2026.firebaseapp.com",
+  "projectId": "siscoop-2026",
+  "storageBucket": "siscoop-2026.firebasestorage.app",
+  "messagingSenderId": "733883099874",
+  "appId": "1:733883099874:web:075229d3ec9f8196cd0cbb",
+  "firestoreDatabaseId": ""
 }

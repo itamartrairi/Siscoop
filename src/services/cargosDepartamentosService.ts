@@ -1,3 +1,4 @@
+import firebaseConfig from '../../firebase-applet-config.json';
 import {
   collection,
   deleteDoc,
@@ -150,7 +151,7 @@ export async function registrarUsoCadastroRH(
 // Cache / contingência local
 // ---------------------------------------------------------------------------
 
-const chaveLocal = (colecao: ColecaoCadastroRH) => `siscoop_${colecao}_comum`;
+const chaveLocal = (colecao: ColecaoCadastroRH) => `siscoop_${colecao}_comum:${firebaseConfig.projectId}`;
 
 export function lerCadastrosRHLocais<T extends DocumentoCadastro>(colecao: ColecaoCadastroRH): T[] {
   try {

@@ -1,3 +1,4 @@
+import firebaseConfig from '../../firebase-applet-config.json';
 import { 
   Cooperado, 
   TransacaoCapital, 
@@ -46,8 +47,8 @@ import {
  * código antigo, para não desligar os registros existentes.
  */
 export const TENANT_ID_LEGADO = 'coop-principal';
-const CHAVE_TENANT_ID_INICIAL = 'siscoop:tenant-id-inicial';
-const CHAVE_BANCO_LOCAL = 'siscoop_system_db_v2';
+const CHAVE_TENANT_ID_INICIAL = `siscoop:tenant-id-inicial:${firebaseConfig.projectId}`;
+const CHAVE_BANCO_LOCAL = `siscoop_system_db_v2:${firebaseConfig.projectId}`;
 
 export function gerarIdCooperativa(): string {
   const aleatorio =

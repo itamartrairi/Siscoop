@@ -1,3 +1,4 @@
+import firebaseConfig from '../../firebase-applet-config.json';
 import { cpfValido, somenteDigitos } from '../utils/documentos';
 import { encontrarVinculos, mensagemExclusaoBloqueada, type EntidadeVinculavel, type ReferenciaPorValor } from '../services/integridadeReferencial';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
@@ -772,7 +773,7 @@ interface CoopContextType {
 }
 
 const CoopContext = createContext<CoopContextType | undefined>(undefined);
-const STORAGE_KEY = 'siscoop_system_db_v2';
+const STORAGE_KEY = `siscoop_system_db_v2:${firebaseConfig.projectId}`;
 
 const chaveUnica = (valor: unknown): string => String(valor ?? '')
   .normalize('NFD')

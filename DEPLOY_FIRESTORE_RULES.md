@@ -1,12 +1,12 @@
 # Publicar as regras do Firestore
 
-O projeto utiliza o banco Firestore padrão (`(default)`) do projeto Firebase **`sicoopplatform`**.
+O projeto utiliza o banco Firestore padrão (`(default)`) do projeto Firebase **`siscoop-2026`**.
 
 ---
 
 ## Opção A — Console do Firebase (mais rápida, ~1 minuto, sem instalar nada)
 
-1. Acesse: https://console.firebase.google.com/project/sicoopplatform/firestore/rules
+1. Acesse: https://console.firebase.google.com/project/siscoop-2026/firestore/rules
 2. Clique na aba **Regras** (Rules).
 3. Cole o conteúdo do arquivo `firestore.rules` deste projeto.
 4. Clique em **Publicar** (Publish).
@@ -17,7 +17,7 @@ Pronto — as novas regras (isolamento por cooperativa / multi-tenant) já valem
 
 ## Opção B — Firebase CLI
 
-Este projeto já inclui `firebase.json` e `.firebaserc` configurados com o projeto `sicoopplatform`:
+Este projeto já inclui `firebase.json` e `.firebaserc` configurados com o projeto `siscoop-2026`:
 
 ```bash
 npm install -g firebase-tools   # se ainda não tiver
