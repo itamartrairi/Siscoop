@@ -131,7 +131,8 @@ import {
   saveTenantToFirestore,
   saveTenantMemberToFirestore,
   deleteTenantMemberFromFirestore,
-  getTenantMemberFromFirestore,
+  lerVinculoDeLogin,
+  vincularMembroNoLogin,
   subscribeTenantMembers,
   fetchTenantFromFirestore,
   lerPermissoesMembro
@@ -1457,12 +1458,12 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const tenantId = currentTenant?.id;
-    if (!isAuthenticated || !tenantId || !auth.currentUser) return;
+    if (!isAuthenticated || !tenantId || currentUser.tenantId !== tenantId || !auth.currentUser) return;
     return iniciarSincronizacaoFirestore(tenantId, (colecao, mudanca) => {
       const set = settersSincronizadosRef.current[colecao];
       if (set) set(atual => aplicarMudancaRemota(atual, mudanca));
     });
-  }, [isAuthenticated, currentTenant?.id]);
+  }, [isAuthenticated, currentUser.tenantId, currentTenant?.id]);
 
 
   // Mantém users/{uid} no Firestore sincronizado com o tenant do usuário
@@ -1473,7 +1474,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // ignorando o app).
   useEffect(() => {
     let cancelado = false;
-    if (isAuthenticated && currentUser?.id && currentTenant?.id) {
+    if (isAuthenticated && currentUser?.id && currentTenant?.id && currentUser.tenantId === currentTenant.id) {
       saveUserTenantMappingToFirestore(currentUser.id, currentTenant.id, currentUser.email).then(() => {
         // Publica o cadastro da cooperativa para que a equipe consiga
         // carregá-lo ao entrar de outro computador (ver montarSessaoFirebase).
@@ -1483,14 +1484,14 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     }
     return () => { cancelado = true; };
-  }, [isAuthenticated, currentUser?.id, currentUser?.role, currentTenant, currentUser?.email]);
+  }, [isAuthenticated, currentUser?.id, currentUser?.tenantId, currentUser?.role, currentTenant, currentUser?.email]);
 
   // Equipe da cooperativa gravada no Firestore (tenantMembers) → lista de
   // usuários de Configurações. Assim um usuário cadastrado em um computador
   // aparece nos demais.
   useEffect(() => {
     const tenantId = currentTenant?.id;
-    if (!isAuthenticated || !tenantId || !auth.currentUser) return;
+    if (!isAuthenticated || !tenantId || currentUser.tenantId !== tenantId || !auth.currentUser) return;
     return subscribeTenantMembers(tenantId, membros => {
       setUsers(prev => {
         let mudou = false;
@@ -1543,7 +1544,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { ...prev, role, customPermissions };
       });
     });
-  }, [isAuthenticated, currentTenant?.id, currentUser?.id]);
+  }, [isAuthenticated, currentUser.tenantId, currentTenant?.id, currentUser?.id]);
 
   // Automatic Weekly Firebase CSV Backup Check
   useEffect(() => {
@@ -1697,10 +1698,6 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // registrado uma única vez) enxergarem sempre as listas atuais.
   const usersRef = useRef(users);
   usersRef.current = users;
-  const tenantsRef = useRef(tenants);
-  tenantsRef.current = tenants;
-  const currentTenantRef = useRef(currentTenant);
-  currentTenantRef.current = currentTenant;
 
   /**
    * Monta a sessão de quem entrou pelo Firebase Auth — com Google OU com
@@ -1717,40 +1714,49 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     origem: 'Google' | 'e-mail/senha' | 'sessão salva'
   ): Promise<{ success: boolean; requiresCooperativeSetup: boolean; error?: string }> => {
     const email = (fbUser.email || '').toLowerCase().trim();
-    const cadastro = email ? usersRef.current.find(u => (u.email || '').toLowerCase().trim() === email) : undefined;
-    const membro = email ? await getTenantMemberFromFirestore(email) : null;
+    const negarEntrada = async (error: string) => {
+      if (auth.currentUser?.uid === fbUser.uid) {
+        setIsAuthenticated(false);
+        await signOut(auth).catch(() => undefined);
+      }
+      return { success: false, requiresCooperativeSetup: false, error };
+    };
 
-    if (cadastro?.active === false || membro?.active === false) {
+    let vinculo: Awaited<ReturnType<typeof lerVinculoDeLogin>>;
+    try {
+      vinculo = await lerVinculoDeLogin(fbUser.uid, email);
+    } catch {
+      return negarEntrada('Não foi possível consultar o vínculo com a cooperativa. Tente novamente.');
+    }
+    const { membro, tenantId: tenantGravado } = vinculo;
+    if (membro?.active === false) return negarEntrada('Este usuário está desativado na equipe da cooperativa.');
+    if (membro?.tenantId && tenantGravado && membro.tenantId !== tenantGravado) {
+      return negarEntrada('Sua conta está vinculada a outra cooperativa no Firebase. Peça ao administrador do SISCOOP para revisar o vínculo da sua conta.');
+    }
+
+    const tenantIdDoCadastro = membro?.tenantId || tenantGravado;
+    const cadastro = email && tenantIdDoCadastro
+      ? usersRef.current.find(u => (u.email || '').toLowerCase().trim() === email && u.tenantId === tenantIdDoCadastro)
+      : undefined;
+    if (!tenantIdDoCadastro && email && usersRef.current.some(u =>
+      (u.email || '').toLowerCase().trim() === email && u.tenantId
+    )) {
+      return negarEntrada('O cadastro deste usuário existe no navegador, mas o vínculo com a cooperativa ainda não foi confirmado no Firebase.');
+    }
+
+    let tenant: CooperativeTenant | undefined;
+    if (tenantIdDoCadastro) {
       try {
-        await signOut(auth);
+        if (membro && !tenantGravado) await vincularMembroNoLogin(fbUser.uid, membro);
+        const remoto = await fetchTenantFromFirestore(tenantIdDoCadastro);
+        if (!remoto) return negarEntrada('Não foi possível abrir a cooperativa vinculada. Peça ao administrador para conferir seu cadastro e acesso.');
+        tenant = remoto as CooperativeTenant;
+        setTenants(prev => [...prev.filter(t => t.id !== tenantIdDoCadastro), remoto as CooperativeTenant]);
       } catch {
-        // ignora
-      }
-      setIsAuthenticated(false);
-      return { success: false, requiresCooperativeSetup: false, error: 'Este usuário está desativado. Fale com o administrador da cooperativa.' };
-    }
-
-    const tenantIdDoCadastro = cadastro?.tenantId || membro?.tenantId || '';
-    let tenant: CooperativeTenant | undefined =
-      (tenantIdDoCadastro ? tenantsRef.current.find(t => t.id === tenantIdDoCadastro) : undefined) ||
-      tenantsRef.current.find(t => (t as any).ownerUid === fbUser.uid);
-
-    // Usuário da equipe entrando num navegador que ainda não tem a
-    // cooperativa: vincula users/{uid} ao tenant (as regras permitem por causa
-    // do tenantMembers) e baixa o cadastro da cooperativa do Firestore.
-    if (!tenant && membro?.tenantId) {
-      await saveUserTenantMappingToFirestore(fbUser.uid, membro.tenantId, email);
-      const remoto = await fetchTenantFromFirestore(membro.tenantId);
-      if (remoto) {
-        const novo = { ...currentTenantRef.current, ...remoto, id: membro.tenantId } as CooperativeTenant;
-        tenant = novo;
-        setTenants(prev => (prev.some(t => t.id === novo.id) ? prev : [...prev, novo]));
+        return negarEntrada('Não foi possível confirmar seu acesso à cooperativa. Peça ao administrador para conferir seu vínculo no Firebase.');
       }
     }
-
-    // Sem cadastro nem vínculo: comportamento anterior (cooperativa deste navegador).
-    const usouCooperativaDoNavegador = !tenant && !membro;
-    if (usouCooperativaDoNavegador) tenant = currentTenantRef.current;
+    if (auth.currentUser?.uid !== fbUser.uid) return { success: false, requiresCooperativeSetup: false };
 
     const sessao: User = {
       ...(cadastro || {}),
@@ -1760,7 +1766,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       email: fbUser.email || cadastro?.email || '',
       // Perfil e permissões vêm primeiro do Firestore (tenantMembers), que vale em
       // qualquer computador; o cadastro local só é usado se não houver vínculo.
-      role: (membro?.role as UserRole | undefined) || cadastro?.role || 'ADMIN',
+      role: (membro?.role as UserRole | undefined) || (tenant ? cadastro?.role : undefined) || 'ADMIN',
       customPermissions: membro?.customPermissionsJson !== undefined
         ? lerPermissoesMembro(membro.customPermissionsJson)
         : cadastro?.customPermissions,
@@ -1776,7 +1782,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // O cadastro local passa a usar o UID do Firebase como id, para que
     // edições de perfil e permissões fiquem ligadas à conta de login.
     setUsers(prev => {
-      const idx = prev.findIndex(u => (u.email || '').toLowerCase().trim() === email);
+      const idx = prev.findIndex(u => (u.email || '').toLowerCase().trim() === email && u.tenantId === sessao.tenantId);
       if (idx < 0) return prev;
       const copia = [...prev];
       copia[idx] = { ...copia[idx], id: fbUser.uid, authUid: fbUser.uid, lastLogin: sessao.lastLogin };
@@ -1786,16 +1792,8 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCurrentUser(sessao);
     setIsAuthenticated(true);
 
-    // Ao restaurar a sessão salva, não mexe no fluxo de cadastro inicial da
-    // cooperativa quando o usuário não tem vínculo (ex.: acabou de se cadastrar).
-    if (!(origem === 'sessão salva' && usouCooperativaDoNavegador)) {
-      if (tenant) {
-        if (tenant.id !== currentTenantRef.current?.id) setCurrentTenant(tenant);
-        setIsPendingCooperativeSetup(false);
-      } else {
-        setIsPendingCooperativeSetup(true);
-      }
-    }
+    setCurrentTenant(tenant ?? INITIAL_TENANTS[0]);
+    setIsPendingCooperativeSetup(!tenant);
 
     if (origem !== 'sessão salva') {
       addAuditLog('AUTH', 'LOGIN', `Usuário ${sessao.name} realizou login via ${origem} (${sessao.email})`);
@@ -1827,7 +1825,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // escolas enviarem. Só roda com a cooperativa logada no Firebase.
   useEffect(() => {
     const tenantId = currentTenant?.id;
-    if (!isAuthenticated || !tenantId || !auth.currentUser) return;
+    if (!isAuthenticated || !tenantId || currentUser.tenantId !== tenantId || !auth.currentUser) return;
     const timer = setTimeout(() => {
       publicarPortalEscolas(tenantId, escolasPnae, {
         pedidos: pedidosProdutorPAA,
@@ -1837,33 +1835,33 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }).catch(err => console.warn('Portal da Escola: falha ao publicar os dados das escolas', err));
     }, 3000);
     return () => clearTimeout(timer);
-  }, [isAuthenticated, currentTenant?.id, escolasPnae, pedidosProdutorPAA, programacoesEntrega, chamadasPublicas, entregasEscola]);
+  }, [isAuthenticated, currentUser.tenantId, currentTenant?.id, escolasPnae, pedidosProdutorPAA, programacoesEntrega, chamadasPublicas, entregasEscola]);
 
   useEffect(() => {
     const tenantId = currentTenant?.id;
-    if (!isAuthenticated || !tenantId || !auth.currentUser) return;
+    if (!isAuthenticated || !tenantId || currentUser.tenantId !== tenantId || !auth.currentUser) return;
     return ouvirComprovantesPortal(tenantId, (docId, entrega) => {
       const id = `portal-${docId}`;
       setEntregasEscola(prev => (prev.some(x => x.id === id) ? prev : [{ ...entrega, id, tenantId }, ...prev]));
     });
-  }, [isAuthenticated, currentTenant?.id]);
+  }, [isAuthenticated, currentUser.tenantId, currentTenant?.id]);
 
   // Portal do Motorista: publica as rotas de cada motorista no Firestore e
   // aplica as entregas que eles confirmarem pelo celular.
   useEffect(() => {
     const tenantId = currentTenant?.id;
-    if (!isAuthenticated || !tenantId || !auth.currentUser) return;
+    if (!isAuthenticated || !tenantId || currentUser.tenantId !== tenantId || !auth.currentUser) return;
     const timer = setTimeout(() => {
       publicarPortalMotoristas(tenantId, motoristas, programacoesEntrega).catch(err =>
         console.warn('Portal do Motorista: falha ao publicar as rotas', err)
       );
     }, 3000);
     return () => clearTimeout(timer);
-  }, [isAuthenticated, currentTenant?.id, motoristas, programacoesEntrega]);
+  }, [isAuthenticated, currentUser.tenantId, currentTenant?.id, motoristas, programacoesEntrega]);
 
   useEffect(() => {
     const tenantId = currentTenant?.id;
-    if (!isAuthenticated || !tenantId || !auth.currentUser) return;
+    if (!isAuthenticated || !tenantId || currentUser.tenantId !== tenantId || !auth.currentUser) return;
     return ouvirAtualizacoesMotoristas(tenantId, (programacaoId, alteracoes) => {
       setProgramacoesEntrega(prev =>
         prev.map(p =>
@@ -1877,7 +1875,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         )
       );
     });
-  }, [isAuthenticated, currentTenant?.id]);
+  }, [isAuthenticated, currentUser.tenantId, currentTenant?.id]);
 
   // Portal do Cooperado e App do Produtor: publica o resumo de cada pessoa no
   // Firestore e aplica as ofertas que os produtores fizerem pelo celular.
@@ -1885,18 +1883,18 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const tenantId = currentTenant?.id;
-    if (!isAuthenticated || !tenantId || !auth.currentUser) return;
+    if (!isAuthenticated || !tenantId || currentUser.tenantId !== tenantId || !auth.currentUser) return;
     const timer = setTimeout(() => {
       publicarPortalCooperados(tenantId, cooperados, registrosProducao, transacoesCapital).catch(err =>
         console.warn('Portal do Cooperado: falha ao publicar os dados', err)
       );
     }, 4000);
     return () => clearTimeout(timer);
-  }, [isAuthenticated, currentTenant?.id, cooperados, registrosProducao, transacoesCapital]);
+  }, [isAuthenticated, currentUser.tenantId, currentTenant?.id, cooperados, registrosProducao, transacoesCapital]);
 
   useEffect(() => {
     const tenantId = currentTenant?.id;
-    if (!isAuthenticated || !tenantId || !auth.currentUser) return;
+    if (!isAuthenticated || !tenantId || currentUser.tenantId !== tenantId || !auth.currentUser) return;
     const timer = setTimeout(() => {
       publicarPortalProdutores(tenantId, produtores, {
         cooperados,
@@ -1908,18 +1906,18 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }).catch(err => console.warn('App do Produtor: falha ao publicar os dados', err));
     }, 4000);
     return () => clearTimeout(timer);
-  }, [isAuthenticated, currentTenant?.id, produtores, cooperados, produtos, chamadasPublicas, ofertasPAA, pedidosProdutorPAA, programacoesEntrega]);
+  }, [isAuthenticated, currentUser.tenantId, currentTenant?.id, produtores, cooperados, produtos, chamadasPublicas, ofertasPAA, pedidosProdutorPAA, programacoesEntrega]);
 
   useEffect(() => {
     const tenantId = currentTenant?.id;
-    if (!isAuthenticated || !tenantId || !auth.currentUser) return;
+    if (!isAuthenticated || !tenantId || currentUser.tenantId !== tenantId || !auth.currentUser) return;
     return ouvirOfertasProdutores(tenantId, ({ tipo, produtorId, ofertaId, dados }) => {
       const h = handlersOfertaRef.current;
       if (!h) return;
       if (tipo === 'nova') h.add({ ...dados, produtorId });
       else if (ofertaId) h.update(ofertaId, dados);
     });
-  }, [isAuthenticated, currentTenant?.id]);
+  }, [isAuthenticated, currentUser.tenantId, currentTenant?.id]);
 
   const loginWithEmail = async (email: string, pass: string) => {
     let erroFirebase: unknown = null;
@@ -2108,7 +2106,10 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       authUid: u.authUid || undefined,
       customPermissionsJson: JSON.stringify(u.customPermissions || {})
     }).then(r => {
-      if (!r.ok) console.warn('tenantMembers:', r.error);
+      if (!r.ok) {
+        console.warn('tenantMembers:', r.error);
+        alert('O cadastro local foi salvo, mas o vínculo de acesso à cooperativa não foi gravado na nuvem. ' + (r.error || 'Tente novamente.'));
+      }
     });
   };
 

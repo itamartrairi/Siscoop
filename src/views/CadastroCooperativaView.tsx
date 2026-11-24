@@ -224,7 +224,7 @@ export const CadastroCooperativaView: React.FC<Props> = ({ onComplete }) => {
         logoUrl: logoUrl || ''
       };
 
-      if (currentTenant?.id) {
+      if (currentTenant?.id && currentUser.tenantId === currentTenant.id) {
         updateTenant(currentTenant.id, payload);
       } else {
         addTenant(payload);

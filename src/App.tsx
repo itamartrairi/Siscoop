@@ -248,6 +248,19 @@ const MainAppContent: React.FC = () => {
     );
   }
 
+  if (isPendingCooperativeSetup) {
+    return (
+      <main className="min-h-screen bg-slate-50 p-4 sm:p-6">
+        <Suspense fallback={<CarregandoModulo />}>
+          <CadastroCooperativaView onComplete={() => {
+            setIsPendingCooperativeSetup(false);
+            setActiveModule('dashboard');
+          }} />
+        </Suspense>
+      </main>
+    );
+  }
+
   return (
     <div className="h-screen overflow-hidden bg-white text-slate-900 flex flex-col font-sans selection:bg-emerald-500/20 selection:text-emerald-900">
       {/* Top Header Navigation */}

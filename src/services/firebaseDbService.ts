@@ -674,6 +674,28 @@ export async function deleteTenantMemberFromFirestore(email: string): Promise<vo
   }
 }
 
+export async function lerVinculoDeLogin(uid: string, email: string) {
+  const [usuario, equipe] = await Promise.all([
+    getDocFromServer(doc(db, 'users', uid)),
+    email ? getDocFromServer(doc(db, 'tenantMembers', chaveMembro(email))) : null,
+  ]);
+  const tenantId = usuario.data()?.tenantId;
+  return {
+    tenantId: typeof tenantId === 'string' ? tenantId : '',
+    membro: equipe?.exists() ? (equipe.data() as TenantMember) : null,
+  };
+}
+
+/** Grava apenas o vínculo de um membro. A autorização é validada pelo Firestore. */
+export async function vincularMembroNoLogin(uid: string, membro: TenantMember): Promise<void> {
+  if (auth.currentUser?.uid !== uid) throw new Error('A sessão mudou durante o login.');
+  await setDoc(doc(db, 'users', uid), {
+    tenantId: membro.tenantId,
+    email: membro.email,
+    updatedAt: new Date().toISOString(),
+  }, { merge: true });
+}
+
 export async function getTenantMemberFromFirestore(email: string): Promise<TenantMember | null> {
   const id = chaveMembro(email);
   if (!id || !auth.currentUser) return null;
