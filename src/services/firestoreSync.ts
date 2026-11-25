@@ -23,8 +23,9 @@
  *
  * O localStorage continua como cache local (o sistema abre mesmo offline).
  */
-import { collection, doc, onSnapshot, query, where, writeBatch, type Unsubscribe } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, runTransaction, where, writeBatch, type Unsubscribe } from 'firebase/firestore';
 import { auth, db } from './firebase';
+import { cpfValido, somenteDigitos } from '../utils/documentos';
 
 export const COLECAO_FIRESTORE = 'dadosCooperativa';
 const UNICO = '__unico';
@@ -92,6 +93,78 @@ export const chaveRegistro = (r: Registro): string => {
 const idSeguro = (s: string) => s.replace(/[/\s#?[\]]/g, '_').slice(0, 300);
 const docIdDe = (tenantId: string, colecao: string, chave: string) => `${tenantId}__${colecao}__${idSeguro(chave)}`;
 
+type DocumentoCooperativa = { colecao: string; registroId: string; json: string };
+
+function cpfDoRegistro(json: string): string {
+  try {
+    const cpf = somenteDigitos(JSON.parse(json).cpf);
+    return cpfValido(cpf) ? cpf : '';
+  } catch {
+    return '';
+  }
+}
+
+class ConflitoCpfCooperado extends Error {}
+
+async function gravarCooperado(
+  tenantId: string, id: string, registro: DocumentoCooperativa | null, atualizadoEm: string, atualizadoPor: string
+) {
+  const cadastro = doc(db, COLECAO_FIRESTORE, id);
+  const indice = (cpf: string) => doc(db, 'tenants', tenantId, 'cpfsCooperados', cpf);
+  const cpf = registro ? cpfDoRegistro(registro.json) : '';
+  await runTransaction(db, async transacao => {
+    const anterior = await transacao.get(cadastro);
+    const cpfAnterior: string = anterior.data()?.cpf || '';
+    const reserva = cpf ? await transacao.get(indice(cpf)) : undefined;
+    const reservaAnterior = cpfAnterior && cpfAnterior !== cpf
+      ? await transacao.get(indice(cpfAnterior)) : undefined;
+
+    if (reserva?.exists() && reserva.data().cadastroId !== id) {
+      throw new ConflitoCpfCooperado('Já existe um cooperado cadastrado com este CPF.');
+    }
+    if (registro && !anterior.exists() && !cpf) {
+      throw new ConflitoCpfCooperado('Novos cooperados precisam de um CPF válido.');
+    }
+    if (reservaAnterior?.data()?.cadastroId === id) transacao.delete(indice(cpfAnterior));
+    if (!registro) {
+      if (anterior.exists()) transacao.delete(cadastro);
+      return;
+    }
+    if (cpf && !reserva?.exists()) transacao.set(indice(cpf), { cadastroId: id });
+    transacao.set(cadastro, { tenantId, ...registro, ...(cpf ? { cpf } : {}), atualizadoEm, atualizadoPor });
+  });
+}
+
+function conferirCpfLegado(s: Sessao, id: string, json: string) {
+  const cpf = cpfDoRegistro(json);
+  if (cpf && [...s.cpfLegadoPorId].some(([outroId, outroCpf]) => outroId !== id && outroCpf === cpf)) {
+    throw new ConflitoCpfCooperado('O CPF já consta em um cadastro anterior desta cooperativa.');
+  }
+}
+
+export async function confirmarCooperadoNaNuvem(registro: { id: string; tenantId: string }) {
+  const s = sessao;
+  const usuario = auth.currentUser;
+  if (!usuario || !s?.carregado || s.tenantId !== registro.tenantId) {
+    throw new Error('Aguarde a sincronização com a nuvem antes de salvar este CPF.');
+  }
+  const registroId = idSeguro(registro.id);
+  const id = docIdDe(s.tenantId, 'cooperados', registroId);
+  const json = JSON.stringify(registro);
+  if (codificadorUtf8.encode(json).byteLength > TAMANHO_MAXIMO) {
+    throw new Error('O cadastro excede o limite de tamanho do Firestore. Reduza os anexos e tente novamente.');
+  }
+  conferirCpfLegado(s, id, json);
+  try {
+    await gravarCooperado(s.tenantId, id, { colecao: 'cooperados', registroId, json },
+      new Date().toISOString(), usuario.email || usuario.uid);
+  } catch (error) {
+    if (error instanceof ConflitoCpfCooperado) throw error;
+    console.warn('Falha ao confirmar cadastro de cooperado no Firestore:', error);
+    throw new Error('Não foi possível confirmar o CPF na nuvem. Confira a conexão e tente novamente.');
+  }
+}
+
 const pertence = (r: Registro, tenantId: string) => !r || !r.tenantId || r.tenantId === tenantId;
 
 // ---------------------------------------------------------------------------
@@ -103,6 +176,7 @@ interface Sessao {
   carregado: boolean;
   /** docId → hash do json gravado/lido do Firestore */
   conhecidos: Map<string, string>;
+  cpfLegadoPorId: Map<string, string>;
   cancelar: Unsubscribe | null;
   tentativas: number;
   timerReabrir: ReturnType<typeof setTimeout> | null;
@@ -173,7 +247,7 @@ export const iniciarSincronizacaoFirestore = (
   aplicar: (colecao: string, mudanca: MudancaRemota) => void
 ): (() => void) => {
   pararSincronizacaoFirestore();
-  const atual: Sessao = { tenantId, carregado: false, conhecidos: new Map(), cancelar: null, tentativas: 0, timerReabrir: null };
+  const atual: Sessao = { tenantId, carregado: false, conhecidos: new Map(), cpfLegadoPorId: new Map(), cancelar: null, tentativas: 0, timerReabrir: null };
   sessao = atual;
   const aplicarRemoto = (colecao: string, mudanca: MudancaRemota) => {
     remotaSeq = ++sequencia;
@@ -193,9 +267,10 @@ export const iniciarSincronizacaoFirestore = (
         if (snap.metadata.fromCache || snap.metadata.hasPendingWrites) return;
         const listas = new Map<string, Registro[]>();
         snap.docs.forEach(d => {
-          const dados = d.data() as { colecao?: string; registroId?: string; json?: string };
+          const dados = d.data() as { colecao?: string; registroId?: string; json?: string; cpf?: string };
           if (!dados.colecao || !TODAS.has(dados.colecao) || typeof dados.json !== 'string') return;
           atual.conhecidos.set(d.id, hash(dados.json));
+          if (dados.colecao === 'cooperados' && !dados.cpf) atual.cpfLegadoPorId.set(d.id, cpfDoRegistro(dados.json));
           try {
             const valor = JSON.parse(dados.json);
             if (OBJETOS.has(dados.colecao)) aplicarRemoto(dados.colecao, { tipo: 'objeto', valor });
@@ -220,11 +295,12 @@ export const iniciarSincronizacaoFirestore = (
       const porColecao = new Map<string, { upserts: Registro[]; removidos: string[] }>();
       snap.docChanges().forEach(ch => {
         if (ch.doc.metadata.hasPendingWrites) return; // eco das gravações deste navegador
-        const dados = ch.doc.data() as { colecao?: string; registroId?: string; json?: string };
+        const dados = ch.doc.data() as { colecao?: string; registroId?: string; json?: string; cpf?: string };
         if (!dados.colecao || !TODAS.has(dados.colecao)) return;
         if (ch.type === 'removed') {
           if (!atual.conhecidos.has(ch.doc.id)) return;
           atual.conhecidos.delete(ch.doc.id);
+          atual.cpfLegadoPorId.delete(ch.doc.id);
           if (OBJETOS.has(dados.colecao)) return;
           const g = porColecao.get(dados.colecao) || { upserts: [], removidos: [] };
           g.removidos.push(String(dados.registroId || ''));
@@ -232,6 +308,10 @@ export const iniciarSincronizacaoFirestore = (
           return;
         }
         if (typeof dados.json !== 'string') return;
+        if (dados.colecao === 'cooperados') {
+          if (dados.cpf) atual.cpfLegadoPorId.delete(ch.doc.id);
+          else atual.cpfLegadoPorId.set(ch.doc.id, cpfDoRegistro(dados.json));
+        }
         const h = hash(dados.json);
         if (atual.conhecidos.get(ch.doc.id) === h) return;
         atual.conhecidos.set(ch.doc.id, h);
@@ -324,6 +404,7 @@ const gravarPendente = async () => {
     const desejados = montarDesejados(payload, s.tenantId);
     const gravar: [string, { colecao: string; registroId: string; json: string }, string][] = [];
     const grandes: string[] = [];
+    const conflitosCpf: string[] = [];
     desejados.forEach((d, id) => {
       const h = hash(d.json);
       if (s.conhecidos.get(id) === h) return;
@@ -375,6 +456,19 @@ const gravarPendente = async () => {
     };
 
     for (const [id, d, h] of gravar) {
+      if (sessao !== s) return;
+      if (d.colecao === 'cooperados') {
+        try {
+          conferirCpfLegado(s, id, d.json);
+          await gravarCooperado(s.tenantId, id, d, agora, quem);
+          s.cpfLegadoPorId.delete(id);
+          s.conhecidos.set(id, h);
+        } catch (error) {
+          if (!(error instanceof ConflitoCpfCooperado)) throw error;
+          conflitosCpf.push(error.message);
+        }
+        continue;
+      }
       const bytes = codificadorUtf8.encode(d.json).byteLength + 4096;
       if (bytesNoLote + bytes > MAX_BYTES_LOTE) fecharLote();
       bytesNoLote += bytes;
@@ -390,6 +484,13 @@ const gravarPendente = async () => {
       if (++noLote >= LOTE) fecharLote();
     }
     for (const id of apagar) {
+      if (sessao !== s) return;
+      if (id.startsWith(`${s.tenantId}__cooperados__`)) {
+        await gravarCooperado(s.tenantId, id, null, agora, quem);
+        s.conhecidos.delete(id);
+        s.cpfLegadoPorId.delete(id);
+        continue;
+      }
       batch.delete(doc(db, COLECAO_FIRESTORE, id));
       operacoes.push(() => s.conhecidos.delete(id));
       if (++noLote >= LOTE) fecharLote();
@@ -401,10 +502,12 @@ const gravarPendente = async () => {
     }
     if (sessao === s) operacoes.forEach(op => op());
     definirStatus({
-      fase: grandes.length ? 'erro' : 'sincronizado',
+      fase: grandes.length || conflitosCpf.length ? 'erro' : 'sincronizado',
       pendentes: 0,
       ultimaGravacao: agora,
-      mensagem: grandes.length
+      mensagem: conflitosCpf.length
+        ? `${conflitosCpf.length} cadastro(s) de cooperados não gravado(s). ${conflitosCpf[0]}`
+        : grandes.length
         ? `Registro(s) grande(s) demais para o Firestore (acima de ~900 KB): ${grandes.slice(0, 5).join(', ')}`
         : `Salvo no Firestore (${gravar.length} gravado(s), ${apagar.length} excluído(s)).`,
     });

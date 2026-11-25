@@ -64,7 +64,7 @@ import {
 } from '../types';
 import { calcularImpostosItem, ALERTA_CRONOGRAMA_TEXTO } from '../utils/tributacaoReforma';
 import { gerarParcelas } from '../utils/parcelamento';
-import { iniciarSincronizacaoFirestore, agendarSincronizacaoFirestore, aplicarMudancaRemota } from '../services/firestoreSync';
+import { iniciarSincronizacaoFirestore, agendarSincronizacaoFirestore, aplicarMudancaRemota, confirmarCooperadoNaNuvem } from '../services/firestoreSync';
 import type { Atividade } from '../types/agenda';
 import { IndicadorSincronizacao } from '../components/IndicadorSincronizacao';
 import { transmitirParaNuvemFiscal } from '../services/nuvemFiscalService';
@@ -539,8 +539,8 @@ interface CoopContextType {
   addAuditLog: (modulo: AuditoriaLog['modulo'], acao: AuditoriaLog['acao'], detalhes: string, antesObj?: string, depoisObj?: string) => void;
 
   // Cooperado CRUD
-  addCooperado: (cooperadoData: Omit<Cooperado, 'id' | 'tenantId' | 'historico' | 'capitalSubscrito' | 'capitalIntegralizado'>) => Cooperado | null;
-  updateCooperado: (id: string, updatedData: Partial<Cooperado>) => boolean;
+  addCooperado: (cooperadoData: Omit<Cooperado, 'id' | 'tenantId' | 'historico' | 'capitalSubscrito' | 'capitalIntegralizado'>) => Promise<Cooperado | null>;
+  updateCooperado: (id: string, updatedData: Partial<Cooperado>) => Promise<boolean>;
   deleteCooperado: (id: string) => void;
   deleteAllCooperados: () => number;
   restaurarCooperadosBaseCompleta: () => void;
@@ -2226,7 +2226,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Cooperado CRUD
-  const addCooperado = (cooperadoData: Omit<Cooperado, 'id' | 'tenantId' | 'historico' | 'capitalSubscrito' | 'capitalIntegralizado'>) => {
+  const addCooperado = async (cooperadoData: Omit<Cooperado, 'id' | 'tenantId' | 'historico' | 'capitalSubscrito' | 'capitalIntegralizado'>) => {
     const cpf = validarCpfCooperado(cooperadoData.cpf);
     if (!cpf) return null;
     const matricula = chaveUnica(cooperadoData.matricula);
@@ -2239,7 +2239,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       alert('Cadastro não realizado: já existe um cooperado com a mesma matrícula ou combinação de nome e data de nascimento.');
       return null;
     }
-    const newId = `cop-${Date.now()}`;
+    const newId = `cop-${crypto.randomUUID()}`;
     const rawCooperado: Cooperado = {
       ...cooperadoData,
       cpf,
@@ -2260,8 +2260,15 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const newCooperado = { ...sanitizeCooperado(rawCooperado), cpf };
 
+    try {
+      await confirmarCooperadoNaNuvem(newCooperado);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Não foi possível salvar o cooperado.');
+      return null;
+    }
+
     setCooperados(prev => {
-      const nextList = [newCooperado, ...prev];
+      const nextList = [newCooperado, ...prev.filter(c => c.id !== newId)];
       syncCooperadosWithProdutores(nextList);
       return nextList;
     });
@@ -2271,11 +2278,19 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
 
-  const updateCooperado = (id: string, updatedData: Partial<Cooperado>) => {
+  const updateCooperado = async (id: string, updatedData: Partial<Cooperado>) => {
     const atual = cooperados.find(c => c.id === id && pertenceAoTenant(c, currentTenant.id));
     if (!atual) return false;
     const cpf = updatedData.cpf === undefined ? undefined : validarCpfCooperado(updatedData.cpf, id);
     if (cpf === null) return false;
+    if (cpf && cpf !== somenteDigitos(atual.cpf)) {
+      try {
+        await confirmarCooperadoNaNuvem({ ...atual, ...updatedData, id, tenantId: currentTenant.id, cpf });
+      } catch (error) {
+        alert(error instanceof Error ? error.message : 'Não foi possível atualizar o CPF.');
+        return false;
+      }
+    }
     setCooperados(prev => {
       const nextList = prev.map(c => {
         if (c.id === id) {

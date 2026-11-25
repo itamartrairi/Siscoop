@@ -659,19 +659,30 @@ export const CadastrosView: React.FC = () => {
     setShowCooperadoModal(true);
   };
 
-  const handleSaveCooperado = (e: React.FormEvent) => {
+  const salvandoCooperadoRef = React.useRef(false);
+  const [salvandoCooperado, setSalvandoCooperado] = useState(false);
+
+  const handleSaveCooperado = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (salvandoCooperadoRef.current) return;
     if (!canWrite) { blockWriteAction(); return; }
     if (!cooperadoForm.nome || !cooperadoForm.cpf) {
       alert('Por favor, informe Nome e CPF do cooperado.');
       return;
     }
-    const salvo = editingCooperado
-      ? updateCooperado(editingCooperado.id, cooperadoForm as any)
-      : addCooperado(cooperadoForm as any);
-    if (!salvo) return;
+    salvandoCooperadoRef.current = true;
+    setSalvandoCooperado(true);
+    try {
+      const salvo = editingCooperado
+        ? await updateCooperado(editingCooperado.id, cooperadoForm as any)
+        : await addCooperado(cooperadoForm as any);
+      if (!salvo) return;
 
-    setShowCooperadoModal(false);
+      setShowCooperadoModal(false);
+    } finally {
+      salvandoCooperadoRef.current = false;
+      setSalvandoCooperado(false);
+    }
   };
 
   // Exclusão em massa — ação destrutiva e irreversível. Exige confirmação
@@ -2626,9 +2637,10 @@ export const CadastrosView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
+                  disabled={salvandoCooperado}
                   className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700"
                 >
-                  Salvar
+                  {salvandoCooperado ? 'Salvando…' : 'Salvar'}
                 </button>
               </div>
             </form>
