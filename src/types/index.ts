@@ -125,6 +125,8 @@ export interface Cooperado {
   regimeBens?: string;
   nomePai?: string;
   nomeMae?: string;
+  nomeConjuge?: string;
+  cpfConjuge?: string;
   situacao: SituacaoCooperado;
   dataFiliacao: string;
   categoria: CategoriaCooperado;
@@ -133,6 +135,7 @@ export interface Cooperado {
 
   // Endereço
   cep: string;
+  tipoLogradouro?: string;
   logradouro: string;
   numero: string;
   complemento?: string;

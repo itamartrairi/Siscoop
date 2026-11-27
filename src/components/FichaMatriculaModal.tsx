@@ -38,9 +38,54 @@ function data(v?: string) {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : esc(v);
 }
 
-export function montarHtml(c: Cooperado, coop: {
-  nome: string; endereco: string; cep: string; email: string; telefone: string; cnpj: string; logo: string; presidente: string;
-}) {
+
+type DadosCooperativa = {
+  nome: string; endereco: string; cep: string; email: string; telefone: string; cnpj: string; logo: string;
+  presidente: string; cidade: string; uf: string;
+};
+
+const BASE_CSS = `
+  @page { size: A4; margin: 12mm; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Arial, Helvetica, sans-serif; color: #111; font-size: 11px; background: #fff; }
+  .folha { width: 186mm; margin: 0 auto; padding: 4mm 0; }
+`;
+
+const TOPO_CSS = `
+  .topo { display: flex; align-items: center; gap: 14px; padding: 8px 14px; border-radius: 4px;
+    background: linear-gradient(100deg, #8cc63f 0%, #4f9a35 45%, #2e6f2c 100%); color: #fff; }
+  .topo img { height: 78px; width: auto; max-width: 120px; object-fit: contain; background: #fff; border-radius: 8px; padding: 4px; }
+  .topo .logo-vazio { height: 64px; width: 64px; border-radius: 50%; background: #fff; color: #2f7d32;
+    display:flex; align-items:center; justify-content:center; font-weight: 800; font-size: 20px; }
+  .topo .nome { font-size: 17px; font-weight: 800; letter-spacing: .3px; text-shadow: 0 1px 1px rgba(0,0,0,.25); }
+  .topo .info { font-size: 11.5px; font-weight: 700; line-height: 1.45; text-shadow: 0 1px 1px rgba(0,0,0,.25); }
+  .topo { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+`;
+
+function topoHtml(coop: DadosCooperativa) {
+  return `<div class="topo">
+    ${coop.logo ? `<img src="${esc(coop.logo)}" alt="">` : `<div class="logo-vazio">${up(coop.nome).slice(0, 1)}</div>`}
+    <div>
+      <div class="nome">${up(coop.nome)}</div>
+      <div class="info">${esc(coop.endereco)}</div>
+      <div class="info">${coop.cep ? `CEP ${esc(coop.cep)}` : ''}${coop.cep && coop.email ? ' &nbsp;-&nbsp; ' : ''}${coop.email ? `E-mail: ${esc(coop.email)}` : ''}</div>
+    </div>
+  </div>`;
+}
+
+/** Data e motivo do desligamento, quando o cooperado já saiu do quadro social. */
+function desligamento(c: Cooperado) {
+  const desligado = SITUACOES_DESLIGADO.includes(String(c.situacao));
+  const evento = desligado
+    ? [...(c.historico || [])].reverse().find(h => /demiss|exclus|elimina|deslig|falec/i.test(`${h.acao} ${h.detalhes}`))
+    : undefined;
+  return {
+    data: evento ? data(evento.data) : '',
+    motivo: desligado ? up(evento?.detalhes || evento?.acao || c.situacao) : '',
+  };
+}
+
+export function montarFichaMatricula(c: Cooperado, coop: DadosCooperativa) {
   const campo = (rotulo: string, valor: string, flex = 1, curto = false) =>
     `<div class="campo" style="flex:${flex}"><span class="rot${curto ? ' curto' : ''}">${rotulo}</span><span class="val">${valor}</span></div>`;
   const linha = (...campos: string[]) => `<div class="linha">${campos.join('')}</div>`;
@@ -52,29 +97,15 @@ export function montarHtml(c: Cooperado, coop: {
 
   // Se o cooperado já foi desligado, o termo vem preenchido com a data e o
   // motivo registrados no histórico; senão fica em branco para preencher à mão.
-  const desligado = SITUACOES_DESLIGADO.includes(String(c.situacao));
-  const evento = desligado
-    ? [...(c.historico || [])].reverse().find(h => /demiss|exclus|elimina|deslig|falec/i.test(`${h.acao} ${h.detalhes}`))
-    : undefined;
-  const dataDeslig = evento ? data(evento.data) : '';
-  const motivo = desligado ? up(evento?.detalhes || evento?.acao || c.situacao) : '';
+  const { data: dataDeslig, motivo } = desligamento(c);
 
   const linhasEmBranco = (n: number) => Array.from({ length: n }, () => '<div class="pauta"></div>').join('');
 
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">
 <title>Ficha de Matrícula - ${esc(c.matricula)} - ${esc(c.nome)}</title>
 <style>
-  @page { size: A4; margin: 12mm; }
-  * { box-sizing: border-box; }
-  body { margin: 0; font-family: Arial, Helvetica, sans-serif; color: #111; font-size: 11px; background: #fff; }
-  .folha { width: 186mm; margin: 0 auto; padding: 4mm 0; }
-  .topo { display: flex; align-items: center; gap: 14px; padding: 8px 14px; border-radius: 4px;
-    background: linear-gradient(100deg, #8cc63f 0%, #4f9a35 45%, #2e6f2c 100%); color: #fff; }
-  .topo img { height: 78px; width: auto; max-width: 120px; object-fit: contain; background: #fff; border-radius: 8px; padding: 4px; }
-  .topo .logo-vazio { height: 64px; width: 64px; border-radius: 50%; background: #fff; color: #2f7d32;
-    display:flex; align-items:center; justify-content:center; font-weight: 800; font-size: 20px; }
-  .topo .nome { font-size: 17px; font-weight: 800; letter-spacing: .3px; text-shadow: 0 1px 1px rgba(0,0,0,.25); }
-  .topo .info { font-size: 11.5px; font-weight: 700; line-height: 1.45; text-shadow: 0 1px 1px rgba(0,0,0,.25); }
+${BASE_CSS}
+${TOPO_CSS}
   h1 { text-align: center; font-size: 15px; margin: 14px 0 10px; letter-spacing: .5px; }
   h2 { text-align: center; font-size: 12.5px; margin: 22px 0 10px; }
   .linha { display: flex; gap: 10px; margin: 9px 0; align-items: flex-end; }
@@ -90,16 +121,9 @@ export function montarHtml(c: Cooperado, coop: {
   .assinaturas .titulo { margin-bottom: 34px; }
   .assinaturas .traco { border-top: 1px solid #111; padding-top: 3px; font-size: 9.5px; }
   .pauta { border-bottom: 1px solid #111; height: 26px; }
-  .topo, .rot { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .rot { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 </style></head><body><div class="folha">
-  <div class="topo">
-    ${coop.logo ? `<img src="${esc(coop.logo)}" alt="">` : `<div class="logo-vazio">${up(coop.nome).slice(0, 1)}</div>`}
-    <div>
-      <div class="nome">${up(coop.nome)}</div>
-      <div class="info">${esc(coop.endereco)}</div>
-      <div class="info">${coop.cep ? `CEP ${esc(coop.cep)}` : ''}${coop.cep && coop.email ? ' &nbsp;-&nbsp; ' : ''}${coop.email ? `E-mail: ${esc(coop.email)}` : ''}</div>
-    </div>
-  </div>
+  ${topoHtml(coop)}
 
   <h1>FICHA DE MATRÍCULA</h1>
 
@@ -135,12 +159,77 @@ export function montarHtml(c: Cooperado, coop: {
 </div></body></html>`;
 }
 
+/** Ficha Cadastral do Sócio: rótulos à esquerda e valores em caixas, em duas colunas. */
+export function montarFichaCadastral(c: Cooperado, coop: DadosCooperativa) {
+  const caixa = (rotulo: string, valor: string, largura = '100%', alinhar: 'left' | 'right' = 'left') =>
+    `<div class="cx" style="flex:1"><span class="r" style="text-align:${alinhar}">${rotulo}</span><span class="v" style="max-width:${largura}">${valor}</span></div>`;
+  const linha = (esq: string, dir = '') => `<div class="ln"><div class="esq">${esq}</div><div class="dir">${dir}</div></div>`;
+
+  const { data: dataDemissao } = desligamento(c);
+  const fone = c.celular || c.whatsapp || c.telefone || '';
+  const cidadeUf = [c.cidade, c.estado].filter(Boolean).join('/');
+  const local = [coop.cidade, coop.uf].filter(Boolean).join('-');
+
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">
+<title>Ficha Cadastral do Sócio - ${esc(c.matricula)} - ${esc(c.nome)}</title>
+<style>
+${BASE_CSS}
+${TOPO_CSS}
+  h1 { text-align: center; font-size: 12.5px; margin: 16px 0 22px; }
+  .ln { display: flex; gap: 18px; margin: 9px 0; }
+  .esq { flex: 1.45; display: flex; }
+  .dir { flex: 1; display: flex; }
+  .cx { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .r { font-weight: 700; font-size: 10.5px; white-space: nowrap; }
+  .esq .r { width: 128px; flex-shrink: 0; }
+  .dir .r { width: 112px; flex-shrink: 0; }
+  .v { flex: 1; border: 1px solid #8a8a8a; min-height: 18px; padding: 2px 5px; font-size: 10.5px; color: #333;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .data-local { text-align: center; font-weight: 700; margin-top: 46px; }
+  .assina { width: 62%; margin: 54px auto 0; border-top: 1px solid #111; text-align: center; font-weight: 700; padding-top: 3px; }
+</style></head><body><div class="folha">
+  ${topoHtml(coop)}
+
+  <h1>FICHA CADASTRAL DO SÓCIO</h1>
+
+  ${linha(caixa('MATR.', esc(c.matricula), '170px'), caixa('CPF', esc(c.cpf), '100%', 'right'))}
+  ${linha(caixa('NOME DO(A) SÓCIO(A)', up(c.nome)), caixa('DT. NASCIM.', data(c.dataNascimento), '100%', 'right'))}
+  ${linha(caixa('NOME USUAL', up(c.nomeUsual)), caixa('RG', esc(c.rg), '100%', 'right'))}
+  ${linha(caixa('PAI', up(c.nomePai)), caixa('Órgão Emissor', up(c.orgaoEmissor), '100%', 'right'))}
+  ${linha(caixa('MÃE', up(c.nomeMae)))}
+  ${linha(caixa('Profissão', up(c.profissao)))}
+  ${linha(caixa('Naturalidade', up(c.naturalidade), '190px'), caixa('Nacionalidade', up(c.nacionalidade), '100%', 'right'))}
+  ${linha(caixa('Estado civil', esc(ESTADO_CIVIL[c.estadoCivil] || ''), '190px'), caixa('Situação conjugal', esc(ESTADO_CIVIL[c.estadoCivil] || ''), '100%', 'right'))}
+  ${linha(caixa('Regime de bens', up(c.regimeBens), '190px'))}
+  ${linha(caixa('Nome do Cônjuge', up(c.nomeConjuge)), caixa('CPF', esc(c.cpfConjuge), '100%', 'right'))}
+  ${linha(caixa('DAP', esc(c.dapCaf)), caixa('Fone celular 1', esc(fone), '100%', 'right'))}
+  <div class="ln">
+    <div class="cx" style="flex:0 0 238px"><span class="r" style="width:128px">Tipo de logradouro</span><span class="v">${up(c.tipoLogradouro)}</span></div>
+    <div class="cx" style="flex:1"><span class="r">Nome do logradouro</span><span class="v">${up(c.logradouro)}</span></div>
+  </div>
+  ${linha(caixa('Bairro', up(c.bairro), '160px'), caixa('Número', up(c.numero), '100%', 'right'))}
+  ${linha(caixa('CEP', esc(c.cep), '120px'), caixa('Cidade/UF', up(cidadeUf), '100%', 'right'))}
+  ${linha(caixa('DT. ADMIS.', data(c.dataFiliacao), '120px'), caixa('Data da demissão', dataDemissao, '100%', 'right'))}
+
+  <div class="data-local">${esc(local || '________')}, ________ de ____________________ de __________</div>
+  <div class="assina">Presidente${coop.presidente ? ` <div style="font-weight:400;font-size:10px">${up(coop.presidente)}</div>` : ''}</div>
+</div></body></html>`;
+}
+
+export type ModeloFicha = 'matricula' | 'cadastral';
+
+const TITULOS: Record<ModeloFicha, string> = {
+  matricula: 'Ficha de Matrícula',
+  cadastral: 'Ficha Cadastral do Sócio',
+};
+
 interface Props {
   cooperado: Cooperado;
+  modelo?: ModeloFicha;
   onClose: () => void;
 }
 
-export const FichaMatriculaModal: React.FC<Props> = ({ cooperado, onClose }) => {
+export const FichaMatriculaModal: React.FC<Props> = ({ cooperado, modelo = 'matricula', onClose }) => {
   const { config, currentTenant, mandatos } = useCoop();
   const frameRef = useRef<HTMLIFrameElement>(null);
 
@@ -162,7 +251,8 @@ export const FichaMatriculaModal: React.FC<Props> = ({ cooperado, onClose }) => 
     const vigente = lista.find(m => m.status === 'VIGENTE') || lista[0];
     const presidente = (vigente?.membros || []).find(m => m.cargo === 'PRESIDENTE' && m.status !== 'CONCLUIDO')?.cooperadoNome || '';
 
-    return montarHtml(cooperado, {
+    const montar = modelo === 'cadastral' ? montarFichaCadastral : montarFichaMatricula;
+    return montar(cooperado, {
       nome: config?.razaoSocial || currentTenant?.razaoSocial || config?.nomeCooperativa || currentTenant?.name || 'Cooperativa',
       endereco,
       cep: sede.cep || currentTenant?.cep || '',
@@ -171,8 +261,10 @@ export const FichaMatriculaModal: React.FC<Props> = ({ cooperado, onClose }) => 
       cnpj: config?.cnpj || currentTenant?.cnpj || '',
       logo: currentTenant?.logoUrl || config?.logoUrl || '',
       presidente,
+      cidade,
+      uf,
     });
-  }, [cooperado, config, currentTenant, mandatos]);
+  }, [cooperado, modelo, config, currentTenant, mandatos]);
 
   const imprimir = () => {
     const w = frameRef.current?.contentWindow;
@@ -186,7 +278,7 @@ export const FichaMatriculaModal: React.FC<Props> = ({ cooperado, onClose }) => 
       <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-4xl h-[92vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 px-6 py-4">
           <div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Ficha de Matrícula</h3>
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white">{TITULOS[modelo]}</h3>
             <p className="text-xs text-slate-400">
               {cooperado.nome} • Matrícula {cooperado.matricula}
             </p>
@@ -212,7 +304,7 @@ export const FichaMatriculaModal: React.FC<Props> = ({ cooperado, onClose }) => 
         <div className="flex-1 bg-slate-100 dark:bg-slate-900 p-4 overflow-hidden">
           <iframe
             ref={frameRef}
-            title="Ficha de Matrícula"
+            title={TITULOS[modelo]}
             srcDoc={html}
             className="w-full h-full bg-white rounded-lg shadow border border-slate-200"
           />
