@@ -121,6 +121,10 @@ export interface Cooperado {
   escolaridade: string;
   naturalidade: string;
   nacionalidade: string;
+  orgaoEmissor?: string;
+  regimeBens?: string;
+  nomePai?: string;
+  nomeMae?: string;
   situacao: SituacaoCooperado;
   dataFiliacao: string;
   categoria: CategoriaCooperado;
