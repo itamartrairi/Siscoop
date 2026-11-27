@@ -43,6 +43,7 @@ import {
   ChevronsRight
 } from 'lucide-react';
 import jsPDF from 'jspdf';
+import { FichaMatriculaModal, type ModeloFicha } from '../components/FichaMatriculaModal';
 import { ReceiptModal } from '../components/ReceiptModal';
 import { GeoLocationPicker } from '../components/GeoLocationPicker';
 
@@ -501,6 +502,7 @@ export const CooperadosView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'geral' | 'capital' | 'endereco' | 'contatos' | 'documentos' | 'banco' | 'historico' | 'producao' | null>(null);
 
   const [fichaModalCooperado, setFichaModalCooperado] = useState<Cooperado | null>(null);
+  const [fichaImpressa, setFichaImpressa] = useState<{ cooperado: Cooperado; modelo: ModeloFicha } | null>(null);
   const [loadingCep, setLoadingCep] = useState(false);
   const [selectedReceiptTxId, setSelectedReceiptTxId] = useState<string | null>(null);
 
@@ -527,6 +529,12 @@ export const CooperadosView: React.FC = () => {
     escolaridade: '',
     naturalidade: '',
     nacionalidade: 'Brasileira',
+    orgaoEmissor: '',
+    regimeBens: '',
+    nomePai: '',
+    nomeMae: '',
+    nomeConjuge: '',
+    cpfConjuge: '',
     situacao: 'ATIVO',
     dataFiliacao: new Date().toISOString().substring(0, 10),
     categoria: 'EFETIVO',
@@ -536,6 +544,7 @@ export const CooperadosView: React.FC = () => {
     fotoUrl: '',
     assinaturaDigitalUrl: '',
     cep: '',
+    tipoLogradouro: '',
     logradouro: '',
     numero: '',
     complemento: '',
@@ -941,7 +950,9 @@ export const CooperadosView: React.FC = () => {
         ]}
         actions={[
           { label: 'Editar', icon: Edit2, onClick: c => handleOpenEdit(c) },
-          { label: 'Ficha Cadastral', icon: FileText, onClick: c => setFichaModalCooperado(c) },
+          { label: 'Resumo do Cadastro', icon: FileText, onClick: c => setFichaModalCooperado(c) },
+          { label: 'Ficha Cadastral do Sócio', icon: Printer, onClick: c => setFichaImpressa({ cooperado: c, modelo: 'cadastral' }) },
+          { label: 'Ficha de Matrícula', icon: Printer, onClick: c => setFichaImpressa({ cooperado: c, modelo: 'matricula' }) },
           {
             label: 'WhatsApp',
             icon: MessageCircle,
@@ -1075,12 +1086,23 @@ export const CooperadosView: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">RG / Órgão Expedidor</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">RG</label>
                     <input
                       type="text"
                       placeholder="12.345.678-9 SSP/SP"
                       value={formData.rg}
                       onChange={e => setFormData({ ...formData, rg: e.target.value })}
+                      className="w-full p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">Órgão Emissor</label>
+                    <input
+                      type="text"
+                      placeholder="SSP/CE"
+                      value={formData.orgaoEmissor || ''}
+                      onChange={e => setFormData({ ...formData, orgaoEmissor: e.target.value })}
                       className="w-full p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
                     />
                   </div>
@@ -1121,6 +1143,87 @@ export const CooperadosView: React.FC = () => {
                       <option value="VIUVO">Viúvo(a)</option>
                       <option value="UNIAO_ESTAVEL">União Estável</option>
                     </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">Regime de Bens</label>
+                    <select
+                      value={formData.regimeBens || ''}
+                      onChange={e => setFormData({ ...formData, regimeBens: e.target.value })}
+                      className="w-full p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                    >
+                      <option value="">Não se aplica / não informado</option>
+                      <option value="Comunhão parcial de bens">Comunhão parcial de bens</option>
+                      <option value="Comunhão universal de bens">Comunhão universal de bens</option>
+                      <option value="Separação total de bens">Separação total de bens</option>
+                      <option value="Participação final nos aquestos">Participação final nos aquestos</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">Nome do Pai</label>
+                    <input
+                      type="text"
+                      placeholder=""
+                      value={formData.nomePai || ''}
+                      onChange={e => setFormData({ ...formData, nomePai: e.target.value })}
+                      className="w-full p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">Nome da Mãe</label>
+                    <input
+                      type="text"
+                      placeholder=""
+                      value={formData.nomeMae || ''}
+                      onChange={e => setFormData({ ...formData, nomeMae: e.target.value })}
+                      className="w-full p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">Nome do Cônjuge</label>
+                    <input
+                      type="text"
+                      placeholder=""
+                      value={formData.nomeConjuge || ''}
+                      onChange={e => setFormData({ ...formData, nomeConjuge: e.target.value })}
+                      className="w-full p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">CPF do Cônjuge</label>
+                    <input
+                      type="text"
+                      placeholder="000.000.000-00"
+                      value={formData.cpfConjuge || ''}
+                      onChange={e => setFormData({ ...formData, cpfConjuge: e.target.value })}
+                      className="w-full p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">Naturalidade</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Trairi"
+                      value={formData.naturalidade || ''}
+                      onChange={e => setFormData({ ...formData, naturalidade: e.target.value })}
+                      className="w-full p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">Nacionalidade</label>
+                    <input
+                      type="text"
+                      placeholder="Brasileira"
+                      value={formData.nacionalidade || ''}
+                      onChange={e => setFormData({ ...formData, nacionalidade: e.target.value })}
+                      className="w-full p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                    />
                   </div>
 
                   <div>
@@ -1463,6 +1566,21 @@ export const CooperadosView: React.FC = () => {
                     >
                       {loadingCep ? 'Buscando...' : 'Buscar CEP'}
                     </button>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">Tipo de Logradouro</label>
+                    <input
+                      type="text"
+                      list="tipos-logradouro"
+                      placeholder="Ex: Rua, Sítio, Localidade"
+                      value={formData.tipoLogradouro || ''}
+                      onChange={e => setFormData({ ...formData, tipoLogradouro: e.target.value })}
+                      className="w-full p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                    />
+                    <datalist id="tipos-logradouro">
+                      {['Rua', 'Avenida', 'Travessa', 'Sítio', 'Localidade', 'Fazenda', 'Distrito', 'Estrada', 'Rodovia', 'Assentamento'].map(t => <option key={t} value={t} />)}
+                    </datalist>
                   </div>
 
                   <div className="md:col-span-2">
@@ -1867,6 +1985,14 @@ export const CooperadosView: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {fichaImpressa && (
+        <FichaMatriculaModal
+          cooperado={fichaImpressa.cooperado}
+          modelo={fichaImpressa.modelo}
+          onClose={() => setFichaImpressa(null)}
+        />
       )}
 
       {/* Ficha do Cooperado Printable Modal */}
