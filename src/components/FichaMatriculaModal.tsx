@@ -70,7 +70,7 @@ export function montarHtml(c: Cooperado, coop: {
   .folha { width: 186mm; margin: 0 auto; padding: 4mm 0; }
   .topo { display: flex; align-items: center; gap: 14px; padding: 8px 14px; border-radius: 4px;
     background: linear-gradient(100deg, #8cc63f 0%, #4f9a35 45%, #2e6f2c 100%); color: #fff; }
-  .topo img { height: 64px; width: 64px; object-fit: contain; background: #fff; border-radius: 50%; padding: 4px; }
+  .topo img { height: 78px; width: auto; max-width: 120px; object-fit: contain; background: #fff; border-radius: 8px; padding: 4px; }
   .topo .logo-vazio { height: 64px; width: 64px; border-radius: 50%; background: #fff; color: #2f7d32;
     display:flex; align-items:center; justify-content:center; font-weight: 800; font-size: 20px; }
   .topo .nome { font-size: 17px; font-weight: 800; letter-spacing: .3px; text-shadow: 0 1px 1px rgba(0,0,0,.25); }
@@ -169,7 +169,7 @@ export const FichaMatriculaModal: React.FC<Props> = ({ cooperado, onClose }) => 
       email: config?.emailOficial || currentTenant?.email || '',
       telefone: config?.telefoneOficial || currentTenant?.telefone || '',
       cnpj: config?.cnpj || currentTenant?.cnpj || '',
-      logo: config?.logoUrl || currentTenant?.logoUrl || '',
+      logo: currentTenant?.logoUrl || config?.logoUrl || '',
       presidente,
     });
   }, [cooperado, config, currentTenant, mandatos]);
