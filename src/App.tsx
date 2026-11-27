@@ -8,6 +8,8 @@ import { PwaInstallPrompt } from './components/PwaInstallPrompt';
 // Telas de entrada: carregadas junto com o app porque são a primeira coisa que
 // um visitante não autenticado vê. Esperar um chunk aqui atrasaria o login.
 import { LoginView } from './views/LoginView';
+import { ValidarCnpjView } from './views/ValidarCnpjView';
+import { cnpjJaValidado, marcarCnpjValidado } from './services/validacaoCnpjSessao';
 
 /**
  * Os demais módulos entram por import dinâmico.
@@ -160,6 +162,12 @@ const MainAppContent: React.FC = () => {
 
   const isConfigAllowed = ['ADMIN', 'PRESIDENTE', 'DIRETOR_FINANCEIRO'].includes(currentUser?.role);
 
+  // Após o login, o CNPJ da cooperativa precisa ser confirmado (uma vez por aba).
+  const [cnpjConfirmado, setCnpjConfirmado] = useState<boolean>(false);
+  useEffect(() => {
+    setCnpjConfirmado(isAuthenticated && cnpjJaValidado(currentUser?.id, currentTenant?.id));
+  }, [isAuthenticated, currentUser?.id, currentTenant?.id]);
+
   // Standalone Portal Shell — sempre que o link de acesso do portal é aberto
   // (via ?portal=... ou #portal-name na URL), o menu lateral do ERP fica
   // oculto, mesmo que o navegador já tenha uma sessão administrativa ativa.
@@ -258,6 +266,23 @@ const MainAppContent: React.FC = () => {
           }} />
         </Suspense>
       </main>
+    );
+  }
+
+  // Etapa de validação do CNPJ, logo depois do login.
+  if (!cnpjConfirmado && !cnpjJaValidado(currentUser?.id, currentTenant?.id)) {
+    return (
+      <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans justify-center">
+        <ValidarCnpjView
+          onValidado={() => setCnpjConfirmado(true)}
+          onAbrirCadastro={() => {
+            // Sem CNPJ no cadastro: libera só para o administrador completar.
+            marcarCnpjValidado(currentUser?.id, currentTenant?.id);
+            setCnpjConfirmado(true);
+            setActiveModule('cadastro-cooperativa');
+          }}
+        />
+      </div>
     );
   }
 

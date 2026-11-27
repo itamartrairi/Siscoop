@@ -139,6 +139,7 @@ import { PLANO_CONTAS_COOPERATIVA, migrarLancamentosContabeis, CODIGO_BANCO_PADR
 import { publicarPortalEscolas, ouvirComprovantesPortal } from '../services/portalEscolaRemoto';
 import { publicarPortalMotoristas, ouvirAtualizacoesMotoristas, mesclarParadas } from '../services/portalMotoristaRemoto';
 import { publicarPortalCooperados, publicarPortalProdutores, ouvirOfertasProdutores } from '../services/portalCooperadoProdutorRemoto';
+import { limparValidacoesCnpj, marcarCnpjValidado } from '../services/validacaoCnpjSessao';
 
 
 export const DEFAULT_ROLE_PERMISSIONS: RolePermissionsMap = {
@@ -1621,6 +1622,9 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }));
 
+    // Quem acabou de cadastrar a cooperativa já digitou o CNPJ: não pede de novo.
+    marcarCnpjValidado(currentUser?.id, newTenant.id);
+
     // Also update current user tenant ID if admin
     if (currentUser) {
       setCurrentUser(prev => ({ ...prev, tenantId: newTenant.id }));
@@ -1923,6 +1927,7 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
+    limparValidacoesCnpj();
     try {
       await signOut(auth);
     } catch (e) {
