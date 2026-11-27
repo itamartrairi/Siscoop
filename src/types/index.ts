@@ -180,6 +180,47 @@ export interface Cooperado {
   nomeUsual?: string;
   aptoAVotar?: boolean;
   falecido?: boolean;
+
+  // Campos da planilha TB-01 (Cadastro do sócio)
+  situacaoConjugal?: string;
+  dataAdmissao2?: string;
+  dataDemissao?: string;
+  motivoDemissao?: string;
+  dataAtualizacaoCadastro?: string;
+  presidenteAdmissao?: string;
+  sea?: boolean;
+  tf?: boolean;
+  cnis?: string;
+  numPessoasCasa?: number;
+  correspTipoLogradouro?: string;
+  correspLogradouro?: string;
+  correspNumero?: string;
+  correspComplemento?: string;
+  correspCep?: string;
+  foneTrabalho?: string;
+  temWhatsapp1?: boolean;
+  celular2?: string;
+  temWhatsapp2?: boolean;
+  foneTerceiros?: string;
+  foneFilho?: string;
+  temWhatsappFilho?: boolean;
+  grauRelacionamentoContato?: string;
+  temWhatsapp3?: boolean;
+  temFoneContato?: boolean;
+  temWa?: boolean;
+  email2?: string;
+  celularConjuge?: string;
+  temWhatsappConjuge?: boolean;
+  banco2?: string;
+  agencia2?: string;
+  conta2?: string;
+  tipoConta2?: string;
+  docIdentidadeDig?: boolean;
+  docCpfDig?: boolean;
+  docDapDig?: boolean;
+  docCnhDig?: boolean;
+  docCertidaoCasamentoDig?: boolean;
+  docComprovanteResidenciaDig?: boolean;
 }
 
 export type TipoTransacaoCapital = 

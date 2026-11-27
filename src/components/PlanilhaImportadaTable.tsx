@@ -18,7 +18,6 @@ import {
   Eye,
   X,
   Upload,
-  RefreshCw,
   Building2,
   Users,
   Wallet,
@@ -28,7 +27,7 @@ import {
 import jsPDF from 'jspdf';
 
 export const PlanilhaImportadaTable: React.FC = () => {
-  const { cooperados, restaurarCooperadosBaseCompleta } = useCoop();
+  const { cooperados } = useCoop();
   const [dataList, setDataList] = useState(() => cooperados.map(c => sanitizeCooperado(c as any)));
 
   useEffect(() => {
@@ -290,18 +289,6 @@ export const PlanilhaImportadaTable: React.FC = () => {
               className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors"
             >
               <Upload className="w-3.5 h-3.5" /> Importar CSV / Excel
-            </button>
-
-            <button
-              onClick={() => {
-                restaurarCooperadosBaseCompleta();
-                setUploadSuccessMsg('Base oficial de 1.718 cooperados do Trairi restaurada com sucesso!');
-                setTimeout(() => setUploadSuccessMsg(null), 4000);
-              }}
-              className="px-3.5 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors"
-              title="Anular exclusões e re-incluir todos os cooperados do Trairi"
-            >
-              <RefreshCw className="w-3.5 h-3.5" /> Restaurar Base (1.718)
             </button>
           </div>
         </div>

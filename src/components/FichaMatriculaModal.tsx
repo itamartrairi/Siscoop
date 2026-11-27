@@ -73,8 +73,11 @@ function topoHtml(coop: DadosCooperativa) {
   </div>`;
 }
 
-/** Data e motivo do desligamento, quando o cooperado já saiu do quadro social. */
+/** Data e motivo do desligamento: campos do cadastro (TB-01) ou, na falta deles, o histórico. */
 function desligamento(c: Cooperado) {
+  if (c.dataDemissao || c.motivoDemissao) {
+    return { data: data(c.dataDemissao), motivo: up(c.motivoDemissao) };
+  }
   const desligado = SITUACOES_DESLIGADO.includes(String(c.situacao));
   const evento = desligado
     ? [...(c.historico || [])].reverse().find(h => /demiss|exclus|elimina|deslig|falec/i.test(`${h.acao} ${h.detalhes}`))
@@ -138,7 +141,7 @@ ${TOPO_CSS}
   ${linha(campo('CIDADE/UF', up(cidadeUf)), campo('CEP', esc(c.cep)))}
   ${linha(campo('FONE', esc(fone)), campo('E-MAIL', esc((c.email || '').toLowerCase())))}
   ${linha(campo('BANCO', up(c.banco), 1.3), campo('AGÊNCIA', esc(c.agencia), 0.9, true), campo('CONTA', esc(c.conta), 0.9, true), campo('TIPO', tipoConta, 1, true))}
-  ${linha(campo('BANCO', '', 1.3), campo('AGÊNCIA', '', 0.9, true), campo('CONTA', '', 0.9, true), campo('TIPO', '', 1, true))}
+  ${linha(campo('BANCO', up(c.banco2), 1.3), campo('AGÊNCIA', esc(c.agencia2), 0.9, true), campo('CONTA', esc(c.conta2), 0.9, true), campo('TIPO', up(c.tipoConta2), 1, true))}
 
   <h2>DECLARAÇÃO - COMPROMISSO ESTATUTÁRIO</h2>
   <p class="declaracao">O cooperado acima qualificado declara a quem possa interessar, por meio da presente declaração, para que esta
@@ -199,7 +202,7 @@ ${TOPO_CSS}
   ${linha(caixa('MÃE', up(c.nomeMae)))}
   ${linha(caixa('Profissão', up(c.profissao)))}
   ${linha(caixa('Naturalidade', up(c.naturalidade), '190px'), caixa('Nacionalidade', up(c.nacionalidade), '100%', 'right'))}
-  ${linha(caixa('Estado civil', esc(ESTADO_CIVIL[c.estadoCivil] || ''), '190px'), caixa('Situação conjugal', esc(ESTADO_CIVIL[c.estadoCivil] || ''), '100%', 'right'))}
+  ${linha(caixa('Estado civil', esc(ESTADO_CIVIL[c.estadoCivil] || ''), '190px'), caixa('Situação conjugal', up(c.situacaoConjugal) || esc(ESTADO_CIVIL[c.estadoCivil] || ''), '100%', 'right'))}
   ${linha(caixa('Regime de bens', up(c.regimeBens), '190px'))}
   ${linha(caixa('Nome do Cônjuge', up(c.nomeConjuge)), caixa('CPF', esc(c.cpfConjuge), '100%', 'right'))}
   ${linha(caixa('DAP', esc(c.dapCaf)), caixa('Fone celular 1', esc(fone), '100%', 'right'))}
