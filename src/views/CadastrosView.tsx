@@ -201,7 +201,6 @@ export const CadastrosView: React.FC = () => {
     updateProdutor,
     deleteProdutor,
     syncCooperadosWithProdutores,
-    restaurarCooperadosBaseCompleta,
     produtos,
     addProduto,
     updateProduto,

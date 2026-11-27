@@ -25,7 +25,7 @@ interface ImportarCsvModalProps {
 }
 
 export const ImportarCsvModal: React.FC<ImportarCsvModalProps> = ({ isOpen, onClose }) => {
-  const { importarCooperadosCSV, restaurarCooperadosBaseCompleta } = useCoop();
+  const { importarCooperadosCSV } = useCoop();
 
   const [activeTab, setActiveTab] = useState<'FILE' | 'DRIVE' | 'PASTE' | null>(null);
   const [pastedText, setPastedText] = useState('');
@@ -440,31 +440,6 @@ export const ImportarCsvModal: React.FC<ImportarCsvModalProps> = ({ isOpen, onCl
             </div>
           )}
 
-          {/* Option to restore full 1,718 base */}
-          <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-amber-50/60 dark:bg-amber-950/20 p-4 rounded-2xl border border-amber-200 dark:border-amber-900/50">
-            <div>
-              <p className="text-xs font-bold text-amber-900 dark:text-amber-300">
-                Anular exclusões e restaurar base oficial Trairi?
-              </p>
-              <p className="text-[11px] text-amber-700 dark:text-amber-400">
-                Restaura instantaneamente todos os 1.718 cooperados oficiais importados da planilha.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                restaurarCooperadosBaseCompleta();
-                setFeedback({
-                  type: 'success',
-                  message: 'Base oficial de 1.718 cooperados do Trairi restaurada e sincronizada!'
-                });
-                setTimeout(() => onClose(), 1500);
-              }}
-              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer shrink-0"
-            >
-              Restaurar Base (1.718 Cooperados)
-            </button>
-          </div>
         </div>
 
         {/* Modal Footer */}

@@ -544,7 +544,6 @@ interface CoopContextType {
   updateCooperado: (id: string, updatedData: Partial<Cooperado>) => boolean;
   deleteCooperado: (id: string) => void;
   deleteAllCooperados: () => number;
-  restaurarCooperadosBaseCompleta: () => void;
   importarCooperadosCSV: (parsedRows: any[]) => { success: boolean; totalInseridos: number; totalAtualizados: number; message: string };
   syncCooperadosWithProdutores: (targetCooperados?: Cooperado[]) => void;
   fetchAddressByCep: (cep: string) => Promise<{ logradouro: string; bairro: string; cidade: string; estado: string } | null>;
@@ -2416,13 +2415,6 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return updatedProdutores;
     });
-  };
-
-  const restaurarCooperadosBaseCompleta = () => {
-    const fullList = INITIAL_COOPERADOS.map(c => sanitizeCooperado(c));
-    setCooperados(fullList);
-    syncCooperadosWithProdutores(fullList);
-    addAuditLog('COOPERADOS', 'INCLUSAO', `Anulou exclusões e restaurou a base completa de ${fullList.length} cooperados do Trairi.`);
   };
 
   const importarCooperadosCSV = (rows: any[]): { success: boolean; totalInseridos: number; totalAtualizados: number; message: string } => {
@@ -5713,7 +5705,6 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         gerarNotaFiscalEntradaProdutor,
         gerarNotaFiscalSaidaEscola,
 
-        restaurarCooperadosBaseCompleta,
         importarCooperadosCSV,
         syncCooperadosWithProdutores,
 
