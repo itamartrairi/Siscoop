@@ -92,8 +92,12 @@ export const Header: React.FC<Props> = ({ activeView = 'dashboard', setActiveVie
             {viewTitles[activeView] || 'SisCoope'}
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
           </h1>
-          <p className="text-[11px] text-slate-500 font-mono">
-            {currentTenant.name} <span className="text-slate-300">•</span> CNPJ {currentTenant.cnpj}
+          <p className="flex items-center gap-1.5 leading-tight">
+            <span className="text-[13px] font-extrabold text-emerald-700 tracking-tight truncate max-w-[42vw]" title={currentTenant.name}>
+              {currentTenant.name}
+            </span>
+            <span className="text-slate-300">•</span>
+            <span className="text-[11px] text-slate-500 font-mono whitespace-nowrap">CNPJ {currentTenant.cnpj}</span>
           </p>
         </div>
       </div>
