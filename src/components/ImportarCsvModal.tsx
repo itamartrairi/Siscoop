@@ -1,10 +1,9 @@
 import { NavegacaoSecoes } from './ui/NavegacaoSecoes';
 import React, { useState } from 'react';
 import { useCoop } from '../context/CoopContext';
-import { sanitizeCooperado, isCpfPattern, isRgPattern, isMatriculaPattern, isNamePattern } from '../utils/cooperadoSanitizer';
 import { GooglePickerButton } from './GooglePickerButton';
 import { fetchGoogleDriveFileBlob, PickedGoogleFile } from '../services/googlePickerService';
-import * as XLSX from '@e965/xlsx';
+import { lerPlanilhaCooperados, baixarPlanilhaTB01, pareceTB01, COLUNAS_TB01, type LinhaImportada } from '../services/planilhaTB01';
 import {
   Upload,
   FileSpreadsheet,
@@ -25,89 +24,46 @@ interface ImportarCsvModalProps {
 }
 
 export const ImportarCsvModal: React.FC<ImportarCsvModalProps> = ({ isOpen, onClose }) => {
-  const { importarCooperadosCSV } = useCoop();
+  const { importarCooperadosCSV, cooperados, currentTenant } = useCoop();
 
   const [activeTab, setActiveTab] = useState<'FILE' | 'DRIVE' | 'PASTE' | null>(null);
   const [pastedText, setPastedText] = useState('');
-  const [parsedRows, setParsedRows] = useState<any[]>([]);
+  const [parsedRows, setParsedRows] = useState<LinhaImportada[]>([]);
+  const [colunasIgnoradas, setColunasIgnoradas] = useState<string[]>([]);
+  const [linhasIgnoradas, setLinhasIgnoradas] = useState<string[]>([]);
+  const [limparVazios, setLimparVazios] = useState(true);
   const [fileName, setFileName] = useState('');
   const [isLoadingDrive, setIsLoadingDrive] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   if (!isOpen) return null;
 
-  // Function to parse CSV/TSV text into objects
-  const parseCsvContent = (text: string) => {
-    if (!text || !text.trim()) return [];
-
-    const lines = text.trim().split(/\r?\n/).filter(line => line.trim().length > 0);
-    if (lines.length === 0) return [];
-
-    // Detect delimiter: comma, semicolon, or tab
-    const firstLine = lines[0];
-    let delimiter = ',';
-    if (firstLine.includes('\t')) delimiter = '\t';
-    else if (firstLine.includes(';')) delimiter = ';';
-
-    const rawHeaders = firstLine.split(delimiter).map(h => h.replace(/^["']|["']$/g, '').trim());
-
-    // Check if first line is a header row by checking header names
-    const headerLower = rawHeaders.map(h => h.toLowerCase());
-    const isHeaderRow = headerLower.some(h => 
-      h.includes('nome') || h.includes('cpf') || h.includes('matr') || h.includes('socio') || h.includes('sócio') || h.includes('rg')
-    );
-
-    const startIndex = isHeaderRow ? 1 : 0;
-    const result: any[] = [];
-
-    for (let i = startIndex; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
-
-      const cols = line.split(delimiter).map(c => c.replace(/^["']|["']$/g, '').trim());
-      const rowObj: Record<string, any> = {};
-
-      if (isHeaderRow) {
-        rawHeaders.forEach((header, idx) => {
-          const val = cols[idx] !== undefined ? cols[idx] : '';
-          rowObj[header] = val;
-
-          const hNorm = header.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-          if (hNorm.includes('nome') || hNorm.includes('cooperado') || hNorm.includes('socio') || hNorm.includes('produtor')) {
-            rowObj['nome'] = val;
-          }
-          if (hNorm.includes('cpf') || hNorm.includes('cnpj') || hNorm.includes('documento')) {
-            rowObj['cpf'] = val;
-          }
-          if (hNorm.includes('matr') || hNorm.includes('cod') || hNorm.includes('no') || hNorm.includes('num')) {
-            rowObj['matricula'] = val;
-          }
-          if (hNorm.includes('rg') || hNorm.includes('identidade')) {
-            rowObj['rg'] = val;
-          }
-          if (hNorm.includes('dap') || hNorm.includes('caf')) {
-            rowObj['dapCaf'] = val;
-          }
-          if (hNorm.includes('comunidade') || hNorm.includes('localidade') || hNorm.includes('bairro')) {
-            rowObj['localidadeComunidade'] = val;
-          }
+  /** Lê a planilha (arquivo ou texto colado) no layout TB-01 e mostra a prévia. */
+  const processar = (dados: ArrayBuffer | string, origem: string) => {
+    setFeedback(null);
+    setLinhasIgnoradas([]);
+    try {
+      const { linhas, colunasReconhecidas, colunasIgnoradas: ignoradas } = lerPlanilhaCooperados(dados);
+      if (!pareceTB01(colunasReconhecidas) || linhas.length === 0) {
+        setParsedRows([]);
+        setColunasIgnoradas([]);
+        setFeedback({
+          type: 'error',
+          message: 'Não reconheci o layout da planilha. A primeira linha precisa ter os cabeçalhos do modelo TB-01 (baixe o modelo para conferir).',
         });
-      } else {
-        // No header row - use smart column content analysis
-        cols.forEach(val => {
-          if (isCpfPattern(val) && !rowObj['cpf']) rowObj['cpf'] = val;
-          else if (isRgPattern(val) && !rowObj['rg']) rowObj['rg'] = val;
-          else if (isMatriculaPattern(val) && !rowObj['matricula']) rowObj['matricula'] = val;
-          else if (isNamePattern(val) && !rowObj['nome']) rowObj['nome'] = val;
-        });
+        return;
       }
-
-      // Sanitize and re-align any remaining misplaced fields
-      const sanitized = sanitizeCooperado(rowObj);
-      result.push(sanitized);
+      setParsedRows(linhas);
+      setColunasIgnoradas(ignoradas);
+      setFeedback({
+        type: 'success',
+        message: `${linhas.length} sócio(s) lidos de ${origem}, com ${colunasReconhecidas.length} coluna(s) reconhecida(s). Confira a prévia abaixo.`,
+      });
+    } catch (err: any) {
+      console.error('Erro ao ler planilha de cooperados:', err);
+      setParsedRows([]);
+      setFeedback({ type: 'error', message: `Não foi possível ler a planilha: ${err?.message || 'arquivo inválido'}` });
     }
-
-    return result;
   };
 
   const handleGoogleDriveFilesPicked = async (files: PickedGoogleFile[]) => {
@@ -116,48 +72,9 @@ export const ImportarCsvModal: React.FC<ImportarCsvModalProps> = ({ isOpen, onCl
     setFileName(picked.name);
     setIsLoadingDrive(true);
     setFeedback(null);
-
     try {
       const blob = await fetchGoogleDriveFileBlob(picked.id, picked.mimeType);
-
-      // If it's a binary Excel file (.xlsx / .xls) or Google Spreadsheet exported as XLSX
-      if (
-        picked.mimeType === 'application/vnd.google-apps.spreadsheet' ||
-        picked.mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-        picked.mimeType === 'application/vnd.ms-excel' ||
-        picked.name.endsWith('.xlsx') ||
-        picked.name.endsWith('.xls')
-      ) {
-        const arrayBuffer = await blob.arrayBuffer();
-        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-        const csvGenerated = XLSX.utils.sheet_to_csv(worksheet, { FS: ';' });
-
-        const rows = parseCsvContent(csvGenerated);
-        if (rows.length === 0) {
-          setFeedback({ type: 'error', message: 'Nenhum cooperado válido encontrado na planilha selecionada do Google Drive.' });
-        } else {
-          setParsedRows(rows);
-          setFeedback({
-            type: 'success',
-            message: `${rows.length} registros extraídos da planilha "${picked.name}" do Google Drive!`
-          });
-        }
-      } else {
-        // Plain CSV/TSV text file
-        const text = await blob.text();
-        const rows = parseCsvContent(text);
-        if (rows.length === 0) {
-          setFeedback({ type: 'error', message: 'Nenhum cooperado válido encontrado no arquivo do Google Drive.' });
-        } else {
-          setParsedRows(rows);
-          setFeedback({
-            type: 'success',
-            message: `${rows.length} registros extraídos do arquivo "${picked.name}" do Google Drive!`
-          });
-        }
-      }
+      processar(await blob.arrayBuffer(), `"${picked.name}" do Google Drive`);
     } catch (err: any) {
       console.error('Erro ao ler arquivo do Google Drive:', err);
       setFeedback({ type: 'error', message: `Erro ao acessar o Google Drive: ${err?.message || 'Falha na conexão'}` });
@@ -170,93 +87,54 @@ export const ImportarCsvModal: React.FC<ImportarCsvModalProps> = ({ isOpen, onCl
     setFeedback(null);
     const file = e.target.files?.[0];
     if (!file) return;
-
     setFileName(file.name);
     const reader = new FileReader();
-
     reader.onload = (evt) => {
-      const text = evt.target?.result as string;
-      if (!text) {
+      const buffer = evt.target?.result;
+      if (!(buffer instanceof ArrayBuffer) || buffer.byteLength === 0) {
         setFeedback({ type: 'error', message: 'O arquivo está vazio ou ilegível.' });
         return;
       }
-
-      const rows = parseCsvContent(text);
-      if (rows.length === 0) {
-        setFeedback({ type: 'error', message: 'Nenhuma linha válida de dados foi identificada.' });
-      } else {
-        setParsedRows(rows);
-        setFeedback({
-          type: 'success',
-          message: `${rows.length} registros identificados no arquivo "${file.name}". Confira a prévia abaixo.`
-        });
-      }
+      processar(buffer, `"${file.name}"`);
     };
-
-    reader.onerror = () => {
-      setFeedback({ type: 'error', message: 'Falha ao ler o arquivo selecionado.' });
-    };
-
-    reader.readAsText(file, 'UTF-8');
+    reader.onerror = () => setFeedback({ type: 'error', message: 'Falha ao ler o arquivo selecionado.' });
+    reader.readAsArrayBuffer(file);
+    e.target.value = '';
   };
 
   const handlePasteProcess = () => {
-    setFeedback(null);
     if (!pastedText.trim()) {
-      setFeedback({ type: 'error', message: 'Cole o conteúdo da planilha no campo de texto.' });
+      setFeedback({ type: 'error', message: 'Cole o conteúdo da planilha no campo de texto, incluindo a linha de cabeçalhos.' });
       return;
     }
-
-    const rows = parseCsvContent(pastedText);
-    if (rows.length === 0) {
-      setFeedback({ type: 'error', message: 'Não foi possível extrair colunas do texto colado.' });
-    } else {
-      setParsedRows(rows);
-      setFeedback({
-        type: 'success',
-        message: `${rows.length} linhas processadas com sucesso do texto colado.`
-      });
-    }
+    processar(pastedText, 'texto colado');
   };
 
   const handleConfirmImport = () => {
     if (parsedRows.length === 0) {
-      setFeedback({ type: 'error', message: 'Processe um arquivo CSV/Excel antes de confirmar a importação.' });
+      setFeedback({ type: 'error', message: 'Processe uma planilha antes de confirmar a importação.' });
       return;
     }
-
-    const res = importarCooperadosCSV(parsedRows);
+    const res = importarCooperadosCSV(parsedRows, { limparVazios });
+    setLinhasIgnoradas(res.ignorados);
+    setFeedback({ type: res.success ? 'success' : 'error', message: res.message });
     if (res.success) {
-      setFeedback({ type: 'success', message: res.message });
-      setTimeout(() => {
-        onClose();
-        setParsedRows([]);
-        setPastedText('');
-        setFileName('');
-        setFeedback(null);
-      }, 1500);
-    } else {
-      setFeedback({ type: 'error', message: res.message });
+      setParsedRows([]);
+      setPastedText('');
+      setFileName('');
+      if (res.ignorados.length === 0) setTimeout(() => { setFeedback(null); onClose(); }, 1800);
     }
   };
 
-  const handleDownloadTemplate = () => {
-    const csvHeader = 'Matrícula;Nome Completo;CPF;RG;Comunidade/Localidade;DAP/CAF;Telefone;Cidade;Estado;Capital Integralizado (R$)\n';
-    const sampleRows = [
-      'IMP-001;JOAO DA SILVA ALVES;123.456.789-00;1234567 SSP-CE;SEDE;SIM;(85) 99888-1111;Trairi;CE;1000',
-      'IMP-002;MARIA DAS GRACAS MENEZES;987.654.321-11;7654321 SSP-CE;GUAIRAS;SIM;(85) 99777-2222;Trairi;CE;1500',
-      'IMP-003;ANTONIO PEREIRA LIMA;456.789.123-22;9876543 SSP-CE;CANAAN;SIM;(85) 99666-3333;Trairi;CE;1000'
-    ].join('\n');
-
-    const blob = new Blob(['\uFEFF' + csvHeader + sampleRows], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', 'Modelo_Importacao_Cooperados_SisCoope.csv');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const nomeArquivoExportacao = () => {
+    const data = new Date().toISOString().slice(0, 10);
+    const coop = (currentTenant?.name || 'cooperativa').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '-');
+    return `TB-01-Cadastro-do-socio-${coop}-${data}.xlsx`;
   };
+
+  const cooperadosDaCoop = (cooperados || [])
+    .filter(c => !c.tenantId || c.tenantId === currentTenant?.id)
+    .sort((a, b) => (Number(a.matricula) || 0) - (Number(b.matricula) || 0) || String(a.matricula).localeCompare(String(b.matricula)));
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
@@ -268,7 +146,7 @@ export const ImportarCsvModal: React.FC<ImportarCsvModalProps> = ({ isOpen, onCl
               <FileSpreadsheet className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="text-lg font-black text-white">Importar Cooperados da Planilha CSV / Excel</h3>
+              <h3 className="text-lg font-black text-white">Importar Cooperados — Planilha TB-01 (Cadastro do sócio)</h3>
               <p className="text-xs text-slate-400">
                 Sincronize cadastros com vinculação direta aos módulos Produtor, Assembleia, Diretoria e Relatórios
               </p>
@@ -288,18 +166,31 @@ export const ImportarCsvModal: React.FC<ImportarCsvModalProps> = ({ isOpen, onCl
           <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700">
             <div className="w-full">
               <NavegacaoSecoes selecionada={activeTab !== null} voltar={() => setActiveTab(null)} secoes={[
-                  { titulo: "Arquivo Local (.CSV / .TSV)", descricao: "Selecione o arquivo salvo no computador.", icone: Upload, abrir: () => setActiveTab('FILE') },
+                  { titulo: "Arquivo do computador (.xlsx / .csv)", descricao: "Selecione a planilha salva no computador.", icone: Upload, abrir: () => setActiveTab('FILE') },
                   { titulo: "Google Drive", descricao: "Escolha um arquivo do seu Drive.", icone: Cloud, abrir: () => setActiveTab('DRIVE') },
                   { titulo: "Copiar & Colar", descricao: "Cole as linhas da planilha no formulário.", icone: FileText, abrir: () => setActiveTab('PASTE') }
               ]} />
             </div>
 
-            <button
-              onClick={handleDownloadTemplate}
-              className="px-3 py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <Download className="w-3.5 h-3.5" /> Baixar Modelo CSV
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => baixarPlanilhaTB01([], 'TB-01-Cadastro-do-socio-modelo.xlsx')}
+                className="px-3 py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                title={`Planilha em branco com as ${COLUNAS_TB01.length} colunas do cadastro do sócio`}
+              >
+                <Download className="w-3.5 h-3.5" /> Baixar modelo TB-01 (em branco)
+              </button>
+              <button
+                type="button"
+                onClick={() => baixarPlanilhaTB01(cooperadosDaCoop, nomeArquivoExportacao())}
+                disabled={cooperadosDaCoop.length === 0}
+                className="px-3 py-1.5 bg-emerald-100 dark:bg-emerald-900/40 hover:bg-emerald-200 text-emerald-800 dark:text-emerald-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Baixa o cadastro atual no layout TB-01, para conferir, editar e importar de volta"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" /> Exportar cadastro atual ({cooperadosDaCoop.length})
+              </button>
+            </div>
           </div>
 
           {/* Feedback message */}
@@ -325,7 +216,7 @@ export const ImportarCsvModal: React.FC<ImportarCsvModalProps> = ({ isOpen, onCl
             <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-emerald-500 rounded-3xl p-8 text-center transition-colors bg-slate-50/50 dark:bg-slate-850">
               <input
                 type="file"
-                accept=".csv,.tsv,.txt"
+                accept=".xlsx,.xls,.ods,.csv,.tsv,.txt"
                 onChange={handleFileUpload}
                 className="hidden"
                 id="csv-file-input"
@@ -339,10 +230,10 @@ export const ImportarCsvModal: React.FC<ImportarCsvModalProps> = ({ isOpen, onCl
                 </div>
                 <div>
                   <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                    {fileName ? `Arquivo selecionado: ${fileName}` : 'Clique para selecionar seu arquivo CSV / Excel'}
+                    {fileName ? `Arquivo selecionado: ${fileName}` : 'Clique para selecionar a planilha TB-01 (Excel ou CSV)'}
                   </p>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    Suporta arquivos delimitados por vírgula (,), ponto e vírgula (;) ou Tab.
+                    Aceita .xlsx, .xls, .ods e .csv. A primeira linha deve ter os cabeçalhos do modelo TB-01.
                   </p>
                 </div>
               </label>
@@ -391,7 +282,7 @@ export const ImportarCsvModal: React.FC<ImportarCsvModalProps> = ({ isOpen, onCl
                 rows={6}
                 value={pastedText}
                 onChange={e => setPastedText(e.target.value)}
-                placeholder="Cole aqui as linhas copiadas da planilha... Exemplo:&#10;Matrícula&#9;Nome Completo&#9;CPF&#10;IMP-001&#9;JOAO DA SILVA&#9;123.456.789-00"
+                placeholder="Copie da planilha TB-01 a linha de cabeçalhos e as linhas dos sócios, e cole aqui."
                 className="w-full p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl font-mono text-xs text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-emerald-500"
               />
               <button
@@ -421,22 +312,52 @@ export const ImportarCsvModal: React.FC<ImportarCsvModalProps> = ({ isOpen, onCl
                       <th className="p-2.5">Nome</th>
                       <th className="p-2.5">CPF</th>
                       <th className="p-2.5">Comunidade</th>
-                      <th className="p-2.5">DAP/CAF</th>
+                      <th className="p-2.5">Admissão</th>
+                      <th className="p-2.5">Situação</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-slate-800 dark:text-slate-200">
                     {parsedRows.slice(0, 5).map((row, i) => (
                       <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                        <td className="p-2.5 font-mono">{row.matricula || row.Matricula || `IMP-${i+1}`}</td>
-                        <td className="p-2.5 font-semibold">{row.nome || row.nomeCompleto || row['Nome Completo'] || row['Nome'] || 'N/I'}</td>
-                        <td className="p-2.5 font-mono">{row.cpf || row.CPF || '000.000.000-00'}</td>
-                        <td className="p-2.5">{row.comunidade || row.localidadeComunidade || row['Comunidade'] || 'SEDE'}</td>
-                        <td className="p-2.5">{row.dapCaf || row['DAP/CAF'] || row['DAP'] || 'SIM'}</td>
+                        <td className="p-2.5 font-mono">{row.matricula || '—'}</td>
+                        <td className="p-2.5 font-semibold">{row.nome || '—'}</td>
+                        <td className="p-2.5 font-mono">{row.cpf || '—'}</td>
+                        <td className="p-2.5">{row.localidadeComunidade || '—'}</td>
+                        <td className="p-2.5 font-mono">{row.dataFiliacao ? row.dataFiliacao.split('-').reverse().join('/') : '—'}</td>
+                        <td className="p-2.5">{row.situacao || 'ATIVO'}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+            </div>
+          )}
+
+          {parsedRows.length > 0 && (
+            <div className="space-y-3">
+              {colunasIgnoradas.length > 0 && (
+                <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                  Colunas não reconhecidas (serão ignoradas): {colunasIgnoradas.join(', ')}
+                </p>
+              )}
+              <label className="flex items-start gap-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
+                <input type="checkbox" className="mt-0.5" checked={limparVazios} onChange={e => setLimparVazios(e.target.checked)} />
+                <span>
+                  <strong>A planilha manda:</strong> célula vazia apaga o dado que estiver no sistema.
+                  Desmarque para manter o que já existe no sistema quando a célula estiver vazia.
+                </span>
+              </label>
+            </div>
+          )}
+
+          {linhasIgnoradas.length > 0 && (
+            <div className="p-3 rounded-2xl border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 space-y-1">
+              <p className="text-xs font-bold text-amber-900 dark:text-amber-300">
+                {linhasIgnoradas.length} linha(s) não importada(s):
+              </p>
+              <ul className="text-[11px] text-amber-800 dark:text-amber-400 max-h-40 overflow-y-auto list-disc pl-4">
+                {linhasIgnoradas.map((m, i) => <li key={i}>{m}</li>)}
+              </ul>
             </div>
           )}
 

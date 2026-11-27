@@ -44,6 +44,7 @@ import {
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { FichaMatriculaModal, type ModeloFicha } from '../components/FichaMatriculaModal';
+import { COLUNAS_TB01, type AbaCadastro } from '../services/planilhaTB01';
 import { ReceiptModal } from '../components/ReceiptModal';
 import { GeoLocationPicker } from '../components/GeoLocationPicker';
 
@@ -449,6 +450,55 @@ function filtroCpf(cpf: Cooperado['cpf'], termo: string) {
   return /^[\d.\s-]+$/.test(termo) && digitos.length > 0 &&
     String(cpf ?? '').replace(/\D/g, '').includes(digitos);
 }
+
+/**
+ * Campos do cadastro que vêm da planilha TB-01 e não têm um campo próprio no
+ * formulário. São mostrados no fim de cada aba, num bloco "Dados da planilha TB-01".
+ */
+const CamposTB01: React.FC<{
+  aba: AbaCadastro;
+  dados: Record<string, any>;
+  alterar: (campo: string, valor: unknown) => void;
+}> = ({ aba, dados, alterar }) => {
+  const campos = COLUNAS_TB01.filter(c => c.aba === aba && !c.noFormulario);
+  if (campos.length === 0) return null;
+  const estilo = 'w-full p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white';
+  return (
+    <fieldset className="mt-6 border-t border-slate-200 dark:border-slate-700 pt-4">
+      <legend className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 pr-2">
+        Dados da planilha TB-01
+      </legend>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+        {campos.map(c => {
+          const valor = dados[c.campo as string];
+          const id = `tb01-${String(c.campo)}`;
+          if (c.tipo === 'bool' || c.tipo === 'sn') {
+            return (
+              <label key={id} htmlFor={id} className="flex items-center gap-2 text-slate-700 dark:text-slate-300 font-medium cursor-pointer">
+                <input id={id} type="checkbox" checked={valor === true} onChange={e => alterar(c.campo as string, e.target.checked)} />
+                {c.rotulo}
+              </label>
+            );
+          }
+          return (
+            <div key={id}>
+              <label htmlFor={id} className="block text-slate-700 dark:text-slate-300 font-medium mb-1">{c.rotulo}</label>
+              <input
+                id={id}
+                type={c.tipo === 'data' ? 'date' : c.tipo === 'numero' ? 'number' : 'text'}
+                value={valor ?? ''}
+                onChange={e => alterar(c.campo as string, c.tipo === 'numero'
+                  ? (e.target.value === '' ? undefined : Number(e.target.value))
+                  : e.target.value)}
+                className={estilo}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+};
 
 export const CooperadosView: React.FC = () => {
   const {
@@ -1381,6 +1431,10 @@ export const CooperadosView: React.FC = () => {
               )}
 
               {/* TAB: CAPITAL SOCIAL & COTAS */}
+              {activeTab === 'geral' && (
+                <CamposTB01 aba="geral" dados={formData as Record<string, any>} alterar={(campo, valor) => setFormData(prev => ({ ...prev, [campo]: valor }))} />
+              )}
+
               {activeTab === 'capital' && (
                 <div className="space-y-5 text-xs">
                   {/* Summary Cards */}
@@ -1680,6 +1734,10 @@ export const CooperadosView: React.FC = () => {
               )}
 
               {/* TAB 3: CONTATOS */}
+              {activeTab === 'endereco' && (
+                <CamposTB01 aba="endereco" dados={formData as Record<string, any>} alterar={(campo, valor) => setFormData(prev => ({ ...prev, [campo]: valor }))} />
+              )}
+
               {activeTab === 'contatos' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                   <div>
@@ -1741,6 +1799,10 @@ export const CooperadosView: React.FC = () => {
               )}
 
               {/* TAB 4: DOCUMENTOS */}
+              {activeTab === 'contatos' && (
+                <CamposTB01 aba="contatos" dados={formData as Record<string, any>} alterar={(campo, valor) => setFormData(prev => ({ ...prev, [campo]: valor }))} />
+              )}
+
               {activeTab === 'documentos' && (
                 <div className="space-y-4 text-xs">
                   <div className="p-4 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl text-center">
@@ -1794,6 +1856,10 @@ export const CooperadosView: React.FC = () => {
               )}
 
               {/* TAB 5: DADOS BANCÁRIOS */}
+              {activeTab === 'documentos' && (
+                <CamposTB01 aba="documentos" dados={formData as Record<string, any>} alterar={(campo, valor) => setFormData(prev => ({ ...prev, [campo]: valor }))} />
+              )}
+
               {activeTab === 'banco' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                   <div>
@@ -1843,6 +1909,10 @@ export const CooperadosView: React.FC = () => {
               )}
 
               {/* TAB 6: HISTÓRICO */}
+              {activeTab === 'banco' && (
+                <CamposTB01 aba="banco" dados={formData as Record<string, any>} alterar={(campo, valor) => setFormData(prev => ({ ...prev, [campo]: valor }))} />
+              )}
+
               {activeTab === 'historico' && editingId && (
                 <div className="space-y-3 text-xs">
                   <div className="text-slate-500 mb-2">Trilha de alterações gravadas pelo sistema para este registro:</div>

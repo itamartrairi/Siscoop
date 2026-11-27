@@ -140,6 +140,17 @@ import { publicarPortalEscolas, ouvirComprovantesPortal } from '../services/port
 import { publicarPortalMotoristas, ouvirAtualizacoesMotoristas, mesclarParadas } from '../services/portalMotoristaRemoto';
 import { publicarPortalCooperados, publicarPortalProdutores, ouvirOfertasProdutores } from '../services/portalCooperadoProdutorRemoto';
 import { limparValidacoesCnpj, marcarCnpjValidado } from '../services/validacaoCnpjSessao';
+import type { LinhaImportada } from '../services/planilhaTB01';
+import { mesclarImportacao } from '../services/importacaoCooperados';
+
+export interface ResultadoImportacaoCooperados {
+  success: boolean;
+  totalInseridos: number;
+  totalAtualizados: number;
+  /** Linhas puladas, com o motivo. */
+  ignorados: string[];
+  message: string;
+}
 
 
 export const DEFAULT_ROLE_PERMISSIONS: RolePermissionsMap = {
@@ -544,7 +555,7 @@ interface CoopContextType {
   updateCooperado: (id: string, updatedData: Partial<Cooperado>) => boolean;
   deleteCooperado: (id: string) => void;
   deleteAllCooperados: () => number;
-  importarCooperadosCSV: (parsedRows: any[]) => { success: boolean; totalInseridos: number; totalAtualizados: number; message: string };
+  importarCooperadosCSV: (linhas: LinhaImportada[], opcoes?: { limparVazios?: boolean }) => ResultadoImportacaoCooperados;
   syncCooperadosWithProdutores: (targetCooperados?: Cooperado[]) => void;
   fetchAddressByCep: (cep: string) => Promise<{ logradouro: string; bairro: string; cidade: string; estado: string } | null>;
 
@@ -2214,6 +2225,9 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const validarCpfCooperado = (valor: string, id?: string) => {
     const cpf = somenteDigitos(valor);
+    // Na edição o CPF pode ficar vazio: a base histórica (planilha TB-01) tem
+    // sócios antigos e falecidos sem CPF. Para cooperado novo ele é obrigatório.
+    if (!cpf && id) return '';
     if (!cpf) {
       alert('Informe o CPF do cooperado. O preenchimento é obrigatório.');
       return null;
@@ -2417,135 +2431,37 @@ export const CoopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
-  const importarCooperadosCSV = (rows: any[]): { success: boolean; totalInseridos: number; totalAtualizados: number; message: string } => {
+  /** Importa cooperados lidos da planilha TB-01 (ver services/importacaoCooperados). */
+  const importarCooperadosCSV = (
+    rows: LinhaImportada[],
+    opcoes: { limparVazios?: boolean } = {}
+  ): ResultadoImportacaoCooperados => {
     if (!Array.isArray(rows) || rows.length === 0) {
-      return { success: false, totalInseridos: 0, totalAtualizados: 0, message: 'Nenhum registro válido encontrado na planilha.' };
+      return { success: false, totalInseridos: 0, totalAtualizados: 0, ignorados: [], message: 'Nenhum registro válido encontrado na planilha.' };
     }
 
-    const mapByCpf = new Map<string, Cooperado>();
-    const mapByMatricula = new Map<string, Cooperado>();
-    cooperados.filter(c => pertenceAoTenant(c, currentTenant.id)).forEach(c => {
-      const cpf = somenteDigitos(c.cpf);
-      if (cpfValido(cpf)) mapByCpf.set(cpf, c);
-      if (c.matricula) mapByMatricula.set(c.matricula.trim().toLowerCase(), c);
+    const { lista, totalInseridos, totalAtualizados, ignorados } = mesclarImportacao(cooperados, rows, {
+      tenantId: currentTenant?.id || 'coop-01',
+      usuario: currentUser?.name || 'Sistema',
+      limparVazios: opcoes.limparVazios,
+      pertenceAoTenant: c => pertenceAoTenant(c, currentTenant.id),
     });
 
-    const linhas = rows.map((row, idx) => ({
-      row,
-      cpf: somenteDigitos(row?.cpf || row?.CPF || row?.['CPF/CNPJ']),
-      numero: idx + 1,
-    }));
-    const cpfsPlanilha = new Set<string>();
-    const matriculasPlanilha = new Set<string>();
-    const rejeitar = (message: string) => ({ success: false, totalInseridos: 0, totalAtualizados: 0, message });
-    for (const { row, cpf, numero } of linhas) {
-      if (!cpfValido(cpf)) return rejeitar(`Registro ${numero}: informe um CPF válido na planilha.`);
-      if (cpfsPlanilha.has(cpf)) return rejeitar(`Registro ${numero}: CPF repetido na planilha.`);
-      cpfsPlanilha.add(cpf);
-      const matricula = String(row.matricula || row['Matrícula'] || row['Matricula'] || '').trim().toLowerCase();
-      if (!matricula) continue;
-      if (matriculasPlanilha.has(matricula)) return rejeitar(`Registro ${numero}: matrícula repetida na planilha.`);
-      matriculasPlanilha.add(matricula);
-      const existente = mapByMatricula.get(matricula);
-      if (existente && ((cpfValido(existente.cpf) && somenteDigitos(existente.cpf) !== cpf) ||
-        (mapByCpf.has(cpf) && mapByCpf.get(cpf)?.id !== existente.id))) {
-        return rejeitar(`Registro ${numero}: o CPF e a matrícula pertencem a cadastros diferentes.`);
-      }
+    if (totalInseridos + totalAtualizados === 0) {
+      return { success: false, totalInseridos, totalAtualizados, ignorados, message: 'Nenhuma linha pôde ser importada. Veja os motivos abaixo.' };
     }
 
-    let totalInseridos = 0;
-    let totalAtualizados = 0;
-    const newArr = [...cooperados];
-    linhas.forEach(({ row, cpf, numero }) => {
-      const cleanRow = sanitizeCooperado(row);
-      const rawNome = cleanRow.nome.trim();
-      const rawMatricula = String(row.matricula || row['Matrícula'] || row['Matricula'] || mapByCpf.get(cpf)?.matricula || `IMP-${Date.now()}-${numero}`).trim();
-      const existing = mapByCpf.get(cpf) || mapByMatricula.get(rawMatricula.toLowerCase());
+    setCooperados(lista);
+    syncCooperadosWithProdutores(lista);
 
-      const lerOpcaoImportada = (opcao: unknown, anterior?: boolean) => {
-        if (typeof opcao === 'boolean') return opcao;
-        const texto = chaveUnica(String(opcao ?? ''));
-        if (['sim', 'true', '1'].includes(texto)) return true;
-        if (['nao', 'false', '0'].includes(texto)) return false;
-        return anterior ?? true;
-      };
-
-      const newCoopObj: Cooperado = { ...sanitizeCooperado({
-        id: existing ? existing.id : `cop-imp-${Date.now()}-${numero}`,
-        tenantId: currentTenant?.id || 'coop-01',
-        matricula: rawMatricula,
-        nome: rawNome.toUpperCase(),
-        cpf,
-        rg: (cleanRow.rg || cleanRow.RG || cleanRow['RG'] || existing?.rg || '1234567 SSP-CE').toString(),
-        dataNascimento: (cleanRow.dataNascimento || cleanRow['Data Nasc.'] || cleanRow['Data Nascimento'] || existing?.dataNascimento || '1980-01-01').toString(),
-        sexo: (cleanRow.sexo || cleanRow.Sexo || existing?.sexo || 'M').toString().toUpperCase().startsWith('F') ? 'F' : 'M',
-        estadoCivil: (cleanRow.estadoCivil || cleanRow['Estado Civil'] || existing?.estadoCivil || 'CASADO').toString().toUpperCase() as any,
-        profissao: (cleanRow.profissao || cleanRow['Profissão'] || cleanRow['Profissao'] || existing?.profissao || 'AGRICULTOR').toString().toUpperCase(),
-        escolaridade: (cleanRow.escolaridade || cleanRow['Escolaridade'] || existing?.escolaridade || 'Ensino Fundamental').toString(),
-        naturalidade: (cleanRow.naturalidade || cleanRow['Naturalidade'] || existing?.naturalidade || 'TRAIRI').toString(),
-        nacionalidade: (cleanRow.nacionalidade || cleanRow['Nacionalidade'] || existing?.nacionalidade || 'BRASILEIRO').toString(),
-        situacao: (cleanRow.situacao || cleanRow['Situação'] || cleanRow['Situacao'] || existing?.situacao || 'ATIVO').toString().toUpperCase() as any,
-        dataFiliacao: (cleanRow.dataFiliacao || cleanRow['Data Admissão'] || cleanRow['Data Filiacao'] || existing?.dataFiliacao || new Date().toISOString().substring(0, 10)).toString(),
-        categoria: (cleanRow.categoria || cleanRow['Categoria'] || existing?.categoria || 'EFETIVO').toString().toUpperCase() as any,
-        fotoUrl: existing?.fotoUrl || '',
-        cep: (cleanRow.cep || cleanRow['CEP'] || existing?.cep || '62.690-000').toString(),
-        logradouro: (cleanRow.logradouro || cleanRow.endereco || cleanRow['Logradouro'] || cleanRow['Endereço'] || existing?.logradouro || 'Sede Cooperativa').toString(),
-        numero: (cleanRow.numero || cleanRow['Número'] || existing?.numero || 'S/N').toString(),
-        complemento: (cleanRow.complemento || cleanRow['Complemento'] || existing?.complemento || '').toString(),
-        bairro: (cleanRow.bairro || cleanRow['Bairro'] || existing?.bairro || 'Centro').toString(),
-        cidade: (cleanRow.cidade || cleanRow['Cidade'] || existing?.cidade || 'Trairi').toString(),
-        estado: (cleanRow.estado || cleanRow['Estado'] || cleanRow['UF'] || existing?.estado || 'CE').toString(),
-        pais: 'Brasil',
-        telefone: (cleanRow.telefone || cleanRow['Telefone'] || existing?.telefone || '').toString(),
-        celular: (cleanRow.celular || cleanRow['Celular'] || existing?.celular || '').toString(),
-        whatsapp: (cleanRow.whatsapp || cleanRow['WhatsApp'] || existing?.whatsapp || '').toString(),
-        email: (cleanRow.email || cleanRow['E-mail'] || cleanRow['Email'] || existing?.email || '').toString(),
-        contatoEmergencia: (cleanRow.contatoEmergencia || existing?.contatoEmergencia || 'Secretaria').toString(),
-        documentos: existing?.documentos || [],
-        banco: (cleanRow.banco || cleanRow['Banco'] || existing?.banco || 'Banco do Brasil').toString(),
-        agencia: (cleanRow.agencia || cleanRow['Agência'] || existing?.agencia || '0001').toString(),
-        conta: (cleanRow.conta || cleanRow['Conta'] || existing?.conta || '10000-1').toString(),
-        tipoConta: (cleanRow.tipoConta || existing?.tipoConta || 'CORRENTE').toString() as any,
-        chavePix: (cleanRow.chavePix || cleanRow['Chave PIX'] || existing?.chavePix || '').toString(),
-        capitalSubscrito: Number(cleanRow.capitalSubscrito || cleanRow['Capital Subscrito'] || existing?.capitalSubscrito || 1000),
-        capitalIntegralizado: Number(cleanRow.capitalIntegralizado || cleanRow['Capital Integralizado (R$)'] || cleanRow['Capital Integralizado'] || existing?.capitalIntegralizado || 0),
-        historico: existing?.historico || [
-          {
-            id: `h-imp-${Date.now()}-${numero}`,
-            data: new Date().toISOString().substring(0, 10),
-            usuario: currentUser?.name || 'Sistema',
-            acao: 'Importação CSV/Excel',
-            detalhes: 'Cooperado importado via planilha CSV/Excel'
-          }
-        ],
-        dapCaf: cleanRow.dapCaf || cleanRow['DAP/CAF'] || cleanRow['DAP'] || existing?.dapCaf || '',
-        cafDapValidade: (cleanRow.cafDapValidade || cleanRow['Validade CAF/DAP'] || cleanRow['Validade CAF'] || cleanRow['Validade DAP'] || existing?.cafDapValidade || '').toString(),
-        aptoPaa: lerOpcaoImportada(cleanRow.aptoPaa ?? cleanRow['Apto PAA'], existing?.aptoPaa),
-        localidadeComunidade: cleanRow.localidadeComunidade || cleanRow['Comunidade/Localidade'] || cleanRow['Comunidade'] || existing?.localidadeComunidade || 'SEDE',
-        nomeUsual: cleanRow.nomeUsual || cleanRow['Nome Usual/Apelido'] || cleanRow['Nome Usual'] || existing?.nomeUsual || rawNome,
-        aptoAVotar: lerOpcaoImportada(cleanRow.aptoAVotar ?? cleanRow['Apto a Votar'] ?? cleanRow['Apto Votar'], existing?.aptoAVotar),
-        falecido: cleanRow.falecido === true || cleanRow['Falecido'] === 'SIM' || existing?.falecido || false
-      }), cpf };
-
-      if (existing) {
-        totalAtualizados++;
-        const targetIdx = newArr.findIndex(c => c.id === existing.id);
-        if (targetIdx !== -1) newArr[targetIdx] = newCoopObj;
-      } else {
-        totalInseridos++;
-        newArr.push(newCoopObj);
-      }
-    });
-
-    setCooperados(newArr);
-    syncCooperadosWithProdutores(newArr);
-
-    addAuditLog('COOPERADOS', 'INCLUSAO', `Importação de planilha CSV/Excel realizada: ${totalInseridos} inseridos, ${totalAtualizados} atualizados.`);
+    addAuditLog('COOPERADOS', 'INCLUSAO', `Importação da planilha TB-01: ${totalInseridos} inseridos, ${totalAtualizados} atualizados, ${ignorados.length} linha(s) ignorada(s).`);
     return {
       success: true,
       totalInseridos,
       totalAtualizados,
-      message: `Importação realizada com sucesso! ${totalInseridos} novos cooperados cadastrados e ${totalAtualizados} atualizados.`
+      ignorados,
+      message: `Importação concluída: ${totalInseridos} novo(s) cooperado(s) e ${totalAtualizados} atualizado(s)` +
+        (ignorados.length ? `. ${ignorados.length} linha(s) ignorada(s).` : '.'),
     };
   };
 
